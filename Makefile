@@ -1,49 +1,59 @@
-# ============================================================================
-# pg-s3-backup — Makefile
-# ============================================================================
+# ── Variables ──────────────────────────────────────────────────────────────────
+BINARY        := pg-s3-backup
+CMD_PATH      := ./cmd/worker
+BUILD_DIR     := ./bin
+COVERAGE_FILE := coverage.out
 
-BINARY   := pg-s3-backup
-CMD_DIR  := ./cmd/worker
-BUILD_DIR := ./bin
-
-GO        := go
-GOLINT    := golangci-lint
+# Detect the OS for platform-specific commands
+UNAME_S := $(shell uname -s)
 
 .PHONY: all build test lint run clean tidy help
 
-all: build
+## all: Run tidy, lint, test, and build
+all: tidy lint test build
 
-## build: compile the worker binary into ./bin/
+## build: Compile the worker binary into ./bin/
 build:
+	@echo "==> Building $(BINARY)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO) build -o $(BUILD_DIR)/$(BINARY) $(CMD_DIR)
-	@echo "✓ built $(BUILD_DIR)/$(BINARY)"
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BUILD_DIR)/$(BINARY) $(CMD_PATH)
+	@echo "    Binary: $(BUILD_DIR)/$(BINARY)"
 
-## test: run all unit tests with race detector
+## test: Run all unit tests with race detection and generate a coverage report
 test:
-	$(GO) test -race -cover ./...
+	@echo "==> Running tests..."
+	go test -race -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
+	go tool cover -func=$(COVERAGE_FILE) | tail -1
 
-## lint: run golangci-lint (install from https://golangci-lint.run)
+## lint: Run golangci-lint (install separately: https://golangci-lint.run/usage/install/)
 lint:
-	$(GOLINT) run ./...
+	@echo "==> Running linter..."
+	@which golangci-lint > /dev/null 2>&1 || \
+		(echo "golangci-lint not found; install from https://golangci-lint.run/usage/install/" && exit 1)
+	golangci-lint run ./...
 
-## run: load .env (if present) and execute the binary
+## run: Build and run the worker using variables from .env (if present)
 run: build
+	@echo "==> Running $(BINARY)..."
 	@if [ -f .env ]; then \
-		echo "Loading .env…"; \
-		export $$(grep -v '^#' .env | xargs); \
-	fi; \
-	$(BUILD_DIR)/$(BINARY)
+		echo "    Loading environment from .env"; \
+		export $$(grep -v '^#' .env | xargs) && $(BUILD_DIR)/$(BINARY); \
+	else \
+		$(BUILD_DIR)/$(BINARY); \
+	fi
 
-## tidy: tidy and verify go modules
+## tidy: Tidy and verify Go module dependencies
 tidy:
-	$(GO) mod tidy
-	$(GO) mod verify
+	@echo "==> Tidying modules..."
+	go mod tidy
+	go mod verify
 
-## clean: remove compiled artefacts
+## clean: Remove build artefacts and coverage files
 clean:
-	rm -rf $(BUILD_DIR)
+	@echo "==> Cleaning..."
+	@rm -rf $(BUILD_DIR) $(COVERAGE_FILE)
 
-## help: print this help message
+## help: Print this help message
 help:
-	@grep -E '^##' Makefile | sed 's/## //'
+	@echo "Available targets:"
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /'

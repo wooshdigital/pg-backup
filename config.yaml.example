@@ -1,50 +1,39 @@
-# pg-s3-backup — example configuration file
+# pg-s3-backup configuration file
 # Copy this file to config.yaml and fill in your values.
-# Environment variables (BACKUP_*) take precedence over values here.
+# Environment variables (prefixed with BACKUP_) always override values here.
 
-# ---------------------------------------------------------------------------
-# Database
-# ---------------------------------------------------------------------------
-
-# PostgreSQL connection string (required).
-# Format: postgres://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=disable
+# ── Database ───────────────────────────────────────────────────────────────────
+# PostgreSQL connection string passed directly to pg_dump.
+# Format: postgres://[user[:password]@][host][:port][/dbname][?param1=value1&...]
 database_dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
-# ---------------------------------------------------------------------------
-# S3 / Object Storage
-# ---------------------------------------------------------------------------
+# ── S3 Storage ────────────────────────────────────────────────────────────────
+# Name of the S3 bucket where backup archives are stored.
+s3_bucket: "my-backup-bucket"
 
-# S3 bucket to upload backups into (required).
-s3_bucket: "my-pg-backups"
-
-# AWS region that hosts the bucket (required).
+# AWS region that hosts the target bucket (e.g. us-east-1, eu-west-1).
 s3_region: "us-east-1"
 
-# Optional key prefix (folder path) inside the bucket.
-# Default: backups/
+# Optional key prefix (think of it as a folder path) within the bucket.
+# A trailing slash is recommended.
 s3_prefix: "backups/"
 
-# ---------------------------------------------------------------------------
-# Scheduling & Retention
-# ---------------------------------------------------------------------------
-
-# Standard 5-field cron expression controlling when backups run.
-# Default: "0 2 * * *"  (daily at 02:00 UTC)
+# ── Schedule ──────────────────────────────────────────────────────────────────
+# Standard 5-field cron expression (UTC) controlling when backups are triggered.
+# Default: every day at 02:00 UTC
 # Examples:
-#   "*/30 * * * *"   — every 30 minutes
-#   "0 */6 * * *"    — every 6 hours
-#   "0 3 * * 0"      — weekly on Sunday at 03:00
+#   "0 2 * * *"     — daily at 02:00
+#   "0 */6 * * *"   — every 6 hours
+#   "0 3 * * 0"     — every Sunday at 03:00
 schedule: "0 2 * * *"
 
-# Number of days to retain old backups before deletion.
-# Default: 30
+# ── Retention ─────────────────────────────────────────────────────────────────
+# Number of days to keep backup objects in S3.
+# Objects older than this threshold are deleted after each successful backup.
+# Set to 0 to disable automatic deletion (keep all backups forever).
 retention_days: 30
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-
-# Log verbosity level.
-# One of: trace | debug | info | warn | error | fatal
-# Default: info
+# ── Logging ───────────────────────────────────────────────────────────────────
+# Controls the verbosity of structured JSON log output.
+# Valid values: trace | debug | info | warn | error | fatal | panic
 log_level: "info"

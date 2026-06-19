@@ -1,28 +1,43 @@
-# Compiled binaries
-bin/
+# ── Compiled binaries & build output ──────────────────────────────────────────
+/bin/
 *.exe
-*.out
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# Environment / secret files
-.env
-*.env
-
-# Config overrides (keep the .example files)
-config.yaml
-config.yml
-
-# Test & coverage output
-*.test
+# ── Test & coverage artefacts ─────────────────────────────────────────────────
 coverage.out
 coverage.html
+*.test
 
-# Editor / IDE artefacts
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+*.env
+!.env.example
+
+# ── Config files with real values ─────────────────────────────────────────────
+config.yaml
+!config.yaml.example
+
+# ── Go workspace files ────────────────────────────────────────────────────────
+go.work
+go.work.sum
+
+# ── IDE & editor files ────────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# OS artefacts
+# ── macOS ─────────────────────────────────────────────────────────────────────
 .DS_Store
-Thumbs.db
+.AppleDouble
+.LSOverride
+
+# ── Linux ─────────────────────────────────────────────────────────────────────
+*~
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+docker-compose.override.yml
