@@ -1,110 +1,121 @@
 # pg-s3-backup
 
-A production-ready PostgreSQL backup tool that schedules `pg_dump` runs and
-uploads the resulting archives to Amazon S3, with automatic retention
-management.
-
----
+A production-ready PostgreSQL backup tool that dumps databases on a cron schedule and stores them in Amazon S3 with configurable retention.
 
 ## Features
 
-- 🕒 **Cron-scheduled backups** — standard cron expression support
-- ☁️ **S3 upload** — streamed directly, no local disk required
-- 🗑️ **Automatic retention** — prunes backups older than *N* days
-- 📋 **Structured JSON logging** — via [zerolog](https://github.com/rs/zerolog)
-- ⚙️ **Layered config** — YAML file → environment variables (env wins)
+- ⏰ **Cron-based scheduling** — standard five-field cron expressions (UTC)
+- ☁️  **S3 storage** — uploads compressed dumps directly to S3
+- 🗑️  **Automatic retention** — deletes objects older than *N* days
+- 🔧 **Layered configuration** — YAML file + environment variable overrides
+- 📋 **Structured logging** — JSON output via `zerolog`
 
 ---
 
 ## Quickstart
 
-### Prerequisites
+### 1. Prerequisites
 
 | Tool | Version |
 |------|---------|
 | Go   | ≥ 1.22  |
-| PostgreSQL client (`pg_dump`) | ≥ 14 |
-| AWS credentials | any standard method |
+| AWS credentials | configured via env, `~/.aws/credentials`, or IAM role |
+| `pg_dump` | matching your target PostgreSQL version |
 
-### 1. Clone & install dependencies
+### 2. Clone & build
 
 ```bash
 git clone https://github.com/org/pg-s3-backup.git
 cd pg-s3-backup
-go mod download
+make build
 ```
 
-### 2. Configure
+### 3. Configure
 
 Copy the example env file and fill in your values:
 
 ```bash
 cp .env.example .env
-$EDITOR .env
+# edit .env with your DSN, bucket, region, etc.
 ```
 
-Alternatively, copy `config.yaml.example` to `config.yaml`:
+Or copy the YAML example:
 
 ```bash
 cp config.yaml.example config.yaml
-$EDITOR config.yaml
+# edit config.yaml
 ```
 
-### 3. Build & run
+### 4. Run
 
 ```bash
-make build
+# Using environment variables
+source .env
 make run
+
+# Or pass variables inline
+BACKUP_DB_DSN="postgres://user:pass@localhost/mydb" \
+BACKUP_S3_BUCKET="my-bucket" \
+BACKUP_S3_REGION="us-east-1" \
+./bin/pg-s3-backup
 ```
 
 ---
 
 ## Configuration Reference
 
-All keys can be set via **environment variable** (takes precedence) or
-**`config.yaml`**. Environment variable names follow the pattern:
+All configuration keys can be set either in `config.yaml` **or** as environment variables. Environment variables always take precedence.
+
+| Config key      | Environment variable      | Required | Default        | Description |
+|-----------------|--------------------------|----------|----------------|-------------|
+| `db_dsn`        | `BACKUP_DB_DSN`          | ✅ Yes   | —              | PostgreSQL connection DSN |
+| `s3_bucket`     | `BACKUP_S3_BUCKET`       | ✅ Yes   | —              | S3 bucket name |
+| `s3_region`     | `BACKUP_S3_REGION`       | ✅ Yes   | —              | AWS region of the bucket |
+| `s3_prefix`     | `BACKUP_S3_PREFIX`       | No       | `backups/`     | Key prefix (folder) within the bucket |
+| `schedule`      | `BACKUP_SCHEDULE`        | No       | `0 2 * * *`    | Cron schedule (UTC) |
+| `retention_days`| `BACKUP_RETENTION_DAYS`  | No       | `30`           | Days to keep old backups |
+| `log_level`     | `BACKUP_LOG_LEVEL`       | No       | `info`         | Log verbosity (`trace`…`panic`) |
+
+### DSN Format
 
 ```
-PG_S3_BACKUP_<KEY_UPPERCASE>
+postgres://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=disable
 ```
-
-| Config Key       | Env Variable                    | Required | Default        | Description                                         |
-|------------------|---------------------------------|----------|----------------|-----------------------------------------------------|
-| `database_dsn`   | `PG_S3_BACKUP_DATABASE_DSN`    | ✅        | —              | Full PostgreSQL DSN                                 |
-| `s3_bucket`      | `PG_S3_BACKUP_S3_BUCKET`       | ✅        | —              | S3 bucket name                                      |
-| `s3_region`      | `PG_S3_BACKUP_S3_REGION`       | ✅        | —              | AWS region (e.g. `us-east-1`)                       |
-| `s3_prefix`      | `PG_S3_BACKUP_S3_PREFIX`       | ❌        | `backups/`     | Key prefix inside the bucket                        |
-| `schedule`       | `PG_S3_BACKUP_SCHEDULE`        | ❌        | `0 2 * * *`    | Cron expression for backup schedule                 |
-| `retention_days` | `PG_S3_BACKUP_RETENTION_DAYS`  | ❌        | `30`           | Days to keep backups (min 1)                        |
-| `log_level`      | `PG_S3_BACKUP_LOG_LEVEL`       | ❌        | `info`         | One of `debug`, `info`, `warn`, `error`             |
 
 ---
 
 ## Development
 
 ```bash
-make test      # run tests with race detector + coverage
-make lint      # run golangci-lint (or go vet)
-make tidy      # tidy & verify modules
-make clean     # remove build artifacts
+# Run all tests with race detector and coverage
+make test
+
+# Lint (requires golangci-lint)
+make lint
+
+# Tidy dependencies
+make tidy
+
+# Remove build artefacts
+make clean
 ```
 
 ---
 
-## Project Layout
+## Project Structure
 
 ```
-.
+pg-s3-backup/
 ├── cmd/
 │   └── worker/
 │       └── main.go          # Entry point
 ├── internal/
 │   └── config/
-│       ├── config.go        # Config struct, Load(), validate()
+│       ├── config.go        # Config struct + Viper loader + validation
 │       └── config_test.go   # Unit tests
-├── config.yaml.example      # Example YAML config
-├── .env.example             # Example environment variables
-├── Makefile
+├── .env.example             # Documented env var template
+├── config.yaml.example      # Documented YAML config template
+├── Makefile                 # Build, test, lint, run targets
 └── README.md
 ```
 
@@ -112,4 +123,4 @@ make clean     # remove build artifacts
 
 ## License
 
-MIT
+MIT © 2026 Your Organisation

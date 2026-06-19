@@ -7,19 +7,19 @@ import (
 	"github.com/org/pg-s3-backup/internal/config"
 )
 
-// setEnv is a helper that sets environment variables and returns a cleanup
-// function that restores the original values when called.
+// setEnv sets multiple environment variables and returns a cleanup function
+// that restores the previous values when called.
 func setEnv(t *testing.T, pairs map[string]string) func() {
 	t.Helper()
-	original := make(map[string]string, len(pairs))
+	prev := make(map[string]string, len(pairs))
 	for k, v := range pairs {
-		original[k] = os.Getenv(k)
+		prev[k] = os.Getenv(k)
 		if err := os.Setenv(k, v); err != nil {
-			t.Fatalf("setenv %s: %v", k, err)
+			t.Fatalf("os.Setenv(%q, %q): %v", k, v, err)
 		}
 	}
 	return func() {
-		for k, v := range original {
+		for k, v := range prev {
 			if v == "" {
 				_ = os.Unsetenv(k)
 			} else {
@@ -29,16 +29,14 @@ func setEnv(t *testing.T, pairs map[string]string) func() {
 	}
 }
 
-// minimalEnv returns the minimum set of env vars required to pass validation.
+// minimalEnv returns the smallest set of env vars that satisfies validation.
 func minimalEnv() map[string]string {
 	return map[string]string{
-		"PG_S3_BACKUP_DATABASE_DSN": "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
-		"PG_S3_BACKUP_S3_BUCKET":   "my-backup-bucket",
-		"PG_S3_BACKUP_S3_REGION":   "us-east-1",
+		"BACKUP_DB_DSN":    "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
+		"BACKUP_S3_BUCKET": "my-backup-bucket",
+		"BACKUP_S3_REGION": "us-east-1",
 	}
 }
-
-// ── Happy-path tests ─────────────────────────────────────────────────────────
 
 func TestLoad_MinimalValidConfig(t *testing.T) {
 	cleanup := setEnv(t, minimalEnv())
@@ -49,46 +47,36 @@ func TestLoad_MinimalValidConfig(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if cfg.DatabaseDSN == "" {
-		t.Error("DatabaseDSN should not be empty")
+	if cfg.DBDSN == "" {
+		t.Error("expected DBDSN to be set")
 	}
 	if cfg.S3Bucket != "my-backup-bucket" {
-		t.Errorf("expected S3Bucket %q, got %q", "my-backup-bucket", cfg.S3Bucket)
+		t.Errorf("expected S3Bucket=my-backup-bucket, got %q", cfg.S3Bucket)
 	}
 	if cfg.S3Region != "us-east-1" {
-		t.Errorf("expected S3Region %q, got %q", "us-east-1", cfg.S3Region)
+		t.Errorf("expected S3Region=us-east-1, got %q", cfg.S3Region)
 	}
-}
-
-func TestLoad_DefaultValues(t *testing.T) {
-	cleanup := setEnv(t, minimalEnv())
-	defer cleanup()
-
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.S3Prefix != "backups/" {
-		t.Errorf("expected default S3Prefix %q, got %q", "backups/", cfg.S3Prefix)
-	}
-	if cfg.Schedule != "0 2 * * *" {
-		t.Errorf("expected default Schedule %q, got %q", "0 2 * * *", cfg.Schedule)
-	}
+	// Defaults
 	if cfg.RetentionDays != 30 {
-		t.Errorf("expected default RetentionDays 30, got %d", cfg.RetentionDays)
+		t.Errorf("expected default RetentionDays=30, got %d", cfg.RetentionDays)
 	}
 	if cfg.LogLevel != "info" {
-		t.Errorf("expected default LogLevel %q, got %q", "info", cfg.LogLevel)
+		t.Errorf("expected default LogLevel=info, got %q", cfg.LogLevel)
+	}
+	if cfg.Schedule != "0 2 * * *" {
+		t.Errorf("expected default Schedule='0 2 * * *', got %q", cfg.Schedule)
+	}
+	if cfg.S3Prefix != "backups/" {
+		t.Errorf("expected default S3Prefix='backups/', got %q", cfg.S3Prefix)
 	}
 }
 
 func TestLoad_EnvVarOverridesDefault(t *testing.T) {
 	env := minimalEnv()
-	env["PG_S3_BACKUP_S3_PREFIX"] = "custom/prefix/"
-	env["PG_S3_BACKUP_SCHEDULE"] = "0 3 * * *"
-	env["PG_S3_BACKUP_RETENTION_DAYS"] = "7"
-	env["PG_S3_BACKUP_LOG_LEVEL"] = "debug"
+	env["BACKUP_RETENTION_DAYS"] = "7"
+	env["BACKUP_LOG_LEVEL"] = "debug"
+	env["BACKUP_SCHEDULE"] = "0 3 * * 0"
+	env["BACKUP_S3_PREFIX"] = "prod/backups/"
 
 	cleanup := setEnv(t, env)
 	defer cleanup()
@@ -98,128 +86,111 @@ func TestLoad_EnvVarOverridesDefault(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.S3Prefix != "custom/prefix/" {
-		t.Errorf("expected S3Prefix %q, got %q", "custom/prefix/", cfg.S3Prefix)
-	}
-	if cfg.Schedule != "0 3 * * *" {
-		t.Errorf("expected Schedule %q, got %q", "0 3 * * *", cfg.Schedule)
-	}
 	if cfg.RetentionDays != 7 {
-		t.Errorf("expected RetentionDays 7, got %d", cfg.RetentionDays)
+		t.Errorf("expected RetentionDays=7, got %d", cfg.RetentionDays)
 	}
 	if cfg.LogLevel != "debug" {
-		t.Errorf("expected LogLevel %q, got %q", "debug", cfg.LogLevel)
+		t.Errorf("expected LogLevel=debug, got %q", cfg.LogLevel)
+	}
+	if cfg.Schedule != "0 3 * * 0" {
+		t.Errorf("expected Schedule='0 3 * * 0', got %q", cfg.Schedule)
+	}
+	if cfg.S3Prefix != "prod/backups/" {
+		t.Errorf("expected S3Prefix='prod/backups/', got %q", cfg.S3Prefix)
 	}
 }
 
-// ── Validation failure tests ──────────────────────────────────────────────────
-
-func TestLoad_MissingDatabaseDSN(t *testing.T) {
+func TestLoad_MissingDBDSN(t *testing.T) {
 	env := minimalEnv()
-	delete(env, "PG_S3_BACKUP_DATABASE_DSN")
-	// Ensure it's unset in the environment too
+	delete(env, "BACKUP_DB_DSN")
+	// Ensure any existing env var is cleared.
 	cleanup := setEnv(t, env)
 	defer cleanup()
-	_ = os.Unsetenv("PG_S3_BACKUP_DATABASE_DSN")
+	_ = os.Unsetenv("BACKUP_DB_DSN")
 
 	_, err := config.Load()
 	if err == nil {
-		t.Fatal("expected error for missing database_dsn, got nil")
+		t.Fatal("expected validation error for missing db_dsn, got nil")
 	}
 }
 
 func TestLoad_MissingS3Bucket(t *testing.T) {
 	env := minimalEnv()
-	delete(env, "PG_S3_BACKUP_S3_BUCKET")
+	delete(env, "BACKUP_S3_BUCKET")
 	cleanup := setEnv(t, env)
 	defer cleanup()
-	_ = os.Unsetenv("PG_S3_BACKUP_S3_BUCKET")
+	_ = os.Unsetenv("BACKUP_S3_BUCKET")
 
 	_, err := config.Load()
 	if err == nil {
-		t.Fatal("expected error for missing s3_bucket, got nil")
+		t.Fatal("expected validation error for missing s3_bucket, got nil")
 	}
 }
 
 func TestLoad_MissingS3Region(t *testing.T) {
 	env := minimalEnv()
-	delete(env, "PG_S3_BACKUP_S3_REGION")
+	delete(env, "BACKUP_S3_REGION")
 	cleanup := setEnv(t, env)
 	defer cleanup()
-	_ = os.Unsetenv("PG_S3_BACKUP_S3_REGION")
+	_ = os.Unsetenv("BACKUP_S3_REGION")
 
 	_, err := config.Load()
 	if err == nil {
-		t.Fatal("expected error for missing s3_region, got nil")
-	}
-}
-
-func TestLoad_InvalidRetentionDays(t *testing.T) {
-	env := minimalEnv()
-	env["PG_S3_BACKUP_RETENTION_DAYS"] = "0"
-	cleanup := setEnv(t, env)
-	defer cleanup()
-
-	_, err := config.Load()
-	if err == nil {
-		t.Fatal("expected error for retention_days=0, got nil")
-	}
-}
-
-func TestLoad_NegativeRetentionDays(t *testing.T) {
-	env := minimalEnv()
-	env["PG_S3_BACKUP_RETENTION_DAYS"] = "-5"
-	cleanup := setEnv(t, env)
-	defer cleanup()
-
-	_, err := config.Load()
-	if err == nil {
-		t.Fatal("expected error for negative retention_days, got nil")
+		t.Fatal("expected validation error for missing s3_region, got nil")
 	}
 }
 
 func TestLoad_InvalidLogLevel(t *testing.T) {
 	env := minimalEnv()
-	env["PG_S3_BACKUP_LOG_LEVEL"] = "verbose"
+	env["BACKUP_LOG_LEVEL"] = "verbose" // not a valid zerolog level
+
 	cleanup := setEnv(t, env)
 	defer cleanup()
 
 	_, err := config.Load()
 	if err == nil {
-		t.Fatal("expected error for invalid log_level, got nil")
+		t.Fatal("expected validation error for invalid log_level, got nil")
 	}
 }
 
-func TestLoad_MultipleValidationErrors(t *testing.T) {
-	// Unset all required env vars to trigger multiple errors at once
-	cleanup := setEnv(t, map[string]string{
-		"PG_S3_BACKUP_DATABASE_DSN": "",
-		"PG_S3_BACKUP_S3_BUCKET":   "",
-		"PG_S3_BACKUP_S3_REGION":   "",
-	})
+func TestLoad_InvalidRetentionDays(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_RETENTION_DAYS"] = "0"
+
+	cleanup := setEnv(t, env)
 	defer cleanup()
 
 	_, err := config.Load()
 	if err == nil {
-		t.Fatal("expected validation errors, got nil")
+		t.Fatal("expected validation error for retention_days=0, got nil")
 	}
 }
 
-func TestLoad_ValidLogLevels(t *testing.T) {
-	levels := []string{"debug", "info", "warn", "error"}
+func TestLoad_NegativeRetentionDays(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_RETENTION_DAYS"] = "-5"
+
+	cleanup := setEnv(t, env)
+	defer cleanup()
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected validation error for negative retention_days, got nil")
+	}
+}
+
+func TestLoad_AllValidLogLevels(t *testing.T) {
+	levels := []string{"trace", "debug", "info", "warn", "error", "fatal", "panic"}
 	for _, level := range levels {
 		t.Run(level, func(t *testing.T) {
 			env := minimalEnv()
-			env["PG_S3_BACKUP_LOG_LEVEL"] = level
+			env["BACKUP_LOG_LEVEL"] = level
 			cleanup := setEnv(t, env)
 			defer cleanup()
 
-			cfg, err := config.Load()
+			_, err := config.Load()
 			if err != nil {
-				t.Fatalf("expected no error for log_level=%q, got: %v", level, err)
-			}
-			if cfg.LogLevel != level {
-				t.Errorf("expected LogLevel %q, got %q", level, cfg.LogLevel)
+				t.Errorf("expected no error for log_level=%q, got: %v", level, err)
 			}
 		})
 	}

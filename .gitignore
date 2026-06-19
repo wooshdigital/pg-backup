@@ -1,4 +1,8 @@
-# ── Binaries ──────────────────────────────────────────────────────────────────
+# =============================================================================
+# pg-s3-backup — .gitignore
+# =============================================================================
+
+# Compiled binaries
 /bin/
 *.exe
 *.exe~
@@ -6,34 +10,37 @@
 *.so
 *.dylib
 
-# ── Test & coverage ───────────────────────────────────────────────────────────
-coverage.out
-coverage.html
+# Test binary, built with `go test -c`
 *.test
 
-# ── Environment & secrets ─────────────────────────────────────────────────────
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Dependency vendor directory (if used)
+vendor/
+
+# Environment / secrets — never commit real values
 .env
 *.env
 !.env.example
 
-# ── Config overrides (keep examples, ignore real configs) ─────────────────────
-config.yaml
-!config.yaml.example
-
-# ── Go workspace ──────────────────────────────────────────────────────────────
-go.work
-go.work.sum
-
-# ── Editor & OS ───────────────────────────────────────────────────────────────
-.DS_Store
+# Editor directories and files
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-Thumbs.db
 
-# ── Temporary files ───────────────────────────────────────────────────────────
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# Config files with real secrets
+config.yaml
+!config.yaml.example
+
+# Temporary files
 tmp/
-*.tmp
-*.bak
