@@ -1,46 +1,34 @@
-# =============================================================================
-# pg-s3-backup — .gitignore
-# =============================================================================
-
 # Compiled binaries
-/bin/
+bin/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# Test & coverage output
 *.test
-
-# Output of the go coverage tool
-*.out
+coverage.out
 coverage.html
 
-# Dependency vendor directory (if used)
-vendor/
-
-# Environment / secrets — never commit real values
+# Environment files (may contain secrets)
 .env
-*.env
-!.env.example
+.env.local
+.env.*.local
 
-# Editor directories and files
+# Local config overrides
+config.yaml
+config.yml
+
+# Editor / OS artifacts
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# macOS
-.DS_Store
-
-# Linux
-*~
-
-# Config files with real secrets
-config.yaml
-!config.yaml.example
-
-# Temporary files
-tmp/
+# Go workspace files
+go.work
+go.work.sum
