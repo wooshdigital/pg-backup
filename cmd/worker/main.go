@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"time"
 
 	"github.com/org/pg-s3-backup/internal/config"
 	"github.com/rs/zerolog"
@@ -19,45 +18,33 @@ const banner = `
 `
 
 func main() {
-	// Bootstrap a temporary console logger for startup
-	consoleWriter := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}
-	bootstrapLog := zerolog.New(consoleWriter).With().Timestamp().Str("component", "startup").Logger()
-
-	bootstrapLog.Info().Msg("Loading configuration...")
+	// Bootstrap a console logger for startup; will reconfigure after config is loaded.
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	cfg, err := config.Load()
 	if err != nil {
-		bootstrapLog.Fatal().Err(err).Msg("Failed to load configuration")
+		log.Fatal().Err(err).Msg("failed to load configuration")
 	}
 
-	// Configure the global logger based on loaded config
+	// Reconfigure logger based on loaded config.
 	level, err := zerolog.ParseLevel(cfg.LogLevel)
 	if err != nil {
-		bootstrapLog.Warn().
-			Str("provided_level", cfg.LogLevel).
-			Msg("Invalid log level, defaulting to 'info'")
+		log.Warn().Str("log_level", cfg.LogLevel).Msg("unknown log level, defaulting to info")
 		level = zerolog.InfoLevel
 	}
-
 	zerolog.SetGlobalLevel(level)
 
-	var logger zerolog.Logger
-	if cfg.LogLevel == "debug" {
-		// Pretty console output in debug mode
-		logger = zerolog.New(consoleWriter).With().Timestamp().Logger()
+	// In production emit JSON; keep pretty console output when a terminal is attached.
+	if isTerminal() {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	} else {
-		// Structured JSON logging in production
-		logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+		log.Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 	}
 
-	log.Logger = logger
+	// Print ASCII banner to stderr (non-structured, for human operators).
+	_, _ = os.Stderr.WriteString(banner + "\n")
 
-	// Print startup banner
-	logger.Info().Msg(banner)
-	logger.Info().Msg("pg-s3-backup worker starting up")
-
-	// Log configuration summary (masking sensitive values)
-	logger.Info().
+	log.Info().
 		Str("db_dsn", maskDSN(cfg.DatabaseDSN)).
 		Str("s3_bucket", cfg.S3Bucket).
 		Str("s3_region", cfg.S3Region).
@@ -65,20 +52,31 @@ func main() {
 		Str("schedule", cfg.Schedule).
 		Int("retention_days", cfg.RetentionDays).
 		Str("log_level", cfg.LogLevel).
-		Msg("Configuration loaded successfully")
+		Msg("pg-s3-backup started — configuration loaded successfully")
 
-	logger.Info().Msg("Startup complete — worker is ready (no scheduler wired yet, exiting cleanly)")
 	os.Exit(0)
 }
 
-// maskDSN replaces the password portion of a DSN with asterisks for safe logging.
+// isTerminal reports whether stderr is an interactive terminal.
+func isTerminal() bool {
+	fi, err := os.Stderr.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// maskDSN replaces the password portion of a DSN with asterisks so it is safe
+// to log.  If the DSN cannot be parsed it returns a fixed placeholder.
 func maskDSN(dsn string) string {
-	if dsn == "" {
-		return "<not set>"
+	// Very simple masking: hide everything after the last '@' sign is kept,
+	// the credentials before it are replaced.
+	for i := len(dsn) - 1; i >= 0; i-- {
+		if dsn[i] == '@' {
+			return "***@" + dsn[i+1:]
+		}
 	}
-	// Simple masking: show only the first 8 chars if DSN is long enough
-	if len(dsn) <= 8 {
-		return "***"
-	}
-	return dsn[:8] + "***"
+	// No '@' found — could be a keyword=value style DSN; return as-is
+	// (passwords in keyword DSNs are harder to extract and less common in logs).
+	return dsn
 }

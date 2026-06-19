@@ -1,258 +1,286 @@
 package config_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/org/pg-s3-backup/internal/config"
-	"github.com/spf13/viper"
 )
 
-// newViper returns a fresh Viper instance that does NOT read any config files,
-// ensuring tests are fully isolated from the developer's local config.yaml.
-func newViper(t *testing.T) *viper.Viper {
+// setEnv sets multiple environment variables for the duration of a test and
+// restores them (or unsets them) when the test completes.
+func setEnv(t *testing.T, pairs map[string]string) {
 	t.Helper()
-	v := viper.New()
-	// Disable config file reading for unit tests
-	v.SetConfigFile("/dev/null")
-	return v
-}
-
-// applyMinimalValid sets the minimum required fields on a Viper instance so
-// that Load succeeds without any errors, serving as a baseline for tests that
-// only care about one specific aspect of validation.
-func applyMinimalValid(v *viper.Viper) {
-	v.Set("database_dsn", "postgres://user:pass@localhost:5432/testdb?sslmode=disable")
-	v.Set("s3_bucket", "my-backup-bucket")
-	v.Set("s3_region", "us-east-1")
-	v.Set("schedule", "0 2 * * *")
-	v.Set("retention_days", 30)
-	v.Set("log_level", "info")
-}
-
-// ---------------------------------------------------------------------------
-// Happy-path tests
-// ---------------------------------------------------------------------------
-
-func TestLoad_ValidConfig(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-
-	cfg, err := config.LoadWithViper(v)
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-
-	if cfg.DatabaseDSN != "postgres://user:pass@localhost:5432/testdb?sslmode=disable" {
-		t.Errorf("unexpected DatabaseDSN: %q", cfg.DatabaseDSN)
-	}
-	if cfg.S3Bucket != "my-backup-bucket" {
-		t.Errorf("unexpected S3Bucket: %q", cfg.S3Bucket)
-	}
-	if cfg.S3Region != "us-east-1" {
-		t.Errorf("unexpected S3Region: %q", cfg.S3Region)
-	}
-	if cfg.Schedule != "0 2 * * *" {
-		t.Errorf("unexpected Schedule: %q", cfg.Schedule)
-	}
-	if cfg.RetentionDays != 30 {
-		t.Errorf("unexpected RetentionDays: %d", cfg.RetentionDays)
-	}
-	if cfg.LogLevel != "info" {
-		t.Errorf("unexpected LogLevel: %q", cfg.LogLevel)
-	}
-}
-
-func TestLoad_Defaults(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-
-	// Override only the required fields; let defaults apply for the rest.
-	v.Set("s3_prefix", "")     // clear so we can check the default
-	v.Set("log_level", "info") // must be valid
-
-	// We need to set a known s3_prefix default — remove override, rely on setDefaults
-	// which is called inside LoadWithViper.
-	v2 := viper.New()
-	v2.Set("database_dsn", "postgres://user:pass@localhost/db")
-	v2.Set("s3_bucket", "bucket")
-	// intentionally omit s3_region, schedule, retention_days, log_level
-
-	cfg, err := config.LoadWithViper(v2)
-	if err != nil {
-		t.Fatalf("expected defaults to satisfy validation, got: %v", err)
-	}
-
-	if cfg.S3Prefix != "backups/" {
-		t.Errorf("expected default s3_prefix 'backups/', got %q", cfg.S3Prefix)
-	}
-	if cfg.Schedule != "0 2 * * *" {
-		t.Errorf("expected default schedule '0 2 * * *', got %q", cfg.Schedule)
-	}
-	if cfg.RetentionDays != 30 {
-		t.Errorf("expected default retention_days 30, got %d", cfg.RetentionDays)
-	}
-	if cfg.LogLevel != "info" {
-		t.Errorf("expected default log_level 'info', got %q", cfg.LogLevel)
-	}
-	if cfg.S3Region != "us-east-1" {
-		t.Errorf("expected default s3_region 'us-east-1', got %q", cfg.S3Region)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Env var override tests
-// ---------------------------------------------------------------------------
-
-func TestLoad_EnvVarOverride(t *testing.T) {
-	t.Setenv("BACKUP_DATABASE_DSN", "postgres://envuser:envpass@envhost:5432/envdb")
-	t.Setenv("BACKUP_S3_BUCKET", "env-bucket")
-	t.Setenv("BACKUP_S3_REGION", "eu-west-1")
-	t.Setenv("BACKUP_SCHEDULE", "30 3 * * *")
-	t.Setenv("BACKUP_RETENTION_DAYS", "14")
-	t.Setenv("BACKUP_LOG_LEVEL", "debug")
-
-	v := viper.New()
-	cfg, err := config.LoadWithViper(v)
-	if err != nil {
-		t.Fatalf("expected no error with env vars set, got: %v", err)
-	}
-
-	if cfg.DatabaseDSN != "postgres://envuser:envpass@envhost:5432/envdb" {
-		t.Errorf("env var BACKUP_DATABASE_DSN not applied, got: %q", cfg.DatabaseDSN)
-	}
-	if cfg.S3Bucket != "env-bucket" {
-		t.Errorf("env var BACKUP_S3_BUCKET not applied, got: %q", cfg.S3Bucket)
-	}
-	if cfg.S3Region != "eu-west-1" {
-		t.Errorf("env var BACKUP_S3_REGION not applied, got: %q", cfg.S3Region)
-	}
-	if cfg.Schedule != "30 3 * * *" {
-		t.Errorf("env var BACKUP_SCHEDULE not applied, got: %q", cfg.Schedule)
-	}
-	if cfg.RetentionDays != 14 {
-		t.Errorf("env var BACKUP_RETENTION_DAYS not applied, got: %d", cfg.RetentionDays)
-	}
-	if cfg.LogLevel != "debug" {
-		t.Errorf("env var BACKUP_LOG_LEVEL not applied, got: %q", cfg.LogLevel)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Validation failure tests
-// ---------------------------------------------------------------------------
-
-func TestLoad_MissingDatabaseDSN(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-	v.Set("database_dsn", "")
-
-	_, err := config.LoadWithViper(v)
-	if err == nil {
-		t.Fatal("expected error for missing database_dsn, got nil")
-	}
-}
-
-func TestLoad_MissingS3Bucket(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-	v.Set("s3_bucket", "")
-
-	_, err := config.LoadWithViper(v)
-	if err == nil {
-		t.Fatal("expected error for missing s3_bucket, got nil")
-	}
-}
-
-func TestLoad_MissingS3Region(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-	v.Set("s3_region", "")
-
-	_, err := config.LoadWithViper(v)
-	if err == nil {
-		t.Fatal("expected error for missing s3_region, got nil")
-	}
-}
-
-func TestLoad_InvalidRetentionDays_Zero(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-	v.Set("retention_days", 0)
-
-	_, err := config.LoadWithViper(v)
-	if err == nil {
-		t.Fatal("expected error for retention_days=0, got nil")
-	}
-}
-
-func TestLoad_InvalidRetentionDays_Negative(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-	v.Set("retention_days", -5)
-
-	_, err := config.LoadWithViper(v)
-	if err == nil {
-		t.Fatal("expected error for retention_days=-5, got nil")
-	}
-}
-
-func TestLoad_InvalidLogLevel(t *testing.T) {
-	v := newViper(t)
-	applyMinimalValid(v)
-	v.Set("log_level", "verbose") // not a valid zerolog level
-
-	_, err := config.LoadWithViper(v)
-	if err == nil {
-		t.Fatal("expected error for invalid log_level, got nil")
-	}
-}
-
-func TestLoad_ValidLogLevels(t *testing.T) {
-	levels := []string{"trace", "debug", "info", "warn", "error", "fatal", "panic"}
-
-	for _, level := range levels {
-		t.Run(level, func(t *testing.T) {
-			v := newViper(t)
-			applyMinimalValid(v)
-			v.Set("log_level", level)
-
-			_, err := config.LoadWithViper(v)
-			if err != nil {
-				t.Errorf("log_level %q should be valid, got error: %v", level, err)
+	for k, v := range pairs {
+		prev, existed := os.LookupEnv(k)
+		if err := os.Setenv(k, v); err != nil {
+			t.Fatalf("setenv %s: %v", k, err)
+		}
+		t.Cleanup(func() {
+			if existed {
+				_ = os.Setenv(k, prev)
+			} else {
+				_ = os.Unsetenv(k)
 			}
 		})
 	}
 }
 
-func TestLoad_MultipleErrors(t *testing.T) {
-	v := newViper(t)
-	// Provide NO required fields whatsoever
-	v.Set("retention_days", -1)
-	v.Set("log_level", "badlevel")
+// minimalEnv returns the smallest set of env vars that makes Load() succeed.
+func minimalEnv() map[string]string {
+	return map[string]string{
+		"BACKUP_DATABASE_DSN": "postgres://user:pass@localhost:5432/testdb?sslmode=disable",
+		"BACKUP_S3_BUCKET":    "my-backup-bucket",
+		"BACKUP_S3_REGION":    "us-east-1",
+	}
+}
 
-	_, err := config.LoadWithViper(v)
+// TestLoad_EnvVarsOnly verifies that a valid config can be loaded purely from
+// environment variables with no config file present.
+func TestLoad_EnvVarsOnly(t *testing.T) {
+	setEnv(t, minimalEnv())
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() returned unexpected error: %v", err)
+	}
+
+	if cfg.DatabaseDSN != "postgres://user:pass@localhost:5432/testdb?sslmode=disable" {
+		t.Errorf("DatabaseDSN = %q; want postgres://...", cfg.DatabaseDSN)
+	}
+	if cfg.S3Bucket != "my-backup-bucket" {
+		t.Errorf("S3Bucket = %q; want my-backup-bucket", cfg.S3Bucket)
+	}
+	if cfg.S3Region != "us-east-1" {
+		t.Errorf("S3Region = %q; want us-east-1", cfg.S3Region)
+	}
+}
+
+// TestLoad_Defaults verifies that optional fields receive their default values.
+func TestLoad_Defaults(t *testing.T) {
+	setEnv(t, minimalEnv())
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() returned unexpected error: %v", err)
+	}
+
+	if cfg.S3Prefix != "backups/" {
+		t.Errorf("S3Prefix = %q; want backups/", cfg.S3Prefix)
+	}
+	if cfg.Schedule != "0 2 * * *" {
+		t.Errorf("Schedule = %q; want 0 2 * * *", cfg.Schedule)
+	}
+	if cfg.RetentionDays != 30 {
+		t.Errorf("RetentionDays = %d; want 30", cfg.RetentionDays)
+	}
+	if cfg.LogLevel != "info" {
+		t.Errorf("LogLevel = %q; want info", cfg.LogLevel)
+	}
+}
+
+// TestLoad_EnvOverridesDefaults ensures that env vars properly override
+// built-in defaults.
+func TestLoad_EnvOverridesDefaults(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_S3_PREFIX"] = "custom/prefix/"
+	env["BACKUP_SCHEDULE"] = "30 3 * * 0"
+	env["BACKUP_RETENTION_DAYS"] = "7"
+	env["BACKUP_LOG_LEVEL"] = "debug"
+	setEnv(t, env)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() returned unexpected error: %v", err)
+	}
+
+	if cfg.S3Prefix != "custom/prefix/" {
+		t.Errorf("S3Prefix = %q; want custom/prefix/", cfg.S3Prefix)
+	}
+	if cfg.Schedule != "30 3 * * 0" {
+		t.Errorf("Schedule = %q; want 30 3 * * 0", cfg.Schedule)
+	}
+	if cfg.RetentionDays != 7 {
+		t.Errorf("RetentionDays = %d; want 7", cfg.RetentionDays)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("LogLevel = %q; want debug", cfg.LogLevel)
+	}
+}
+
+// TestLoad_MissingRequired verifies that missing required fields produce a
+// descriptive error.
+func TestLoad_MissingRequired(t *testing.T) {
+	// Ensure none of the required vars are set.
+	for _, k := range []string{"BACKUP_DATABASE_DSN", "BACKUP_S3_BUCKET", "BACKUP_S3_REGION"} {
+		_ = os.Unsetenv(k)
+		t.Cleanup(func() { _ = os.Unsetenv(k) })
+	}
+
+	_, err := config.Load()
 	if err == nil {
-		t.Fatal("expected multiple validation errors, got nil")
+		t.Fatal("Load() should have failed with missing required fields but returned nil error")
 	}
-	// The error message should mention at least one field
-	errMsg := err.Error()
-	for _, expectedSubstr := range []string{"database_dsn", "s3_bucket"} {
-		if !containsSubstring(errMsg, expectedSubstr) {
-			t.Errorf("expected error to mention %q, but got: %v", expectedSubstr, errMsg)
+}
+
+// TestLoad_MissingDatabaseDSN verifies that an absent database DSN is caught.
+func TestLoad_MissingDatabaseDSN(t *testing.T) {
+	env := minimalEnv()
+	delete(env, "BACKUP_DATABASE_DSN")
+	setEnv(t, env)
+	// Ensure the var really is absent.
+	_ = os.Unsetenv("BACKUP_DATABASE_DSN")
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error for missing database_dsn, got nil")
+	}
+}
+
+// TestLoad_MissingS3Bucket verifies that an absent S3 bucket is caught.
+func TestLoad_MissingS3Bucket(t *testing.T) {
+	env := minimalEnv()
+	delete(env, "BACKUP_S3_BUCKET")
+	setEnv(t, env)
+	_ = os.Unsetenv("BACKUP_S3_BUCKET")
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error for missing s3_bucket, got nil")
+	}
+}
+
+// TestLoad_MissingS3Region verifies that an absent S3 region is caught.
+func TestLoad_MissingS3Region(t *testing.T) {
+	env := minimalEnv()
+	delete(env, "BACKUP_S3_REGION")
+	setEnv(t, env)
+	_ = os.Unsetenv("BACKUP_S3_REGION")
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error for missing s3_region, got nil")
+	}
+}
+
+// TestLoad_InvalidLogLevel verifies that an unrecognised log level is rejected.
+func TestLoad_InvalidLogLevel(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_LOG_LEVEL"] = "verbose" // not a valid zerolog level
+	setEnv(t, env)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error for invalid log_level, got nil")
+	}
+}
+
+// TestLoad_InvalidRetentionDays verifies that retention_days < 1 is rejected.
+func TestLoad_InvalidRetentionDays(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_RETENTION_DAYS"] = "0"
+	setEnv(t, env)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error for retention_days=0, got nil")
+	}
+}
+
+// TestLoad_YAMLConfigFile verifies that values from a YAML config file are
+// picked up correctly.
+func TestLoad_YAMLConfigFile(t *testing.T) {
+	// Write a temporary config.yaml and change to that directory.
+	dir := t.TempDir()
+	content := []byte(`
+database_dsn: "postgres://yaml-user:yaml-pass@db:5432/prod"
+s3_bucket: "yaml-bucket"
+s3_region: "eu-west-1"
+s3_prefix: "yaml/prefix/"
+schedule: "0 4 * * *"
+retention_days: 14
+log_level: "warn"
+`)
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0o600); err != nil {
+		t.Fatalf("writing temp config: %v", err)
+	}
+
+	// Change working directory so Viper can discover the file.
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	// Unset env vars that might shadow the file values.
+	for _, k := range []string{
+		"BACKUP_DATABASE_DSN", "BACKUP_S3_BUCKET", "BACKUP_S3_REGION",
+		"BACKUP_S3_PREFIX", "BACKUP_SCHEDULE", "BACKUP_RETENTION_DAYS", "BACKUP_LOG_LEVEL",
+	} {
+		_ = os.Unsetenv(k)
+		t.Cleanup(func() { _ = os.Unsetenv(k) })
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() returned unexpected error: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		got  interface{}
+		want interface{}
+	}{
+		{"DatabaseDSN", cfg.DatabaseDSN, "postgres://yaml-user:yaml-pass@db:5432/prod"},
+		{"S3Bucket", cfg.S3Bucket, "yaml-bucket"},
+		{"S3Region", cfg.S3Region, "eu-west-1"},
+		{"S3Prefix", cfg.S3Prefix, "yaml/prefix/"},
+		{"Schedule", cfg.Schedule, "0 4 * * *"},
+		{"RetentionDays", cfg.RetentionDays, 14},
+		{"LogLevel", cfg.LogLevel, "warn"},
+	}
+	for _, tt := range tests {
+		if tt.got != tt.want {
+			t.Errorf("%s = %v; want %v", tt.name, tt.got, tt.want)
 		}
 	}
 }
 
-func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr ||
-		len(s) > 0 && containsSubstringHelper(s, substr))
-}
-
-func containsSubstringHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+// TestLoad_EnvOverridesYAML verifies that env vars take precedence over file
+// values (core Viper contract).
+func TestLoad_EnvOverridesYAML(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte(`
+database_dsn: "postgres://file-user:file-pass@db:5432/prod"
+s3_bucket: "file-bucket"
+s3_region: "us-west-2"
+`)
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), content, 0o600); err != nil {
+		t.Fatalf("writing temp config: %v", err)
 	}
-	return false
+
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	// Override the bucket via env var.
+	setEnv(t, map[string]string{
+		"BACKUP_S3_BUCKET": "env-bucket",
+	})
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() returned unexpected error: %v", err)
+	}
+
+	if cfg.S3Bucket != "env-bucket" {
+		t.Errorf("S3Bucket = %q; want env-bucket (env should override file)", cfg.S3Bucket)
+	}
+	// File-sourced value should still be present for other keys.
+	if cfg.S3Region != "us-west-2" {
+		t.Errorf("S3Region = %q; want us-west-2 (from config file)", cfg.S3Region)
+	}
 }

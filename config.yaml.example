@@ -1,51 +1,54 @@
-# pg-s3-backup configuration file
-# Copy this file to config.yaml and fill in the values.
+# pg-s3-backup — example configuration file
 #
-# Environment variables prefixed with BACKUP_ always override values set here.
-# Example: BACKUP_DATABASE_DSN overrides database_dsn below.
+# Copy this file to config.yaml and fill in your values.
+# All settings can also be provided (or overridden) via environment variables
+# prefixed with BACKUP_  (e.g. BACKUP_DATABASE_DSN).
+#
+# Environment variables always take precedence over values in this file.
 
-# ---------------------------------------------------------------------------
-# PostgreSQL connection
-# ---------------------------------------------------------------------------
+# ── PostgreSQL ────────────────────────────────────────────────────────────────
 
-# Full DSN for the PostgreSQL database to back up.
-# Format: postgres://[user[:password]@][host][:port]/[dbname][?param=value&...]
-database_dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+# libpq-compatible connection string for the source database.
+# Required.
+database_dsn: "postgres://backup_user:changeme@localhost:5432/mydb?sslmode=require"
 
-# ---------------------------------------------------------------------------
-# S3 / object storage
-# ---------------------------------------------------------------------------
+# ── Amazon S3 ─────────────────────────────────────────────────────────────────
 
-# Name of the S3 bucket where backup archives will be uploaded.
-s3_bucket: "my-database-backups"
+# Name of the S3 bucket where backups will be stored.
+# Required.
+s3_bucket: "my-backup-bucket"
 
 # AWS region that hosts the bucket.
+# Required.
 s3_region: "us-east-1"
 
-# Optional key prefix (acts as a folder) within the bucket.
-# Trailing slash is recommended.
+# Optional key prefix (folder path) inside the bucket.
+# A trailing slash is recommended.
+# Default: "backups/"
 s3_prefix: "backups/"
 
-# ---------------------------------------------------------------------------
-# Backup schedule & retention
-# ---------------------------------------------------------------------------
+# ── Schedule ──────────────────────────────────────────────────────────────────
 
-# Cron expression controlling how often backups run (evaluated in UTC).
-# Default: daily at 02:00 UTC
+# Standard 5-field cron expression (evaluated in UTC).
 # Examples:
-#   "0 2 * * *"     — daily at 02:00
-#   "0 */6 * * *"   — every 6 hours
-#   "0 2 * * 0"     — weekly on Sunday at 02:00
+#   "0 2 * * *"    — daily at 02:00 UTC
+#   "0 */6 * * *"  — every 6 hours
+#   "30 1 * * 0"   — weekly on Sunday at 01:30 UTC
+# Default: "0 2 * * *"
 schedule: "0 2 * * *"
 
-# Number of days to retain backups.
-# Backups older than this will be deleted during the pruning phase.
+# ── Retention ─────────────────────────────────────────────────────────────────
+
+# Number of days to keep backups in S3.
+# After each successful backup run, objects older than this threshold are
+# deleted from the configured prefix.
+# Must be >= 1.
+# Default: 30
 retention_days: 30
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
+# ── Logging ───────────────────────────────────────────────────────────────────
 
-# Log verbosity level.
-# Valid values: trace | debug | info | warn | error | fatal | panic
+# Minimum log level to emit.
+# Accepted values: trace, debug, info, warn, error, fatal, panic
+# Default: "info"
 log_level: "info"
