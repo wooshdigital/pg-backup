@@ -1,38 +1,28 @@
-# Compiled binaries and build output
+# Compiled binaries
 bin/
 *.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+*.out
 
-# Test binary, built with `go test -c`
+# Environment / secret files
+.env
+*.env
+
+# Config overrides (keep the .example files)
+config.yaml
+config.yml
+
+# Test & coverage output
 *.test
-
-# Test coverage output
 coverage.out
 coverage.html
 
-# Go workspace file
-go.work
-go.work.sum
-
-# Environment files — never commit real secrets
-.env
-*.env
-!.env.example
-
-# Editor and OS artefacts
-.DS_Store
+# Editor / IDE artefacts
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# Dependency vendor directory (uncomment if you vendor dependencies)
-# vendor/
-
-# Temporary files
-tmp/
-*.tmp
+# OS artefacts
+.DS_Store
+Thumbs.db

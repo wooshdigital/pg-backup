@@ -1,56 +1,49 @@
-# ── Variables ─────────────────────────────────────────────────────────────────
-MODULE        := github.com/org/pg-s3-backup
-BINARY        := pg-s3-backup
-CMD_DIR       := ./cmd/worker
-OUTPUT_DIR    := bin
-COVERAGE_FILE := coverage.out
+# ============================================================================
+# pg-s3-backup — Makefile
+# ============================================================================
 
-GO            := go
-GOFLAGS       ?=
-LDFLAGS       := -s -w
+BINARY   := pg-s3-backup
+CMD_DIR  := ./cmd/worker
+BUILD_DIR := ./bin
 
-# Use golangci-lint if available; install instructions:
-#   https://golangci-lint.run/usage/install/
-LINTER        := golangci-lint
+GO        := go
+GOLINT    := golangci-lint
 
 .PHONY: all build test lint run clean tidy help
 
-## all: build the binary (default target)
 all: build
 
 ## build: compile the worker binary into ./bin/
 build:
-	@mkdir -p $(OUTPUT_DIR)
-	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(OUTPUT_DIR)/$(BINARY) $(CMD_DIR)
-	@echo "✓ Built $(OUTPUT_DIR)/$(BINARY)"
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build -o $(BUILD_DIR)/$(BINARY) $(CMD_DIR)
+	@echo "✓ built $(BUILD_DIR)/$(BINARY)"
 
-## test: run all unit tests with race detector and coverage
+## test: run all unit tests with race detector
 test:
-	$(GO) test -race -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
-	$(GO) tool cover -func=$(COVERAGE_FILE)
+	$(GO) test -race -cover ./...
 
-## lint: run golangci-lint (install separately)
+## lint: run golangci-lint (install from https://golangci-lint.run)
 lint:
-	$(LINTER) run ./...
+	$(GOLINT) run ./...
 
-## run: build and immediately execute the binary (reads .env if present)
+## run: load .env (if present) and execute the binary
 run: build
 	@if [ -f .env ]; then \
-		echo "⟳ Loading .env"; \
+		echo "Loading .env…"; \
 		export $$(grep -v '^#' .env | xargs); \
 	fi; \
-	$(OUTPUT_DIR)/$(BINARY)
+	$(BUILD_DIR)/$(BINARY)
 
-## tidy: tidy and verify go.mod / go.sum
+## tidy: tidy and verify go modules
 tidy:
 	$(GO) mod tidy
 	$(GO) mod verify
 
-## clean: remove build artefacts and coverage reports
+## clean: remove compiled artefacts
 clean:
-	@rm -rf $(OUTPUT_DIR) $(COVERAGE_FILE)
-	@echo "✓ Cleaned"
+	rm -rf $(BUILD_DIR)
 
 ## help: print this help message
 help:
-	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## //'
+	@grep -E '^##' Makefile | sed 's/## //'
