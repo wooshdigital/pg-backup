@@ -1,0 +1,39 @@
+# ── Binaries ──────────────────────────────────────────────────────────────────
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# ── Test & coverage ───────────────────────────────────────────────────────────
+coverage.out
+coverage.html
+*.test
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+*.env
+!.env.example
+
+# ── Config overrides (keep examples, ignore real configs) ─────────────────────
+config.yaml
+!config.yaml.example
+
+# ── Go workspace ──────────────────────────────────────────────────────────────
+go.work
+go.work.sum
+
+# ── Editor & OS ───────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# ── Temporary files ───────────────────────────────────────────────────────────
+tmp/
+*.tmp
+*.bak

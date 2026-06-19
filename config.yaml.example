@@ -1,0 +1,51 @@
+# pg-s3-backup configuration file
+# Copy this file to config.yaml in the working directory.
+# Environment variables (PG_S3_BACKUP_*) take precedence over values here.
+
+# ── Database ──────────────────────────────────────────────────────────────────
+
+# PostgreSQL connection DSN.
+# Format: postgres://[user[:password]@][host][:port]/[dbname][?options]
+database_dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+
+# ── S3 Storage ────────────────────────────────────────────────────────────────
+
+# Name of the S3 bucket where backup archives will be stored.
+s3_bucket: "my-backup-bucket"
+
+# AWS region where the bucket resides.
+s3_region: "us-east-1"
+
+# Optional key prefix (acts like a folder) inside the bucket.
+# The final object key will be: <s3_prefix><timestamp>-<dbname>.dump.gz
+s3_prefix: "backups/"
+
+# ── Schedule ─────────────────────────────────────────────────────────────────
+
+# Cron expression controlling when backups are triggered.
+# Default: daily at 02:00 UTC
+# Format: minute hour day-of-month month day-of-week
+#
+# Examples:
+#   "0 2 * * *"     — daily at 2 AM
+#   "0 */6 * * *"   — every 6 hours
+#   "30 1 * * 0"    — every Sunday at 1:30 AM
+schedule: "0 2 * * *"
+
+# ── Retention ─────────────────────────────────────────────────────────────────
+
+# Number of days to keep backup files in S3.
+# Backups older than this value will be deleted on each successful run.
+# Minimum value: 1
+retention_days: 30
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+
+# Log level controls output verbosity.
+# Valid values: debug | info | warn | error
+#
+#   debug — verbose, includes caller information (use in development)
+#   info  — standard operational messages (recommended for production)
+#   warn  — only warnings and errors
+#   error — only errors
+log_level: "info"
