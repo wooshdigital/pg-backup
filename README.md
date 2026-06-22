@@ -1,28 +1,27 @@
 # pg-s3-backup
 
-A production-ready, containerisable Go worker that takes scheduled PostgreSQL
-dumps and uploads them to Amazon S3, with automatic retention management.
+A production-ready PostgreSQL backup tool that dumps databases on a cron schedule and uploads them to Amazon S3, with automatic retention management.
 
 ---
 
 ## Features
 
-- **Scheduled backups** via a standard cron expression
-- **Structured JSON logging** with [zerolog](https://github.com/rs/zerolog)
-- **Layered configuration**: defaults → config file → environment variables
-- **Retention management**: automatically prune old backup objects from S3
-- **Single static binary** — trivial to deploy in Docker / Kubernetes
+- ⏰ **Cron-based scheduling** — define your backup frequency with a standard cron expression
+- ☁️ **S3 storage** — uploads compressed dumps to any S3-compatible endpoint
+- 🗓️ **Retention management** — automatically deletes backups older than N days
+- 📋 **Structured logging** — JSON output via `zerolog`, debug-friendly console mode
+- 🔧 **Layered config** — environment variables override config file values; sane defaults out of the box
 
 ---
 
 ## Quickstart
 
-### 1. Clone and install dependencies
+### 1. Clone and build
 
 ```bash
 git clone https://github.com/org/pg-s3-backup.git
 cd pg-s3-backup
-go mod download
+make build
 ```
 
 ### 2. Configure
@@ -32,76 +31,88 @@ Copy the example files and fill in your values:
 ```bash
 cp config.yaml.example config.yaml
 cp .env.example .env
+# edit config.yaml or set environment variables
 ```
 
-Either the YAML file **or** environment variables (or both) can be used.
-Environment variables always take precedence.
-
-### 3. Build and run
+### 3. Run
 
 ```bash
-make build
-make run
-```
+# Using environment variables:
+export PG_S3_BACKUP_DATABASE_DSN="postgres://user:pass@localhost:5432/mydb"
+export PG_S3_BACKUP_S3_BUCKET="my-backup-bucket"
+export PG_S3_BACKUP_S3_REGION="us-east-1"
+./bin/pg-s3-backup
 
-Or with `go run` directly:
-
-```bash
-BACKUP_DATABASE_DSN="postgres://user:pass@localhost:5432/mydb" \
-BACKUP_S3_BUCKET="my-backup-bucket" \
-BACKUP_S3_REGION="us-east-1" \
-go run ./cmd/worker
+# Using a config file:
+./bin/pg-s3-backup   # reads ./config.yaml automatically
 ```
 
 ---
 
 ## Configuration Reference
 
-All configuration keys can be supplied via:
+All configuration can be supplied via **environment variables** (highest priority), a **`config.yaml`** file, or will fall back to **default values**.
 
-1. **`config.yaml`** in the working directory (or `/etc/pg-s3-backup/config.yaml`)
-2. **Environment variables** — prefix every key with `BACKUP_` and
-   upper-case it (e.g. `database_dsn` → `BACKUP_DATABASE_DSN`).
+Environment variable names follow the pattern: `PG_S3_BACKUP_<KEY>` where `<KEY>` is the YAML key in `SCREAMING_SNAKE_CASE`.
 
-| Key              | Env Variable              | Required | Default        | Description                                                   |
-|------------------|---------------------------|----------|----------------|---------------------------------------------------------------|
-| `database_dsn`   | `BACKUP_DATABASE_DSN`     | ✅ Yes   | —              | PostgreSQL connection string passed to `pg_dump`              |
-| `s3_bucket`      | `BACKUP_S3_BUCKET`        | ✅ Yes   | —              | Name of the target S3 bucket                                  |
-| `s3_region`      | `BACKUP_S3_REGION`        | ✅ Yes   | —              | AWS region of the S3 bucket (e.g. `us-east-1`)                |
-| `s3_prefix`      | `BACKUP_S3_PREFIX`        | No       | `backups/`     | Key prefix (folder) inside the bucket                         |
-| `schedule`       | `BACKUP_SCHEDULE`         | No       | `0 2 * * *`    | Cron expression for backup frequency (UTC)                    |
-| `retention_days` | `BACKUP_RETENTION_DAYS`   | No       | `30`           | Days to keep backups; `0` means keep forever                  |
-| `log_level`      | `BACKUP_LOG_LEVEL`        | No       | `info`         | Zerolog level: `trace`, `debug`, `info`, `warn`, `error`, …   |
+| YAML Key          | Environment Variable              | Required | Default       | Description                                              |
+|-------------------|-----------------------------------|----------|---------------|----------------------------------------------------------|
+| `database_dsn`    | `PG_S3_BACKUP_DATABASE_DSN`       | ✅ Yes   | —             | PostgreSQL connection string                             |
+| `s3_bucket`       | `PG_S3_BACKUP_S3_BUCKET`          | ✅ Yes   | —             | S3 bucket name                                           |
+| `s3_region`       | `PG_S3_BACKUP_S3_REGION`          | ✅ Yes   | —             | AWS region (e.g. `us-east-1`)                            |
+| `s3_prefix`       | `PG_S3_BACKUP_S3_PREFIX`          | No       | `backups/`    | Key prefix (folder) inside the bucket                    |
+| `schedule`        | `PG_S3_BACKUP_SCHEDULE`           | No       | `0 2 * * *`   | Cron expression for backup frequency                     |
+| `retention_days`  | `PG_S3_BACKUP_RETENTION_DAYS`     | No       | `30`          | Days to keep backups before automatic deletion           |
+| `log_level`       | `PG_S3_BACKUP_LOG_LEVEL`          | No       | `info`        | Log verbosity: `debug`, `info`, `warn`, `error`          |
+
+### PostgreSQL DSN format
+
+```
+postgres://username:password@host:port/database?sslmode=disable
+```
 
 ---
 
 ## Development
 
 ```bash
-make tidy    # go mod tidy + verify
-make test    # race-detected tests + coverage
-make lint    # golangci-lint (install separately)
-make build   # produces ./bin/pg-s3-backup
-make clean   # remove build artefacts
+make test          # run tests with race detection + coverage
+make test-verbose  # verbose test output
+make cover         # open HTML coverage report
+make lint          # run golangci-lint
+make fmt           # gofmt all files
+make vet           # go vet
+make tidy          # go mod tidy + verify
+make clean         # remove build artifacts
+make help          # list all targets
 ```
+
+### Running tests
+
+```bash
+make test
+```
+
+Tests use only the standard library and environment variables — no external services required.
 
 ---
 
-## Project Layout
+## Project Structure
 
 ```
-.
+pg-s3-backup/
 ├── cmd/
 │   └── worker/
 │       └── main.go          # Entry point
 ├── internal/
 │   └── config/
-│       ├── config.go        # Config struct + Viper-based loader + validation
+│       ├── config.go        # Config struct + Viper-based Load()
 │       └── config_test.go   # Unit tests
-├── config.yaml.example      # Example YAML config
+├── config.yaml.example      # Example config file
 ├── .env.example             # Example environment variables
-├── Makefile
-└── README.md
+├── Makefile                 # Dev workflow targets
+├── go.mod
+└── go.sum
 ```
 
 ---

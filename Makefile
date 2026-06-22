@@ -1,59 +1,84 @@
-# ── Variables ──────────────────────────────────────────────────────────────────
-BINARY        := pg-s3-backup
-CMD_PATH      := ./cmd/worker
-BUILD_DIR     := ./bin
-COVERAGE_FILE := coverage.out
+# ============================================================
+# pg-s3-backup — Developer Makefile
+# ============================================================
 
-# Detect the OS for platform-specific commands
-UNAME_S := $(shell uname -s)
+# Go binary name and module path
+BINARY      := pg-s3-backup
+MODULE      := github.com/org/pg-s3-backup
+CMD_PATH    := ./cmd/worker
 
-.PHONY: all build test lint run clean tidy help
+# Build output directory
+BUILD_DIR   := ./bin
 
-## all: Run tidy, lint, test, and build
-all: tidy lint test build
+# Go tools
+GO          := go
+GOFLAGS     :=
+
+# Linting (requires golangci-lint to be installed)
+GOLANGCI    := golangci-lint
+
+.PHONY: all build test lint fmt vet run clean tidy help
+
+## all: Build and test (default target)
+all: build test
 
 ## build: Compile the worker binary into ./bin/
 build:
 	@echo "==> Building $(BINARY)..."
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BUILD_DIR)/$(BINARY) $(CMD_PATH)
-	@echo "    Binary: $(BUILD_DIR)/$(BINARY)"
+	$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY) $(CMD_PATH)
+	@echo "    Binary written to $(BUILD_DIR)/$(BINARY)"
 
-## test: Run all unit tests with race detection and generate a coverage report
+## test: Run all unit tests with race detection and coverage
 test:
 	@echo "==> Running tests..."
-	go test -race -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
-	go tool cover -func=$(COVERAGE_FILE) | tail -1
+	$(GO) test -race -count=1 -coverprofile=coverage.out ./...
+	@echo "==> Coverage summary:"
+	$(GO) tool cover -func=coverage.out | tail -1
 
-## lint: Run golangci-lint (install separately: https://golangci-lint.run/usage/install/)
+## test-verbose: Run tests with verbose output
+test-verbose:
+	$(GO) test -v -race -count=1 -coverprofile=coverage.out ./...
+
+## cover: Open HTML coverage report in the default browser
+cover: test
+	$(GO) tool cover -html=coverage.out
+
+## lint: Run golangci-lint
 lint:
-	@echo "==> Running linter..."
-	@which golangci-lint > /dev/null 2>&1 || \
-		(echo "golangci-lint not found; install from https://golangci-lint.run/usage/install/" && exit 1)
-	golangci-lint run ./...
+	@echo "==> Linting..."
+	$(GOLANGCI) run ./...
 
-## run: Build and run the worker using variables from .env (if present)
-run: build
-	@echo "==> Running $(BINARY)..."
-	@if [ -f .env ]; then \
-		echo "    Loading environment from .env"; \
-		export $$(grep -v '^#' .env | xargs) && $(BUILD_DIR)/$(BINARY); \
-	else \
-		$(BUILD_DIR)/$(BINARY); \
-	fi
+## fmt: Format all Go source files
+fmt:
+	@echo "==> Formatting..."
+	$(GO) fmt ./...
 
-## tidy: Tidy and verify Go module dependencies
+## vet: Run go vet
+vet:
+	@echo "==> Vetting..."
+	$(GO) vet ./...
+
+## tidy: Tidy and verify go.mod / go.sum
 tidy:
 	@echo "==> Tidying modules..."
-	go mod tidy
-	go mod verify
+	$(GO) mod tidy
+	$(GO) mod verify
 
-## clean: Remove build artefacts and coverage files
+## run: Build and run the worker (requires env vars or config.yaml)
+run: build
+	@echo "==> Running $(BINARY)..."
+	$(BUILD_DIR)/$(BINARY)
+
+## clean: Remove build artifacts and coverage output
 clean:
 	@echo "==> Cleaning..."
-	@rm -rf $(BUILD_DIR) $(COVERAGE_FILE)
+	@rm -rf $(BUILD_DIR) coverage.out
 
-## help: Print this help message
+## help: Display this help text
 help:
-	@echo "Available targets:"
-	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /'
+	@echo ""
+	@echo "Usage: make <target>"
+	@echo ""
+	@grep -E '^##' $(MAKEFILE_LIST) | sed 's/## /  /' | column -t -s ':'
+	@echo ""

@@ -1,4 +1,4 @@
-# ── Compiled binaries & build output ──────────────────────────────────────────
+# Compiled binaries
 /bin/
 *.exe
 *.exe~
@@ -6,38 +6,29 @@
 *.so
 *.dylib
 
-# ── Test & coverage artefacts ─────────────────────────────────────────────────
+# Test & coverage output
 coverage.out
 coverage.html
 *.test
 
-# ── Environment & secrets ─────────────────────────────────────────────────────
+# Environment / secrets — never commit these
 .env
 *.env
 !.env.example
 
-# ── Config files with real values ─────────────────────────────────────────────
+# Config files with real values — commit only the .example
 config.yaml
 !config.yaml.example
 
-# ── Go workspace files ────────────────────────────────────────────────────────
+# Go workspace files
 go.work
 go.work.sum
 
-# ── IDE & editor files ────────────────────────────────────────────────────────
+# Editor / OS artefacts
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# ── macOS ─────────────────────────────────────────────────────────────────────
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# ── Linux ─────────────────────────────────────────────────────────────────────
-*~
-
-# ── Docker ────────────────────────────────────────────────────────────────────
-docker-compose.override.yml

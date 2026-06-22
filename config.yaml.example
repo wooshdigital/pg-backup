@@ -1,39 +1,64 @@
 # pg-s3-backup configuration file
 # Copy this file to config.yaml and fill in your values.
-# Environment variables (prefixed with BACKUP_) always override values here.
+# Environment variables override these file-based values.
+# See README.md for the full configuration reference.
 
-# ── Database ───────────────────────────────────────────────────────────────────
-# PostgreSQL connection string passed directly to pg_dump.
-# Format: postgres://[user[:password]@][host][:port][/dbname][?param1=value1&...]
-database_dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+# ---------------------------------------------------------------------------
+# PostgreSQL connection
+# ---------------------------------------------------------------------------
 
-# ── S3 Storage ────────────────────────────────────────────────────────────────
-# Name of the S3 bucket where backup archives are stored.
-s3_bucket: "my-backup-bucket"
+# PostgreSQL Data Source Name (DSN).
+# Format: postgres://user:password@host:port/dbname?sslmode=disable
+# Env var: PG_S3_BACKUP_DATABASE_DSN
+database_dsn: "postgres://myuser:mypassword@localhost:5432/mydb?sslmode=disable"
 
-# AWS region that hosts the target bucket (e.g. us-east-1, eu-west-1).
+# ---------------------------------------------------------------------------
+# S3 storage
+# ---------------------------------------------------------------------------
+
+# Name of the S3 bucket to store backups in.
+# Env var: PG_S3_BACKUP_S3_BUCKET
+s3_bucket: "my-postgres-backups"
+
+# AWS region where the bucket is located.
+# Env var: PG_S3_BACKUP_S3_REGION
 s3_region: "us-east-1"
 
-# Optional key prefix (think of it as a folder path) within the bucket.
-# A trailing slash is recommended.
+# Optional key prefix (folder path) within the bucket.
+# Backups will be stored at: s3://<bucket>/<prefix><timestamp>.dump
+# Default: "backups/"
+# Env var: PG_S3_BACKUP_S3_PREFIX
 s3_prefix: "backups/"
 
-# ── Schedule ──────────────────────────────────────────────────────────────────
-# Standard 5-field cron expression (UTC) controlling when backups are triggered.
-# Default: every day at 02:00 UTC
+# ---------------------------------------------------------------------------
+# Schedule & retention
+# ---------------------------------------------------------------------------
+
+# Cron expression defining when backups run.
+# The schedule uses standard 5-field cron syntax (minute hour dom month dow).
 # Examples:
-#   "0 2 * * *"     — daily at 02:00
-#   "0 */6 * * *"   — every 6 hours
-#   "0 3 * * 0"     — every Sunday at 03:00
+#   "0 2 * * *"    — daily at 02:00 UTC
+#   "0 */6 * * *"  — every 6 hours
+#   "0 2 * * 0"    — weekly on Sunday at 02:00 UTC
+# Default: "0 2 * * *"
+# Env var: PG_S3_BACKUP_SCHEDULE
 schedule: "0 2 * * *"
 
-# ── Retention ─────────────────────────────────────────────────────────────────
-# Number of days to keep backup objects in S3.
-# Objects older than this threshold are deleted after each successful backup.
-# Set to 0 to disable automatic deletion (keep all backups forever).
+# Number of days to retain backup files in S3.
+# Backups older than this value will be automatically deleted.
+# Minimum: 1
+# Default: 30
+# Env var: PG_S3_BACKUP_RETENTION_DAYS
 retention_days: 30
 
-# ── Logging ───────────────────────────────────────────────────────────────────
-# Controls the verbosity of structured JSON log output.
-# Valid values: trace | debug | info | warn | error | fatal | panic
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+# Log verbosity level.
+# Valid values: debug, info, warn, error, fatal, panic
+# In debug mode the logger uses a human-friendly console format.
+# In all other modes it emits structured JSON (suitable for log aggregators).
+# Default: "info"
+# Env var: PG_S3_BACKUP_LOG_LEVEL
 log_level: "info"

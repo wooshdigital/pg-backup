@@ -9,36 +9,61 @@ import (
 )
 
 const banner = `
-██████╗  ██████╗       ███████╗██████╗      ██████╗  █████╗  ██████╗██╗  ██╗██╗   ██╗██████╗
-██╔══██╗██╔════╝       ██╔════╝╚════██╗     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██║   ██║██╔══██╗
-██████╔╝██║  ███╗█████╗███████╗ █████╔╝     ██████╔╝███████║██║     █████╔╝ ██║   ██║██████╔╝
-██╔═══╝ ██║   ██║╚════╝╚════██║ ╚═══██╗     ██╔══██╗██╔══██║██║     ██╔═██╗ ██║   ██║██╔═══╝
-██║     ╚██████╔╝      ███████║██████╔╝     ██████╔╝██║  ██║╚██████╗██║  ██╗╚██████╔╝██║
-╚═╝      ╚═════╝       ╚══════╝╚═════╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝
+██████╗  ██████╗      ███████╗██████╗      ██████╗  █████╗  ██████╗██╗  ██╗██╗   ██╗██████╗
+██╔══██╗██╔════╝      ██╔════╝╚════██╗     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██║   ██║██╔══██╗
+██████╔╝██║  ███╗     ███████╗ █████╔╝     ██████╔╝███████║██║     █████╔╝ ██║   ██║██████╔╝
+██╔═══╝ ██║   ██║     ╚════██║ ╚═══██╗     ██╔══██╗██╔══██║██║     ██╔═██╗ ██║   ██║██╔═══╝
+██║     ╚██████╔╝     ███████║██████╔╝     ██████╔╝██║  ██║╚██████╗██║  ██╗╚██████╔╝██║
+╚═╝      ╚═════╝      ╚══════╝╚═════╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝
 `
 
 func main() {
 	// Bootstrap a console logger for startup (before config is loaded)
-	bootstrapLogger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
-		With().
-		Timestamp().
-		Str("component", "bootstrap").
-		Logger()
+	consoleWriter := zerolog.ConsoleWriter{Out: os.Stderr}
+	bootstrapLog := zerolog.New(consoleWriter).With().Timestamp().Logger()
 
-	bootstrapLogger.Info().Msg("Starting pg-s3-backup worker")
+	bootstrapLog.Info().Msg("pg-s3-backup starting up...")
 
-	// Load and validate configuration
+	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		bootstrapLogger.Fatal().Err(err).Msg("Failed to load configuration")
+		bootstrapLog.Fatal().Err(err).Msg("failed to load configuration")
 	}
 
-	// Set up the real logger based on config
-	logger := buildLogger(cfg)
+	// Configure the global logger based on the loaded config
+	level, err := zerolog.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		bootstrapLog.Warn().Str("log_level", cfg.LogLevel).Msg("invalid log level, defaulting to info")
+		level = zerolog.InfoLevel
+	}
 
-	// Print startup banner and config summary
-	logger.Info().Msg(banner)
-	logger.Info().
+	var logger zerolog.Logger
+	if cfg.LogLevel == "debug" {
+		// Pretty console output in debug mode
+		logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
+			Level(level).
+			With().
+			Timestamp().
+			Str("service", "pg-s3-backup").
+			Logger()
+	} else {
+		// Structured JSON output for production
+		logger = zerolog.New(os.Stderr).
+			Level(level).
+			With().
+			Timestamp().
+			Str("service", "pg-s3-backup").
+			Logger()
+	}
+
+	// Replace the global logger
+	log.Logger = logger
+
+	// Print startup banner
+	log.Info().Msg(banner)
+
+	// Log configuration summary (masking sensitive fields)
+	log.Info().
 		Str("db_dsn", maskDSN(cfg.DatabaseDSN)).
 		Str("s3_bucket", cfg.S3Bucket).
 		Str("s3_region", cfg.S3Region).
@@ -46,55 +71,22 @@ func main() {
 		Str("schedule", cfg.Schedule).
 		Int("retention_days", cfg.RetentionDays).
 		Str("log_level", cfg.LogLevel).
-		Msg("Configuration loaded successfully")
+		Msg("configuration loaded successfully")
 
-	logger.Info().Msg("Worker initialised — ready to run scheduled backups")
+	log.Info().Msg("startup validation complete — ready to run")
 	os.Exit(0)
 }
 
-// buildLogger constructs a zerolog.Logger from the loaded config.
-func buildLogger(cfg *config.Config) zerolog.Logger {
-	level, err := zerolog.ParseLevel(cfg.LogLevel)
-	if err != nil {
-		level = zerolog.InfoLevel
-	}
-	zerolog.SetGlobalLevel(level)
-
-	// Use pretty console output for non-production log levels, JSON otherwise
-	if level <= zerolog.DebugLevel {
-		return zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).
-			With().
-			Timestamp().
-			Str("service", "pg-s3-backup").
-			Logger()
-	}
-
-	return zerolog.New(os.Stdout).
-		With().
-		Timestamp().
-		Str("service", "pg-s3-backup").
-		Logger()
-}
-
-// maskDSN replaces the password portion of a DSN string with asterisks so it
-// is safe to log.
+// maskDSN masks the password in a PostgreSQL DSN for safe logging.
+// It handles both URI (postgres://user:pass@host/db) and keyword formats.
 func maskDSN(dsn string) string {
-	if dsn == "" {
-		return ""
+	if len(dsn) == 0 {
+		return "<empty>"
 	}
-	// Simple heuristic: show only the host/db portion after '@', or mask entirely
-	for i, ch := range dsn {
-		if ch == '@' {
-			// Find scheme prefix up to "://"
-			schemeEnd := 0
-			for j := 0; j < i; j++ {
-				if dsn[j] == ':' && j+2 < len(dsn) && dsn[j+1] == '/' && dsn[j+2] == '/' {
-					schemeEnd = j + 3
-					break
-				}
-			}
-			return dsn[:schemeEnd] + "****:****" + dsn[i:]
-		}
+	// Simple masking: show only first 10 chars and mask the rest
+	const maxVisible = 10
+	if len(dsn) <= maxVisible {
+		return "***"
 	}
-	return "****"
+	return dsn[:maxVisible] + "***"
 }
