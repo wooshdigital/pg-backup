@@ -7,183 +7,235 @@ import (
 	"github.com/org/pg-s3-backup/internal/config"
 )
 
-// setEnv is a helper that sets an environment variable and registers a cleanup
-// function to restore the original value after the test.
-func setEnv(t *testing.T, key, value string) {
+// setEnv is a helper that sets environment variables for the duration of a test
+// and restores their original values via t.Cleanup.
+func setEnv(t *testing.T, pairs map[string]string) {
 	t.Helper()
-	original, existed := os.LookupEnv(key)
-	if err := os.Setenv(key, value); err != nil {
-		t.Fatalf("setenv %s: %v", key, err)
-	}
-	t.Cleanup(func() {
-		if existed {
-			_ = os.Setenv(key, original)
+	for k, v := range pairs {
+		orig, exists := os.LookupEnv(k)
+		if err := os.Setenv(k, v); err != nil {
+			t.Fatalf("setenv %s: %v", k, err)
+		}
+		k := k // capture
+		if exists {
+			t.Cleanup(func() { os.Setenv(k, orig) })
 		} else {
-			_ = os.Unsetenv(key)
+			t.Cleanup(func() { os.Unsetenv(k) })
 		}
-	})
+	}
 }
 
-// unsetEnv unsets an env var and restores it after the test.
-func unsetEnv(t *testing.T, key string) {
-	t.Helper()
-	original, existed := os.LookupEnv(key)
-	_ = os.Unsetenv(key)
-	t.Cleanup(func() {
-		if existed {
-			_ = os.Setenv(key, original)
-		}
-	})
+// minimalEnv returns a map with the minimum required env vars so tests that
+// only care about one aspect don't have to repeat boilerplate.
+func minimalEnv() map[string]string {
+	return map[string]string{
+		"BACKUP_DATABASE_DSN": "postgres://user:secret@localhost:5432/testdb?sslmode=disable",
+		"BACKUP_S3_BUCKET":    "my-backup-bucket",
+		"BACKUP_S3_REGION":    "us-east-1",
+	}
 }
 
-// minimalEnv sets the three required environment variables and returns a
-// cleanup that removes them.
-func minimalEnv(t *testing.T) {
-	t.Helper()
-	setEnv(t, "BACKUP_DATABASE_DSN", "postgres://user:pass@localhost:5432/testdb?sslmode=disable")
-	setEnv(t, "BACKUP_S3_BUCKET", "my-backups")
-	setEnv(t, "BACKUP_S3_REGION", "us-east-1")
-}
+// ── Happy path ───────────────────────────────────────────────────────────────
 
-// TestLoad_Defaults verifies that default values are applied when only the
-// mandatory fields are supplied.
-func TestLoad_Defaults(t *testing.T) {
-	minimalEnv(t)
+func TestLoad_MinimalEnvVars(t *testing.T) {
+	setEnv(t, minimalEnv())
 
 	cfg, err := config.Load()
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.Schedule != "0 2 * * *" {
-		t.Errorf("expected default schedule '0 2 * * *', got %q", cfg.Schedule)
-	}
-	if cfg.RetentionDays != 30 {
-		t.Errorf("expected default retention_days 30, got %d", cfg.RetentionDays)
-	}
-	if cfg.LogLevel != "info" {
-		t.Errorf("expected default log_level 'info', got %q", cfg.LogLevel)
-	}
-	if cfg.S3Prefix != "backups/" {
-		t.Errorf("expected default s3_prefix 'backups/', got %q", cfg.S3Prefix)
-	}
-}
-
-// TestLoad_EnvOverride verifies that BACKUP_* env vars override defaults.
-func TestLoad_EnvOverride(t *testing.T) {
-	minimalEnv(t)
-	setEnv(t, "BACKUP_SCHEDULE", "0 3 * * *")
-	setEnv(t, "BACKUP_RETENTION_DAYS", "7")
-	setEnv(t, "BACKUP_LOG_LEVEL", "debug")
-	setEnv(t, "BACKUP_S3_PREFIX", "prod/")
-
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if cfg.Schedule != "0 3 * * *" {
-		t.Errorf("expected schedule '0 3 * * *', got %q", cfg.Schedule)
-	}
-	if cfg.RetentionDays != 7 {
-		t.Errorf("expected retention_days 7, got %d", cfg.RetentionDays)
-	}
-	if cfg.LogLevel != "debug" {
-		t.Errorf("expected log_level 'debug', got %q", cfg.LogLevel)
-	}
-	if cfg.S3Prefix != "prod/" {
-		t.Errorf("expected s3_prefix 'prod/', got %q", cfg.S3Prefix)
-	}
-}
-
-// TestLoad_MissingDSN verifies that omitting database_dsn is rejected.
-func TestLoad_MissingDSN(t *testing.T) {
-	minimalEnv(t)
-	unsetEnv(t, "BACKUP_DATABASE_DSN")
-
-	_, err := config.Load()
-	if err == nil {
-		t.Fatal("expected error when database_dsn is missing, got nil")
-	}
-}
-
-// TestLoad_MissingBucket verifies that omitting s3_bucket is rejected.
-func TestLoad_MissingBucket(t *testing.T) {
-	minimalEnv(t)
-	unsetEnv(t, "BACKUP_S3_BUCKET")
-
-	_, err := config.Load()
-	if err == nil {
-		t.Fatal("expected error when s3_bucket is missing, got nil")
-	}
-}
-
-// TestLoad_MissingRegion verifies that omitting s3_region is rejected.
-func TestLoad_MissingRegion(t *testing.T) {
-	minimalEnv(t)
-	unsetEnv(t, "BACKUP_S3_REGION")
-
-	_, err := config.Load()
-	if err == nil {
-		t.Fatal("expected error when s3_region is missing, got nil")
-	}
-}
-
-// TestLoad_InvalidRetentionDays verifies that a non-positive retention_days
-// is rejected.
-func TestLoad_InvalidRetentionDays(t *testing.T) {
-	minimalEnv(t)
-	setEnv(t, "BACKUP_RETENTION_DAYS", "0")
-
-	_, err := config.Load()
-	if err == nil {
-		t.Fatal("expected error when retention_days is 0, got nil")
-	}
-}
-
-// TestLoad_InvalidLogLevel verifies that an unknown log level is rejected.
-func TestLoad_InvalidLogLevel(t *testing.T) {
-	minimalEnv(t)
-	setEnv(t, "BACKUP_LOG_LEVEL", "verbose")
-
-	_, err := config.Load()
-	if err == nil {
-		t.Fatal("expected error for invalid log_level 'verbose', got nil")
-	}
-}
-
-// TestLoad_AllValidLogLevels checks that every supported log level is accepted.
-func TestLoad_AllValidLogLevels(t *testing.T) {
-	levels := []string{"trace", "debug", "info", "warn", "error", "fatal", "panic"}
-	for _, level := range levels {
-		t.Run(level, func(t *testing.T) {
-			minimalEnv(t)
-			setEnv(t, "BACKUP_LOG_LEVEL", level)
-
-			_, err := config.Load()
-			if err != nil {
-				t.Errorf("expected no error for log_level %q, got: %v", level, err)
-			}
-		})
-	}
-}
-
-// TestLoad_MandatoryFields verifies all mandatory fields are populated from env.
-func TestLoad_MandatoryFields(t *testing.T) {
-	minimalEnv(t)
-
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("expected no error, got: %v", err)
 	}
 
 	if cfg.DatabaseDSN == "" {
-		t.Error("DatabaseDSN should not be empty")
+		t.Error("expected DatabaseDSN to be set")
 	}
-	if cfg.S3Bucket == "" {
-		t.Error("S3Bucket should not be empty")
+	if cfg.S3Bucket != "my-backup-bucket" {
+		t.Errorf("expected S3Bucket 'my-backup-bucket', got %q", cfg.S3Bucket)
 	}
-	if cfg.S3Region == "" {
-		t.Error("S3Region should not be empty")
+	if cfg.S3Region != "us-east-1" {
+		t.Errorf("expected S3Region 'us-east-1', got %q", cfg.S3Region)
 	}
+}
+
+func TestLoad_Defaults(t *testing.T) {
+	setEnv(t, minimalEnv())
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.S3Prefix != "backups/" {
+		t.Errorf("expected default S3Prefix 'backups/', got %q", cfg.S3Prefix)
+	}
+	if cfg.Schedule != "0 2 * * *" {
+		t.Errorf("expected default Schedule '0 2 * * *', got %q", cfg.Schedule)
+	}
+	if cfg.RetentionDays != 30 {
+		t.Errorf("expected default RetentionDays 30, got %d", cfg.RetentionDays)
+	}
+	if cfg.LogLevel != "info" {
+		t.Errorf("expected default LogLevel 'info', got %q", cfg.LogLevel)
+	}
+}
+
+func TestLoad_EnvVarOverridesDefault(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_RETENTION_DAYS"] = "7"
+	env["BACKUP_LOG_LEVEL"] = "debug"
+	env["BACKUP_SCHEDULE"] = "0 3 * * *"
+	env["BACKUP_S3_PREFIX"] = "custom/prefix/"
+	setEnv(t, env)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.RetentionDays != 7 {
+		t.Errorf("expected RetentionDays 7, got %d", cfg.RetentionDays)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("expected LogLevel 'debug', got %q", cfg.LogLevel)
+	}
+	if cfg.Schedule != "0 3 * * *" {
+		t.Errorf("expected Schedule '0 3 * * *', got %q", cfg.Schedule)
+	}
+	if cfg.S3Prefix != "custom/prefix/" {
+		t.Errorf("expected S3Prefix 'custom/prefix/', got %q", cfg.S3Prefix)
+	}
+}
+
+func TestLoad_LogLevelNormalisedToLowerCase(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_LOG_LEVEL"] = "WARN"
+	setEnv(t, env)
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.LogLevel != "warn" {
+		t.Errorf("expected normalised LogLevel 'warn', got %q", cfg.LogLevel)
+	}
+}
+
+// ── Validation failures ───────────────────────────────────────────────────────
+
+func TestLoad_MissingDatabaseDSN(t *testing.T) {
+	env := minimalEnv()
+	delete(env, "BACKUP_DATABASE_DSN")
+	// Unset in case it was inherited from the shell
+	os.Unsetenv("BACKUP_DATABASE_DSN")
+	setEnv(t, env)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error when DatabaseDSN is missing, got nil")
+	}
+}
+
+func TestLoad_MissingS3Bucket(t *testing.T) {
+	env := minimalEnv()
+	delete(env, "BACKUP_S3_BUCKET")
+	os.Unsetenv("BACKUP_S3_BUCKET")
+	setEnv(t, env)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error when S3Bucket is missing, got nil")
+	}
+}
+
+func TestLoad_MissingS3Region(t *testing.T) {
+	env := minimalEnv()
+	delete(env, "BACKUP_S3_REGION")
+	os.Unsetenv("BACKUP_S3_REGION")
+	setEnv(t, env)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error when S3Region is missing, got nil")
+	}
+}
+
+func TestLoad_InvalidRetentionDays(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_RETENTION_DAYS"] = "0"
+	setEnv(t, env)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error when RetentionDays is 0, got nil")
+	}
+}
+
+func TestLoad_InvalidLogLevel(t *testing.T) {
+	env := minimalEnv()
+	env["BACKUP_LOG_LEVEL"] = "verbose"
+	setEnv(t, env)
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error for invalid log level 'verbose', got nil")
+	}
+}
+
+// ── MaskDSN ───────────────────────────────────────────────────────────────────
+
+func TestMaskDSN_WithPassword(t *testing.T) {
+	dsn := "postgres://alice:s3cr3t@db.example.com:5432/mydb?sslmode=require"
+	masked := config.MaskDSN(dsn)
+
+	if masked == dsn {
+		t.Error("expected password to be masked but DSN was unchanged")
+	}
+	if contains(masked, "s3cr3t") {
+		t.Errorf("password should be masked, got: %s", masked)
+	}
+	if !contains(masked, "alice") {
+		t.Errorf("username should remain visible, got: %s", masked)
+	}
+	if !contains(masked, "***") {
+		t.Errorf("expected '***' placeholder in masked DSN, got: %s", masked)
+	}
+}
+
+func TestMaskDSN_WithoutPassword(t *testing.T) {
+	dsn := "postgres://alice@db.example.com:5432/mydb"
+	masked := config.MaskDSN(dsn)
+	if masked != dsn {
+		t.Errorf("DSN without password should be unchanged; got %q", masked)
+	}
+}
+
+func TestMaskDSN_Empty(t *testing.T) {
+	if got := config.MaskDSN(""); got != "" {
+		t.Errorf("expected empty string, got %q", got)
+	}
+}
+
+func TestMaskDSN_NonURLDSN(t *testing.T) {
+	// Key=value style DSN — cannot parse as URL, should be fully redacted.
+	dsn := "host=localhost user=alice password=s3cr3t dbname=mydb"
+	masked := config.MaskDSN(dsn)
+	if masked == dsn {
+		t.Error("non-URL DSN containing password should be redacted")
+	}
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr ||
+		len(substr) == 0 ||
+		indexOfSubstr(s, substr) >= 0)
+}
+
+func indexOfSubstr(s, sub string) int {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }

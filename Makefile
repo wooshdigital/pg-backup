@@ -1,56 +1,51 @@
-# ---------------------------------------------------------------------------
-# pg-s3-backup — Makefile
-# ---------------------------------------------------------------------------
-BINARY      := pg-s3-backup
-CMD_DIR     := ./cmd/worker
-BIN_DIR     := bin
-COVERAGE    := coverage.out
+# ── pg-s3-backup Makefile ─────────────────────────────────────────────────────
+BINARY_NAME  := pg-s3-backup
+BUILD_DIR    := bin
+CMD_PATH     := ./cmd/worker
+COVERAGE_OUT := coverage.out
 
-GO          := go
-GOFLAGS     ?=
+# Go toolchain
+GO      := go
+GOFLAGS := -trimpath
 
 .PHONY: all build test lint run clean tidy help
 
-all: build
+all: build ## Default: build the binary
 
-## build: Compile the worker binary into bin/
+## build: Compile the worker binary into ./bin/
 build:
-	@mkdir -p $(BIN_DIR)
-	$(GO) build $(GOFLAGS) -o $(BIN_DIR)/$(BINARY) $(CMD_DIR)
-	@echo "Built $(BIN_DIR)/$(BINARY)"
+	@echo "› Building $(BINARY_NAME)…"
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_PATH)
+	@echo "  ✓ Binary: $(BUILD_DIR)/$(BINARY_NAME)"
 
-## test: Run all unit tests with race detector and generate coverage report
+## test: Run all unit tests with race detector and produce coverage report
 test:
-	$(GO) test -race -coverprofile=$(COVERAGE) -covermode=atomic ./...
-	$(GO) tool cover -func=$(COVERAGE)
+	@echo "› Running tests…"
+	$(GO) test -race -coverprofile=$(COVERAGE_OUT) -covermode=atomic ./...
+	$(GO) tool cover -func=$(COVERAGE_OUT) | tail -1
 
-## lint: Run staticcheck (install with: go install honnef.co/go/tools/cmd/staticcheck@latest)
+## lint: Run golangci-lint (install separately: https://golangci-lint.run)
 lint:
-	@command -v staticcheck >/dev/null 2>&1 || { \
-		echo "staticcheck not found — install with:"; \
-		echo "  go install honnef.co/go/tools/cmd/staticcheck@latest"; \
-		exit 1; \
-	}
-	staticcheck ./...
+	@echo "› Linting…"
+	golangci-lint run ./...
 
-## run: Build and execute the binary (reads .env if present via env file trick)
+## run: Build and execute the binary (requires env vars or config.yaml)
 run: build
-	@if [ -f .env ]; then \
-		echo "Loading .env"; \
-		export $$(grep -v '^#' .env | xargs) && $(BIN_DIR)/$(BINARY); \
-	else \
-		$(BIN_DIR)/$(BINARY); \
-	fi
+	@echo "› Running $(BINARY_NAME)…"
+	./$(BUILD_DIR)/$(BINARY_NAME)
 
-## tidy: Tidy and verify go.mod / go.sum
+## tidy: Tidy and verify the Go module
 tidy:
+	@echo "› Tidying module…"
 	$(GO) mod tidy
 	$(GO) mod verify
 
-## clean: Remove compiled binaries and coverage artefacts
+## clean: Remove build artefacts
 clean:
-	rm -rf $(BIN_DIR) $(COVERAGE) coverage.html
+	@echo "› Cleaning…"
+	@rm -rf $(BUILD_DIR) $(COVERAGE_OUT)
 
-## help: Show this help message
+## help: Print this help message
 help:
-	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## //' | column -t -s ':'
+	@grep -E '^##' Makefile | sed 's/## //' | column -t -s ':'

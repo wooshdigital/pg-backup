@@ -1,26 +1,34 @@
-# Compiled binaries
+# Compiled binaries and build output
 bin/
 dist/
 *.exe
-*.out
-pg-s3-backup
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# Test & coverage artefacts
+# Go test / coverage artefacts
 *.test
 coverage.out
 coverage.html
 
-# Environment / secrets — never commit these
+# Environment files — may contain secrets
 .env
 *.env
 
-# Editor / OS artefacts
-.DS_Store
+# Config file with real credentials
+config.yaml
+
+# Editor / IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
-# Go workspace files
+# macOS
+.DS_Store
+
+# Go workspace
 go.work
 go.work.sum

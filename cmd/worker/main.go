@@ -2,53 +2,73 @@ package main
 
 import (
 	"os"
-	"time"
 
 	"github.com/org/pg-s3-backup/internal/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
+const banner = `
+██████╗  ██████╗       ███████╗██████╗      ██████╗  █████╗  ██████╗██╗  ██╗██╗   ██╗██████╗
+██╔══██╗██╔════╝       ██╔════╝╚════██╗     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██║   ██║██╔══██╗
+██████╔╝██║  ███╗█████╗███████╗ █████╔╝     ██████╔╝███████║██║     █████╔╝ ██║   ██║██████╔╝
+██╔═══╝ ██║   ██║╚════╝╚════██║ ╚═══██╗     ██╔══██╗██╔══██║██║     ██╔═██╗ ██║   ██║██╔═══╝
+██║     ╚██████╔╝      ███████║██████╔╝     ██████╔╝██║  ██║╚██████╗██║  ██╗╚██████╔╝██║
+╚═╝      ╚═════╝       ╚══════╝╚═════╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝
+`
+
 func main() {
-	// Bootstrap a console logger for startup; will be replaced after config load.
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).
-		With().
-		Timestamp().
-		Str("service", "pg-s3-backup").
-		Logger()
+	// Bootstrap a console logger for startup before config is loaded
+	consoleWriter := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05Z07:00"}
+	bootstrapLogger := zerolog.New(consoleWriter).With().Timestamp().Logger()
 
-	log.Info().Msg("pg-s3-backup starting up")
+	bootstrapLogger.Info().Msg("pg-s3-backup starting up...")
 
+	// Load and validate configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load configuration")
+		bootstrapLogger.Fatal().Err(err).Msg("failed to load configuration")
 	}
 
-	// Re-initialise logger with the configured log level.
-	level, err := zerolog.ParseLevel(cfg.LogLevel)
-	if err != nil {
-		log.Warn().Str("log_level", cfg.LogLevel).Msg("unknown log level, defaulting to info")
-		level = zerolog.InfoLevel
-	}
+	// Configure the global logger based on config
+	logger := setupLogger(cfg)
 
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).
-		Level(level).
-		With().
-		Timestamp().
-		Str("service", "pg-s3-backup").
-		Logger()
+	// Print startup banner
+	logger.Info().Msg(banner)
 
-	printStartupBanner(cfg)
+	// Log configuration summary
+	logConfigSummary(logger, cfg)
 
-	log.Info().Msg("configuration validated — ready to run")
+	logger.Info().Msg("configuration validated successfully — ready to run")
 	os.Exit(0)
 }
 
-// printStartupBanner logs a structured summary of the active configuration.
-// Sensitive values (DSN) are redacted.
-func printStartupBanner(cfg *config.Config) {
-	log.Info().
-		Str("db_dsn", redact(cfg.DatabaseDSN)).
+// setupLogger configures zerolog based on the loaded config.
+func setupLogger(cfg *config.Config) zerolog.Logger {
+	level, err := zerolog.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		level = zerolog.InfoLevel
+	}
+
+	zerolog.SetGlobalLevel(level)
+
+	if cfg.LogLevel == "debug" || cfg.LogLevel == "trace" {
+		// Pretty console output for development
+		consoleWriter := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05Z07:00"}
+		return zerolog.New(consoleWriter).With().Timestamp().Caller().Logger()
+	}
+
+	// Structured JSON for production
+	return zerolog.New(os.Stderr).With().Timestamp().Logger()
+}
+
+// logConfigSummary logs a human-readable summary of the active configuration.
+func logConfigSummary(logger zerolog.Logger, cfg *config.Config) {
+	// Mask the DSN to avoid leaking credentials in logs
+	maskedDSN := config.MaskDSN(cfg.DatabaseDSN)
+
+	logger.Info().
+		Str("database_dsn", maskedDSN).
 		Str("s3_bucket", cfg.S3Bucket).
 		Str("s3_region", cfg.S3Region).
 		Str("s3_prefix", cfg.S3Prefix).
@@ -56,14 +76,6 @@ func printStartupBanner(cfg *config.Config) {
 		Int("retention_days", cfg.RetentionDays).
 		Str("log_level", cfg.LogLevel).
 		Msg("active configuration")
-}
 
-// redact replaces all but the scheme of a DSN with asterisks to avoid
-// leaking credentials into logs.
-func redact(dsn string) string {
-	if dsn == "" {
-		return "<not set>"
-	}
-	// Show only that a value is present.
-	return "***redacted***"
+	log.Logger = logger
 }
