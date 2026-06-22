@@ -1,34 +1,26 @@
 # Compiled binaries
-/bin/
+bin/
+dist/
 *.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+*.out
+pg-s3-backup
 
-# Test & coverage output
+# Test & coverage artefacts
+*.test
 coverage.out
 coverage.html
-*.test
 
 # Environment / secrets — never commit these
 .env
 *.env
-!.env.example
-
-# Config files with real values — commit only the .example
-config.yaml
-!config.yaml.example
-
-# Go workspace files
-go.work
-go.work.sum
 
 # Editor / OS artefacts
 .DS_Store
-Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
+
+# Go workspace files
+go.work
+go.work.sum

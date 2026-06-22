@@ -1,97 +1,77 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/viper"
 )
 
-// Config holds all application configuration values.
+// Config holds all runtime configuration for pg-s3-backup.
 type Config struct {
 	// DatabaseDSN is the PostgreSQL connection string.
-	// Format: postgres://user:password@host:port/dbname?sslmode=disable
+	// Example: postgres://user:password@localhost:5432/mydb?sslmode=disable
 	DatabaseDSN string `mapstructure:"database_dsn"`
 
-	// S3Bucket is the name of the S3 bucket to store backups in.
+	// S3Bucket is the target S3 bucket name.
 	S3Bucket string `mapstructure:"s3_bucket"`
 
-	// S3Region is the AWS region where the S3 bucket resides.
+	// S3Region is the AWS region where the bucket lives.
 	S3Region string `mapstructure:"s3_region"`
 
-	// S3Prefix is the optional key prefix (folder path) within the S3 bucket.
+	// S3Prefix is an optional key prefix (folder) inside the bucket.
 	S3Prefix string `mapstructure:"s3_prefix"`
 
-	// Schedule is a cron expression defining the backup frequency.
-	// Example: "0 2 * * *" (daily at 2 AM UTC)
+	// Schedule is a standard cron expression (5 or 6 field) controlling
+	// how often backups run.
+	// Example: "0 2 * * *"  (every day at 02:00)
 	Schedule string `mapstructure:"schedule"`
 
-	// RetentionDays is the number of days to keep backups before automatic deletion.
+	// RetentionDays is the number of days to keep old backups.
+	// Backups older than this will be deleted from S3.
 	RetentionDays int `mapstructure:"retention_days"`
 
-	// LogLevel controls verbosity. Valid values: debug, info, warn, error.
+	// LogLevel controls zerolog verbosity: trace, debug, info, warn, error, fatal, panic.
 	LogLevel string `mapstructure:"log_level"`
 }
 
-// Load reads configuration from the following sources (in order of precedence, highest first):
-//  1. Environment variables (prefixed with PG_S3_BACKUP_, e.g. PG_S3_BACKUP_DATABASE_DSN)
-//  2. Config file (config.yaml in the current directory, or path set via CONFIG_FILE env var)
-//  3. Default values
+// Load reads configuration from (in increasing priority order):
+//  1. Built-in defaults
+//  2. config.yaml (or the path in the CONFIG_FILE env var)
+//  3. Environment variables prefixed with BACKUP_
 //
-// Returns a fully validated Config or an error describing what is missing/invalid.
+// After loading, the configuration is validated and a non-nil error is
+// returned if any required field is missing or invalid.
 func Load() (*Config, error) {
 	v := viper.New()
 
-	// --- Defaults ---
-	v.SetDefault("s3_prefix", "backups/")
-	v.SetDefault("schedule", "0 2 * * *")
-	v.SetDefault("retention_days", 30)
-	v.SetDefault("log_level", "info")
+	setDefaults(v)
+	bindEnvVars(v)
 
-	// --- Config file ---
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
-	v.AddConfigPath("/etc/pg-s3-backup/")
+	// Allow an explicit config file path via environment variable.
+	if cfgFile := v.GetString("config_file"); cfgFile != "" {
+		v.SetConfigFile(cfgFile)
+	} else {
+		v.SetConfigName("config")
+		v.SetConfigType("yaml")
+		v.AddConfigPath(".")
+		v.AddConfigPath("/etc/pg-s3-backup")
+	}
 
 	if err := v.ReadInConfig(); err != nil {
-		// It's okay if no config file is found — env vars can supply everything.
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("error reading config file: %w", err)
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
+			return nil, fmt.Errorf("reading config file: %w", err)
 		}
+		// Missing config file is acceptable; env vars / defaults are used.
 	}
 
-	// --- Environment variables ---
-	// Env vars take precedence over config file values.
-	// They must be prefixed with PG_S3_BACKUP_ and use underscores.
-	// Example: PG_S3_BACKUP_DATABASE_DSN, PG_S3_BACKUP_S3_BUCKET
-	v.SetEnvPrefix("PG_S3_BACKUP")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
-
-	// Explicitly bind env vars for each key to ensure mapstructure works correctly
-	envBindings := map[string]string{
-		"database_dsn":   "PG_S3_BACKUP_DATABASE_DSN",
-		"s3_bucket":      "PG_S3_BACKUP_S3_BUCKET",
-		"s3_region":      "PG_S3_BACKUP_S3_REGION",
-		"s3_prefix":      "PG_S3_BACKUP_S3_PREFIX",
-		"schedule":       "PG_S3_BACKUP_SCHEDULE",
-		"retention_days": "PG_S3_BACKUP_RETENTION_DAYS",
-		"log_level":      "PG_S3_BACKUP_LOG_LEVEL",
-	}
-	for key, env := range envBindings {
-		if err := v.BindEnv(key, env); err != nil {
-			return nil, fmt.Errorf("failed to bind env var %s: %w", env, err)
-		}
-	}
-
-	// --- Unmarshal into struct ---
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+		return nil, fmt.Errorf("unmarshalling config: %w", err)
 	}
 
-	// --- Validate ---
 	if err := validate(&cfg); err != nil {
 		return nil, err
 	}
@@ -99,50 +79,72 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-// validate checks that all required fields are present and that values are within
-// acceptable ranges. Returns a combined error describing all validation failures.
+// setDefaults registers sensible default values.
+func setDefaults(v *viper.Viper) {
+	v.SetDefault("s3_prefix", "backups/")
+	v.SetDefault("schedule", "0 2 * * *")
+	v.SetDefault("retention_days", 30)
+	v.SetDefault("log_level", "info")
+}
+
+// bindEnvVars maps BACKUP_* environment variables to viper keys.
+func bindEnvVars(v *viper.Viper) {
+	v.SetEnvPrefix("BACKUP")
+	v.AutomaticEnv()
+	// Replace dots and hyphens with underscores when looking up env vars.
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+
+	// Explicitly bind each key so that AutomaticEnv works even when viper
+	// has not seen the key via a config file yet.
+	keys := []string{
+		"database_dsn",
+		"s3_bucket",
+		"s3_region",
+		"s3_prefix",
+		"schedule",
+		"retention_days",
+		"log_level",
+		"config_file",
+	}
+	for _, k := range keys {
+		_ = v.BindEnv(k)
+	}
+}
+
+// validate checks that all required fields are set and values are sane.
 func validate(cfg *Config) error {
 	var errs []string
 
 	if strings.TrimSpace(cfg.DatabaseDSN) == "" {
-		errs = append(errs, "database_dsn is required (set PG_S3_BACKUP_DATABASE_DSN or database_dsn in config.yaml)")
+		errs = append(errs, "database_dsn is required (env: BACKUP_DATABASE_DSN)")
 	}
 
 	if strings.TrimSpace(cfg.S3Bucket) == "" {
-		errs = append(errs, "s3_bucket is required (set PG_S3_BACKUP_S3_BUCKET or s3_bucket in config.yaml)")
+		errs = append(errs, "s3_bucket is required (env: BACKUP_S3_BUCKET)")
 	}
 
 	if strings.TrimSpace(cfg.S3Region) == "" {
-		errs = append(errs, "s3_region is required (set PG_S3_BACKUP_S3_REGION or s3_region in config.yaml)")
+		errs = append(errs, "s3_region is required (env: BACKUP_S3_REGION)")
 	}
 
 	if strings.TrimSpace(cfg.Schedule) == "" {
 		errs = append(errs, "schedule must not be empty")
 	}
 
-	if cfg.RetentionDays < 1 {
-		errs = append(errs, fmt.Sprintf("retention_days must be >= 1, got %d", cfg.RetentionDays))
+	if cfg.RetentionDays <= 0 {
+		errs = append(errs, fmt.Sprintf("retention_days must be a positive integer, got %d", cfg.RetentionDays))
 	}
 
-	validLogLevels := map[string]bool{
-		"debug": true,
-		"info":  true,
-		"warn":  true,
-		"error": true,
-		"fatal": true,
-		"panic": true,
+	validLevels := map[string]bool{
+		"trace": true, "debug": true, "info": true,
+		"warn": true, "error": true, "fatal": true, "panic": true,
 	}
-	if !validLogLevels[strings.ToLower(cfg.LogLevel)] {
-		errs = append(errs, fmt.Sprintf(
-			"log_level must be one of [debug, info, warn, error, fatal, panic], got %q",
-			cfg.LogLevel,
-		))
+	if !validLevels[strings.ToLower(cfg.LogLevel)] {
+		errs = append(errs, fmt.Sprintf("log_level %q is not valid; choose one of: trace, debug, info, warn, error, fatal, panic", cfg.LogLevel))
 	}
-	// Normalise to lowercase
-	cfg.LogLevel = strings.ToLower(cfg.LogLevel)
 
 	if len(errs) > 0 {
-		return fmt.Errorf("configuration validation failed:\n  - %s", strings.Join(errs, "\n  - "))
+		return fmt.Errorf("configuration errors:\n  - %s", strings.Join(errs, "\n  - "))
 	}
 
 	return nil
