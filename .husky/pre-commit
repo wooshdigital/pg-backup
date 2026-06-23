@@ -3,11 +3,11 @@
 
 echo "🔍 Running pre-commit checks..."
 
-# Run lint-staged (lint + format on staged files)
+# Run lint-staged for staged files
 npx lint-staged
 
-# Run TypeScript type check
-echo "📘 Type checking..."
-npx tsc --noEmit
+# Run TypeScript type checking
+echo "🔷 Running type check..."
+npm run type-check
 
 echo "✅ Pre-commit checks passed!"

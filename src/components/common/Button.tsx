@@ -1,182 +1,194 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  type StyleProp,
-  type ViewStyle,
+  type PressableProps,
   type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import {
-  BorderRadius,
-  FontSizes,
-  FontWeights,
-  Spacing,
-} from '../../constants/theme';
+import { borderRadius, spacing, typography } from '../../constants/theme';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps {
+interface ButtonProps extends Omit<PressableProps, 'style'> {
   label: string;
-  onPress: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
-  disabled?: boolean;
   loading?: boolean;
-  style?: StyleProp<ViewStyle>;
-  textStyle?: StyleProp<TextStyle>;
+  disabled?: boolean;
   fullWidth?: boolean;
-  accessibilityLabel?: string;
-  accessibilityHint?: string;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
 }
 
-// ─── Size Maps ────────────────────────────────────────────────────────────────
+// ─── Size Config ─────────────────────────────────────────────────────────────
 
-const sizeStyles: Record<ButtonSize, { paddingVertical: number; paddingHorizontal: number; fontSize: number; borderRadius: number }> = {
+const sizeConfig = {
   sm: {
-    paddingVertical: Spacing[1.5],
-    paddingHorizontal: Spacing[3],
-    fontSize: FontSizes.sm,
-    borderRadius: BorderRadius.md,
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    fontSize: typography.fontSize.sm,
+    borderRadius: borderRadius.md,
+    iconSize: 14,
   },
   md: {
-    paddingVertical: Spacing[2.5],
-    paddingHorizontal: Spacing[5],
-    fontSize: FontSizes.base,
-    borderRadius: BorderRadius.lg,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[5],
+    fontSize: typography.fontSize.base,
+    borderRadius: borderRadius.lg,
+    iconSize: 16,
   },
   lg: {
-    paddingVertical: Spacing[3.5],
-    paddingHorizontal: Spacing[7],
-    fontSize: FontSizes.lg,
-    borderRadius: BorderRadius.xl,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[6],
+    fontSize: typography.fontSize.md,
+    borderRadius: borderRadius.xl,
+    iconSize: 20,
   },
-};
+} as const;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Button({
   label,
-  onPress,
   variant = 'primary',
   size = 'md',
-  disabled = false,
   loading = false,
+  disabled = false,
+  fullWidth = false,
+  leftIcon,
+  rightIcon,
   style,
   textStyle,
-  fullWidth = false,
-  accessibilityLabel,
-  accessibilityHint,
+  ...rest
 }: ButtonProps) {
-  const { theme } = useTheme();
-  const sizeConfig = sizeStyles[size];
+  const { colors } = useTheme();
+  const config = sizeConfig[size];
   const isDisabled = disabled || loading;
 
-  // Compute background and text colors based on variant
-  const getVariantStyles = (): { bg: string; text: string; borderColor?: string } => {
-    switch (variant) {
-      case 'primary':
-        return {
-          bg: isDisabled ? theme.colors.primaryLight : theme.colors.primary,
-          text: theme.colors.textInverse,
-        };
-      case 'secondary':
-        return {
-          bg: theme.colors.surfaceVariant,
-          text: theme.colors.textPrimary,
-        };
-      case 'outline':
-        return {
-          bg: 'transparent',
-          text: theme.colors.primary,
-          borderColor: theme.colors.primary,
-        };
-      case 'ghost':
-        return {
-          bg: 'transparent',
-          text: theme.colors.primary,
-        };
-      case 'danger':
-        return {
-          bg: isDisabled ? theme.colors.error + '80' : theme.colors.error,
-          text: theme.colors.textInverse,
-        };
-      default:
-        return {
-          bg: theme.colors.primary,
-          text: theme.colors.textInverse,
-        };
-    }
-  };
-
-  const variantStyles = getVariantStyles();
+  const variantStyles = getVariantStyles(variant, colors, isDisabled);
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
+    <Pressable
       disabled={isDisabled}
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: isDisabled, busy: loading }}
-      style={[
+      style={({ pressed }) => [
         styles.base,
         {
-          backgroundColor: variantStyles.bg,
-          borderRadius: sizeConfig.borderRadius,
-          paddingVertical: sizeConfig.paddingVertical,
-          paddingHorizontal: sizeConfig.paddingHorizontal,
-          borderWidth: variant === 'outline' ? 1.5 : 0,
-          borderColor: variantStyles.borderColor ?? 'transparent',
-          opacity: isDisabled && !loading ? 0.6 : 1,
+          paddingVertical: config.paddingVertical,
+          paddingHorizontal: config.paddingHorizontal,
+          borderRadius: config.borderRadius,
+          opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
           alignSelf: fullWidth ? 'stretch' : 'flex-start',
+          ...variantStyles.container,
         },
         style,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      {...rest}
     >
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variantStyles.text}
-          accessibilityLabel="Loading"
+          color={variantStyles.textColor}
         />
       ) : (
-        <Text
-          style={[
-            styles.label,
-            {
-              color: variantStyles.text,
-              fontSize: sizeConfig.fontSize,
-            },
-            textStyle,
-          ]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
+        <>
+          {leftIcon}
+          <Text
+            style={[
+              styles.label,
+              {
+                fontSize: config.fontSize,
+                color: variantStyles.textColor,
+                marginLeft: leftIcon ? spacing[2] : 0,
+                marginRight: rightIcon ? spacing[2] : 0,
+              },
+              textStyle,
+            ]}
+          >
+            {label}
+          </Text>
+          {rightIcon}
+        </>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
+}
+
+// ─── Variant Styles Helper ───────────────────────────────────────────────────
+
+function getVariantStyles(
+  variant: ButtonVariant,
+  colors: ReturnType<typeof useTheme>['colors'],
+  _isDisabled: boolean,
+): { container: ViewStyle; textColor: string } {
+  switch (variant) {
+    case 'primary':
+      return {
+        container: {
+          backgroundColor: colors.primary,
+          borderWidth: 0,
+        },
+        textColor: colors.textInverse,
+      };
+    case 'secondary':
+      return {
+        container: {
+          backgroundColor: colors.secondary,
+          borderWidth: 0,
+        },
+        textColor: colors.textInverse,
+      };
+    case 'outline':
+      return {
+        container: {
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          borderColor: colors.primary,
+        },
+        textColor: colors.primary,
+      };
+    case 'ghost':
+      return {
+        container: {
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+        },
+        textColor: colors.primary,
+      };
+    case 'danger':
+      return {
+        container: {
+          backgroundColor: colors.error,
+          borderWidth: 0,
+        },
+        textColor: colors.textInverse,
+      };
+  }
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   base: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    minWidth: 64,
   },
   label: {
-    fontWeight: FontWeights.semiBold,
-    letterSpacing: 0.2,
+    fontWeight: typography.fontWeight.semibold,
     textAlign: 'center',
   },
 });
+
+export default Button;

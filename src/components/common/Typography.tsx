@@ -1,234 +1,207 @@
 import React from 'react';
 import {
   Text,
-  StyleSheet,
-  type StyleProp,
-  type TextStyle,
   type TextProps,
+  type TextStyle,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import {
-  FontSizes,
-  FontWeights,
-  LineHeights,
-  LetterSpacings,
-} from '../../constants/theme';
+import { typography } from '../../constants/theme';
 
-// ─── Base Typography ─────────────────────────────────────────────────────────
+// ─── Base Text Component ──────────────────────────────────────────────────────
 
 interface BaseTextProps extends TextProps {
   children: React.ReactNode;
-  style?: StyleProp<TextStyle>;
   color?: string;
-  align?: 'auto' | 'left' | 'right' | 'center' | 'justify';
+  align?: TextStyle['textAlign'];
+  style?: TextStyle;
 }
 
-// ─── Heading ──────────────────────────────────────────────────────────────────
+// ─── Display ─────────────────────────────────────────────────────────────────
 
-interface HeadingProps extends BaseTextProps {
-  level?: 1 | 2 | 3 | 4 | 5 | 6;
+interface DisplayProps extends BaseTextProps {
+  size?: 'sm' | 'md' | 'lg';
 }
 
-export function Heading({
-  children,
-  level = 1,
-  style,
-  color,
-  align = 'auto',
-  ...props
-}: HeadingProps) {
-  const { theme } = useTheme();
-
-  const levelStyles: Record<number, TextStyle> = {
-    1: {
-      fontSize: FontSizes['3xl'],
-      fontWeight: FontWeights.bold,
-      lineHeight: FontSizes['3xl'] * LineHeights.tight,
-      letterSpacing: LetterSpacings.tight,
-    },
-    2: {
-      fontSize: FontSizes['2xl'],
-      fontWeight: FontWeights.bold,
-      lineHeight: FontSizes['2xl'] * LineHeights.snug,
-      letterSpacing: LetterSpacings.tight,
-    },
-    3: {
-      fontSize: FontSizes.xl,
-      fontWeight: FontWeights.semiBold,
-      lineHeight: FontSizes.xl * LineHeights.snug,
-      letterSpacing: LetterSpacings.normal,
-    },
-    4: {
-      fontSize: FontSizes.lg,
-      fontWeight: FontWeights.semiBold,
-      lineHeight: FontSizes.lg * LineHeights.normal,
-      letterSpacing: LetterSpacings.normal,
-    },
-    5: {
-      fontSize: FontSizes.base,
-      fontWeight: FontWeights.semiBold,
-      lineHeight: FontSizes.base * LineHeights.normal,
-      letterSpacing: LetterSpacings.normal,
-    },
-    6: {
-      fontSize: FontSizes.md,
-      fontWeight: FontWeights.semiBold,
-      lineHeight: FontSizes.md * LineHeights.normal,
-      letterSpacing: LetterSpacings.wide,
-    },
-  };
+export function Display({ children, size = 'md', color, align, style, ...rest }: DisplayProps) {
+  const { colors } = useTheme();
+  const fontSize = {
+    sm: typography.fontSize['3xl'],
+    md: typography.fontSize['4xl'],
+    lg: typography.fontSize['5xl'],
+  }[size];
 
   return (
     <Text
       style={[
-        levelStyles[level],
         {
-          color: color ?? theme.colors.textPrimary,
+          fontSize,
+          fontWeight: typography.fontWeight.extrabold,
+          color: color ?? colors.text,
           textAlign: align,
+          letterSpacing: typography.letterSpacing.tight,
         },
         style,
       ]}
-      accessibilityRole="header"
-      {...props}
+      {...rest}
     >
       {children}
     </Text>
   );
 }
 
-// ─── Body ─────────────────────────────────────────────────────────────────────
+// ─── Heading ─────────────────────────────────────────────────────────────────
+
+interface HeadingProps extends BaseTextProps {
+  level?: 1 | 2 | 3 | 4;
+}
+
+export function Heading({ children, level = 1, color, align, style, ...rest }: HeadingProps) {
+  const { colors } = useTheme();
+  const fontSizeMap = {
+    1: typography.fontSize['2xl'],
+    2: typography.fontSize.xl,
+    3: typography.fontSize.lg,
+    4: typography.fontSize.md,
+  } as const;
+
+  const fontWeightMap = {
+    1: typography.fontWeight.bold,
+    2: typography.fontWeight.bold,
+    3: typography.fontWeight.semibold,
+    4: typography.fontWeight.semibold,
+  } as const;
+
+  return (
+    <Text
+      style={[
+        {
+          fontSize: fontSizeMap[level],
+          fontWeight: fontWeightMap[level],
+          color: color ?? colors.text,
+          textAlign: align,
+          letterSpacing: level <= 2 ? typography.letterSpacing.tight : typography.letterSpacing.normal,
+        },
+        style,
+      ]}
+      {...rest}
+    >
+      {children}
+    </Text>
+  );
+}
+
+// ─── Body ────────────────────────────────────────────────────────────────────
 
 interface BodyProps extends BaseTextProps {
   size?: 'sm' | 'md' | 'lg';
-  weight?: 'normal' | 'medium' | 'semiBold';
+  weight?: 'regular' | 'medium' | 'semibold';
+  secondary?: boolean;
 }
 
 export function Body({
   children,
   size = 'md',
-  weight = 'normal',
-  style,
+  weight = 'regular',
+  secondary = false,
   color,
-  align = 'auto',
-  ...props
+  align,
+  style,
+  ...rest
 }: BodyProps) {
-  const { theme } = useTheme();
-
-  const fontSizeMap: Record<string, number> = {
-    sm: FontSizes.sm,
-    md: FontSizes.base,
-    lg: FontSizes.lg,
-  };
-
-  const fontWeightMap: Record<string, string> = {
-    normal: FontWeights.normal,
-    medium: FontWeights.medium,
-    semiBold: FontWeights.semiBold,
-  };
+  const { colors } = useTheme();
+  const fontSizeMap = {
+    sm: typography.fontSize.sm,
+    md: typography.fontSize.base,
+    lg: typography.fontSize.md,
+  } as const;
 
   return (
     <Text
       style={[
-        styles.body,
         {
           fontSize: fontSizeMap[size],
-          fontWeight: fontWeightMap[weight] as TextStyle['fontWeight'],
-          lineHeight: fontSizeMap[size] * LineHeights.relaxed,
-          color: color ?? theme.colors.textPrimary,
+          fontWeight: typography.fontWeight[weight],
+          color: color ?? (secondary ? colors.textSecondary : colors.text),
           textAlign: align,
+          lineHeight: fontSizeMap[size] * typography.lineHeight.normal,
         },
         style,
       ]}
-      {...props}
+      {...rest}
     >
       {children}
     </Text>
   );
 }
 
-// ─── Caption ──────────────────────────────────────────────────────────────────
+// ─── Caption ─────────────────────────────────────────────────────────────────
 
 interface CaptionProps extends BaseTextProps {
-  muted?: boolean;
+  weight?: 'regular' | 'medium' | 'semibold';
+  uppercase?: boolean;
 }
 
 export function Caption({
   children,
-  muted = false,
-  style,
+  weight = 'regular',
+  uppercase = false,
   color,
-  align = 'auto',
-  ...props
+  align,
+  style,
+  ...rest
 }: CaptionProps) {
-  const { theme } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <Text
       style={[
-        styles.caption,
         {
-          color: color ?? (muted ? theme.colors.textSecondary : theme.colors.textPrimary),
+          fontSize: typography.fontSize.xs,
+          fontWeight: typography.fontWeight[weight],
+          color: color ?? colors.textSecondary,
           textAlign: align,
+          letterSpacing: uppercase ? typography.letterSpacing.wider : typography.letterSpacing.normal,
+          textTransform: uppercase ? 'uppercase' : 'none',
+          lineHeight: typography.fontSize.xs * typography.lineHeight.normal,
         },
         style,
       ]}
-      {...props}
+      {...rest}
     >
       {children}
     </Text>
   );
 }
 
-// ─── Label ────────────────────────────────────────────────────────────────────
+// ─── Label ───────────────────────────────────────────────────────────────────
 
 interface LabelProps extends BaseTextProps {
-  uppercase?: boolean;
+  size?: 'sm' | 'md';
+  required?: boolean;
 }
 
-export function Label({
-  children,
-  uppercase = false,
-  style,
-  color,
-  align = 'auto',
-  ...props
-}: LabelProps) {
-  const { theme } = useTheme();
+export function Label({ children, size = 'md', required = false, color, align, style, ...rest }: LabelProps) {
+  const { colors } = useTheme();
+  const fontSize = size === 'sm' ? typography.fontSize.xs : typography.fontSize.sm;
 
   return (
     <Text
       style={[
-        styles.label,
         {
-          color: color ?? theme.colors.textSecondary,
-          textTransform: uppercase ? 'uppercase' : 'none',
-          letterSpacing: uppercase ? LetterSpacings.widest : LetterSpacings.wide,
+          fontSize,
+          fontWeight: typography.fontWeight.medium,
+          color: color ?? colors.textSecondary,
           textAlign: align,
+          letterSpacing: typography.letterSpacing.wide,
         },
         style,
       ]}
-      {...props}
+      {...rest}
     >
       {children}
+      {required && <Text style={{ color: colors.error }}>{' *'}</Text>}
     </Text>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  body: {
-    letterSpacing: LetterSpacings.normal,
-  },
-  caption: {
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.normal,
-    lineHeight: FontSizes.sm * LineHeights.relaxed,
-    letterSpacing: LetterSpacings.normal,
-  },
-  label: {
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.medium,
-    lineHeight: FontSizes.xs * LineHeights.normal,
-  },
-});
+export default { Display, Heading, Body, Caption, Label };

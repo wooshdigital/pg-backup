@@ -1,85 +1,75 @@
 /**
- * Format an ISO 8601 date string as a human-readable date.
- * e.g. "2026-06-23T12:00:00Z" => "Jun 23, 2026"
+ * Format an ISO 8601 date string to a human-readable date.
  */
-export function formatDate(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+export function formatDate(isoString: string, locale = 'en-US'): string {
+  try {
+    const date = new Date(isoString);
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(date);
+  } catch {
+    return isoString;
+  }
 }
 
 /**
- * Format a date range as a readable string.
- * e.g. "Jun 20 – Jun 27, 2026"
+ * Format an ISO 8601 date string to a relative time string (e.g. "2 days ago").
  */
-export function formatDateRange(startIso: string, endIso: string): string {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
+export function formatRelativeDate(isoString: string, locale = 'en-US'): string {
+  try {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
 
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const sameMonth = sameYear && start.getMonth() === end.getMonth();
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
 
-  const startStr = start.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: sameYear ? undefined : 'numeric',
-  });
-
-  const endStr = end.toLocaleDateString('en-US', {
-    month: sameMonth ? undefined : 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
-  return `${startStr} – ${endStr}`;
+    if (Math.abs(diffDays) >= 1) return rtf.format(-diffDays, 'day');
+    if (Math.abs(diffHours) >= 1) return rtf.format(-diffHours, 'hour');
+    if (Math.abs(diffMinutes) >= 1) return rtf.format(-diffMinutes, 'minute');
+    return rtf.format(-diffSeconds, 'second');
+  } catch {
+    return formatDate(isoString, locale);
+  }
 }
 
 /**
- * Return the number of days between two dates.
+ * Format a date range from two ISO strings.
  */
-export function daysBetween(startIso: string, endIso: string): number {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  const msPerDay = 1000 * 60 * 60 * 24;
-  return Math.round((end.getTime() - start.getTime()) / msPerDay);
+export function formatDateRange(
+  startIso: string,
+  endIso: string,
+  locale = 'en-US',
+): string {
+  try {
+    const start = new Date(startIso);
+    const end = new Date(endIso);
+    const fmt = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+    });
+    const yearFmt = new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    if (start.getFullYear() === end.getFullYear()) {
+      return `${fmt.format(start)} – ${yearFmt.format(end)}`;
+    }
+    return `${yearFmt.format(start)} – ${yearFmt.format(end)}`;
+  } catch {
+    return `${startIso} – ${endIso}`;
+  }
 }
 
 /**
- * Return a relative time string like "2 days ago", "just now", etc.
- */
-export function timeAgo(isoString: string): string {
-  const date = new Date(isoString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHr = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHr / 24);
-  const diffWeek = Math.floor(diffDay / 7);
-  const diffMonth = Math.floor(diffDay / 30);
-  const diffYear = Math.floor(diffDay / 365);
-
-  if (diffSec < 60) return 'just now';
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHr < 24) return `${diffHr}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  if (diffWeek < 4) return `${diffWeek}w ago`;
-  if (diffMonth < 12) return `${diffMonth}mo ago`;
-  return `${diffYear}y ago`;
-}
-
-/**
- * Get today's ISO date string (date-only, no time).
- */
-export function todayISO(): string {
-  return new Date().toISOString().split('T')[0] ?? '';
-}
-
-/**
- * Get a full ISO timestamp string.
+ * Return a new ISO 8601 timestamp string for now.
  */
 export function nowISO(): string {
   return new Date().toISOString();

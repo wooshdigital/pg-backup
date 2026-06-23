@@ -1,6 +1,6 @@
 /**
- * Generate a UUID v4-like unique identifier.
- * Uses Math.random() — suitable for client-side IDs without network dependency.
+ * Generate a pseudo-random UUID v4.
+ * In production you may swap this for a native uuid library.
  */
 export function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -11,9 +11,8 @@ export function generateId(): string {
 }
 
 /**
- * Generate a short alphanumeric ID (8 chars).
- * Useful for display-friendly IDs.
+ * Generate a short human-readable ID (8 chars).
  */
 export function generateShortId(): string {
-  return Math.random().toString(36).substring(2, 10).toUpperCase();
+  return Math.random().toString(36).slice(2, 10).toUpperCase();
 }

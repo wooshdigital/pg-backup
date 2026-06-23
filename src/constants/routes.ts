@@ -1,31 +1,34 @@
-// ─── Root Tab Routes ──────────────────────────────────────────────────────────
+// ─── Root Tab Routes ─────────────────────────────────────────────────────────
 
-export enum RootRoutes {
-  Home = 'Home',
-  Trips = 'Trips',
-  Settings = 'Settings',
+export enum RootRoute {
+  HOME = 'Home',
+  TRIPS = 'Trips',
+  SETTINGS = 'Settings',
 }
 
 // ─── Trip Stack Routes ────────────────────────────────────────────────────────
 
-export enum TripRoutes {
-  TripsList = 'TripsList',
-  TripDetail = 'TripDetail',
-  TripCreate = 'TripCreate',
-  TripEdit = 'TripEdit',
+export enum TripRoute {
+  TRIPS_LIST = 'TripsList',
+  TRIP_DETAIL = 'TripDetail',
+  TRIP_CREATE = 'TripCreate',
+  TRIP_EDIT = 'TripEdit',
 }
 
 // ─── Expense Stack Routes ─────────────────────────────────────────────────────
 
-export enum ExpenseRoutes {
-  ExpenseCreate = 'ExpenseCreate',
-  ExpenseDetail = 'ExpenseDetail',
-  ExpenseEdit = 'ExpenseEdit',
+export enum ExpenseRoute {
+  EXPENSE_CREATE = 'ExpenseCreate',
+  EXPENSE_DETAIL = 'ExpenseDetail',
+  EXPENSE_EDIT = 'ExpenseEdit',
 }
 
-// ─── Participant Routes ───────────────────────────────────────────────────────
+// ─── Settings Stack Routes ────────────────────────────────────────────────────
 
-export enum ParticipantRoutes {
-  ParticipantList = 'ParticipantList',
-  ParticipantDetail = 'ParticipantDetail',
+export enum SettingsRoute {
+  SETTINGS_HOME = 'SettingsHome',
+  SETTINGS_PROFILE = 'SettingsProfile',
+  SETTINGS_CURRENCY = 'SettingsCurrency',
+  SETTINGS_THEME = 'SettingsTheme',
+  SETTINGS_ABOUT = 'SettingsAbout',
 }

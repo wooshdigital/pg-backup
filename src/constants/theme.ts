@@ -1,200 +1,154 @@
+import type { ThemeColors } from '../types';
+
 // ─── Color Palette ────────────────────────────────────────────────────────────
 
-export const Colors = {
+export const palette = {
   // Brand
-  primary: '#6C63FF',
-  primaryLight: '#9D96FF',
-  primaryDark: '#4B44CC',
+  violet50: '#F3F0FF',
+  violet100: '#E5DBFF',
+  violet200: '#C5B3FF',
+  violet300: '#A58AFF',
+  violet400: '#8B6EFF',
+  violet500: '#6C63FF',
+  violet600: '#5A52D5',
+  violet700: '#4841AB',
+  violet800: '#363081',
+  violet900: '#241F57',
 
-  // Accent
-  accent: '#FF6584',
-  accentLight: '#FF92A8',
-  accentDark: '#CC3D5E',
+  // Teal accent
+  teal400: '#2DD4BF',
+  teal500: '#14B8A6',
+  teal600: '#0D9488',
 
-  // Success / Error / Warning / Info
-  success: '#4CAF50',
-  successLight: '#80E27E',
-  successDark: '#087F23',
-
-  error: '#F44336',
-  errorLight: '#FF7961',
-  errorDark: '#BA000D',
-
-  warning: '#FF9800',
-  warningLight: '#FFC947',
-  warningDark: '#C66900',
-
-  info: '#2196F3',
-  infoLight: '#6EC6FF',
-  infoDark: '#0069C0',
-
-  // Neutral
+  // Neutrals
   white: '#FFFFFF',
+  gray50: '#F9FAFB',
+  gray100: '#F3F4F6',
+  gray200: '#E5E7EB',
+  gray300: '#D1D5DB',
+  gray400: '#9CA3AF',
+  gray500: '#6B7280',
+  gray600: '#4B5563',
+  gray700: '#374151',
+  gray800: '#1F2937',
+  gray900: '#111827',
   black: '#000000',
 
-  grey50: '#FAFAFA',
-  grey100: '#F5F5F5',
-  grey200: '#EEEEEE',
-  grey300: '#E0E0E0',
-  grey400: '#BDBDBD',
-  grey500: '#9E9E9E',
-  grey600: '#757575',
-  grey700: '#616161',
-  grey800: '#424242',
-  grey900: '#212121',
+  // Dark mode surfaces
+  dark900: '#0A0A0F',
+  dark800: '#12121A',
+  dark700: '#1A1A2E',
+  dark600: '#22223B',
+  dark500: '#2D2D4A',
+
+  // Semantic
+  green400: '#4ADE80',
+  green500: '#22C55E',
+  green600: '#16A34A',
+  yellow400: '#FACC15',
+  yellow500: '#EAB308',
+  red400: '#F87171',
+  red500: '#EF4444',
+  red600: '#DC2626',
+  blue400: '#60A5FA',
+  blue500: '#3B82F6',
 } as const;
 
-// ─── Light Theme ──────────────────────────────────────────────────────────────
+// ─── Light Theme ─────────────────────────────────────────────────────────────
 
-export const LightTheme = {
-  mode: 'light' as const,
-  colors: {
-    // Backgrounds
-    background: Colors.grey50,
-    surface: Colors.white,
-    surfaceVariant: Colors.grey100,
-
-    // Text
-    textPrimary: Colors.grey900,
-    textSecondary: Colors.grey600,
-    textDisabled: Colors.grey400,
-    textInverse: Colors.white,
-
-    // Brand
-    primary: Colors.primary,
-    primaryLight: Colors.primaryLight,
-    primaryDark: Colors.primaryDark,
-    accent: Colors.accent,
-
-    // Semantic
-    success: Colors.success,
-    error: Colors.error,
-    warning: Colors.warning,
-    info: Colors.info,
-
-    // Borders & Dividers
-    border: Colors.grey300,
-    divider: Colors.grey200,
-
-    // Tab bar / Nav
-    tabBarBackground: Colors.white,
-    tabBarActive: Colors.primary,
-    tabBarInactive: Colors.grey400,
-
-    // Card
-    cardBackground: Colors.white,
-    cardShadow: Colors.black,
-
-    // Input
-    inputBackground: Colors.white,
-    inputBorder: Colors.grey300,
-    inputFocusBorder: Colors.primary,
-    placeholder: Colors.grey500,
-  },
-} as const;
-
-export const DarkTheme = {
-  mode: 'dark' as const,
-  colors: {
-    // Backgrounds
-    background: Colors.grey900,
-    surface: Colors.grey800,
-    surfaceVariant: Colors.grey700,
-
-    // Text
-    textPrimary: Colors.grey50,
-    textSecondary: Colors.grey400,
-    textDisabled: Colors.grey600,
-    textInverse: Colors.grey900,
-
-    // Brand
-    primary: Colors.primaryLight,
-    primaryLight: Colors.primaryLight,
-    primaryDark: Colors.primary,
-    accent: Colors.accentLight,
-
-    // Semantic
-    success: Colors.successLight,
-    error: Colors.errorLight,
-    warning: Colors.warningLight,
-    info: Colors.infoLight,
-
-    // Borders & Dividers
-    border: Colors.grey700,
-    divider: Colors.grey800,
-
-    // Tab bar / Nav
-    tabBarBackground: Colors.grey800,
-    tabBarActive: Colors.primaryLight,
-    tabBarInactive: Colors.grey600,
-
-    // Card
-    cardBackground: Colors.grey800,
-    cardShadow: Colors.black,
-
-    // Input
-    inputBackground: Colors.grey800,
-    inputBorder: Colors.grey700,
-    inputFocusBorder: Colors.primaryLight,
-    placeholder: Colors.grey500,
-  },
-} as const;
-
-export type ThemeMode = 'light' | 'dark';
-export type ThemeColors = typeof LightTheme.colors;
-
-export interface Theme {
-  mode: ThemeMode;
-  colors: ThemeColors;
-}
-
-// ─── Typography ───────────────────────────────────────────────────────────────
-
-export const FontSizes = {
-  xs: 10,
-  sm: 12,
-  md: 14,
-  base: 16,
-  lg: 18,
-  xl: 20,
-  '2xl': 24,
-  '3xl': 30,
-  '4xl': 36,
-  '5xl': 48,
-} as const;
-
-export const FontWeights = {
-  thin: '100' as const,
-  extraLight: '200' as const,
-  light: '300' as const,
-  normal: '400' as const,
-  medium: '500' as const,
-  semiBold: '600' as const,
-  bold: '700' as const,
-  extraBold: '800' as const,
-  black: '900' as const,
+export const lightColors: ThemeColors = {
+  primary: palette.violet500,
+  primaryLight: palette.violet300,
+  primaryDark: palette.violet700,
+  secondary: palette.teal500,
+  accent: palette.teal400,
+  background: palette.gray50,
+  surface: palette.white,
+  surfaceElevated: palette.white,
+  border: palette.gray200,
+  borderLight: palette.gray100,
+  text: palette.gray900,
+  textSecondary: palette.gray500,
+  textDisabled: palette.gray300,
+  textInverse: palette.white,
+  success: palette.green500,
+  warning: palette.yellow500,
+  error: palette.red500,
+  info: palette.blue500,
+  shadow: 'rgba(0, 0, 0, 0.08)',
 };
 
-export const LineHeights = {
-  tight: 1.2,
-  snug: 1.375,
-  normal: 1.5,
-  relaxed: 1.625,
-  loose: 2,
+// ─── Dark Theme ───────────────────────────────────────────────────────────────
+
+export const darkColors: ThemeColors = {
+  primary: palette.violet400,
+  primaryLight: palette.violet300,
+  primaryDark: palette.violet600,
+  secondary: palette.teal400,
+  accent: palette.teal500,
+  background: palette.dark900,
+  surface: palette.dark800,
+  surfaceElevated: palette.dark700,
+  border: palette.dark500,
+  borderLight: palette.dark600,
+  text: palette.gray50,
+  textSecondary: palette.gray400,
+  textDisabled: palette.gray600,
+  textInverse: palette.gray900,
+  success: palette.green400,
+  warning: palette.yellow400,
+  error: palette.red400,
+  info: palette.blue400,
+  shadow: 'rgba(0, 0, 0, 0.4)',
+};
+
+// ─── Typography ──────────────────────────────────────────────────────────────
+
+export const typography = {
+  fontFamily: {
+    regular: 'System',
+    medium: 'System',
+    semibold: 'System',
+    bold: 'System',
+  },
+  fontSize: {
+    xs: 11,
+    sm: 13,
+    base: 15,
+    md: 17,
+    lg: 19,
+    xl: 22,
+    '2xl': 26,
+    '3xl': 30,
+    '4xl': 36,
+    '5xl': 44,
+  },
+  fontWeight: {
+    regular: '400' as const,
+    medium: '500' as const,
+    semibold: '600' as const,
+    bold: '700' as const,
+    extrabold: '800' as const,
+  },
+  lineHeight: {
+    tight: 1.25,
+    snug: 1.375,
+    normal: 1.5,
+    relaxed: 1.625,
+    loose: 2,
+  },
+  letterSpacing: {
+    tight: -0.5,
+    normal: 0,
+    wide: 0.5,
+    wider: 1,
+  },
 } as const;
 
-export const LetterSpacings = {
-  tighter: -0.5,
-  tight: -0.25,
-  normal: 0,
-  wide: 0.25,
-  wider: 0.5,
-  widest: 1,
-} as const;
+// ─── Spacing ─────────────────────────────────────────────────────────────────
 
-// ─── Spacing ──────────────────────────────────────────────────────────────────
-
-export const Spacing = {
+export const spacing = {
+  px: 1,
   0: 0,
   0.5: 2,
   1: 4,
@@ -210,7 +164,6 @@ export const Spacing = {
   8: 32,
   9: 36,
   10: 40,
-  11: 44,
   12: 48,
   14: 56,
   16: 64,
@@ -220,64 +173,68 @@ export const Spacing = {
   32: 128,
 } as const;
 
-// ─── Border Radii ─────────────────────────────────────────────────────────────
+// ─── Border Radius ───────────────────────────────────────────────────────────
 
-export const BorderRadius = {
+export const borderRadius = {
   none: 0,
   xs: 2,
   sm: 4,
   md: 8,
   lg: 12,
   xl: 16,
-  '2xl': 24,
-  '3xl': 32,
+  '2xl': 20,
+  '3xl': 24,
   full: 9999,
 } as const;
 
-// ─── Shadows ──────────────────────────────────────────────────────────────────
+// ─── Shadows ─────────────────────────────────────────────────────────────────
 
-export const Shadows = {
+export const shadows = {
+  none: {
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
   sm: {
-    shadowColor: Colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
   md: {
-    shadowColor: Colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 3,
   },
   lg: {
-    shadowColor: Colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowRadius: 12,
+    elevation: 6,
   },
   xl: {
-    shadowColor: Colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: 20,
+    elevation: 10,
   },
 } as const;
 
-// ─── Z-Index ──────────────────────────────────────────────────────────────────
+// ─── Z-Index ─────────────────────────────────────────────────────────────────
 
-export const ZIndex = {
-  hide: -1,
-  auto: 'auto',
+export const zIndex = {
   base: 0,
   raised: 1,
-  dropdown: 1000,
-  sticky: 1100,
-  overlay: 1200,
-  modal: 1300,
-  toast: 1400,
-  tooltip: 1500,
+  dropdown: 10,
+  sticky: 20,
+  overlay: 30,
+  modal: 40,
+  toast: 50,
 } as const;

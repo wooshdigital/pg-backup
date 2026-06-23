@@ -3,21 +3,21 @@ import {
   StyleSheet,
   View,
   type ViewProps,
-  type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import { BorderRadius, Shadows, Spacing } from '../../constants/theme';
+import { borderRadius, shadows, spacing } from '../../constants/theme';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type CardElevation = 'none' | 'sm' | 'md' | 'lg' | 'xl';
+type CardElevation = 'none' | 'sm' | 'md' | 'lg';
 
 interface CardProps extends ViewProps {
   children: React.ReactNode;
   elevation?: CardElevation;
-  padding?: number;
-  style?: StyleProp<ViewStyle>;
+  padding?: keyof typeof spacing;
+  style?: ViewStyle;
+  radius?: keyof typeof borderRadius;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -25,27 +25,28 @@ interface CardProps extends ViewProps {
 export function Card({
   children,
   elevation = 'md',
-  padding = Spacing[4],
+  padding = 4,
   style,
-  ...props
+  radius = 'lg',
+  ...rest
 }: CardProps) {
-  const { theme } = useTheme();
-
-  const shadowStyle = elevation === 'none' ? {} : Shadows[elevation];
+  const { colors } = useTheme();
 
   return (
     <View
       style={[
-        styles.card,
-        shadowStyle,
+        styles.base,
         {
-          backgroundColor: theme.colors.cardBackground,
-          borderColor: theme.colors.border,
-          padding,
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderRadius: borderRadius[radius],
+          padding: spacing[padding],
+          ...shadows[elevation],
+          shadowColor: colors.shadow,
         },
         style,
       ]}
-      {...props}
+      {...rest}
     >
       {children}
     </View>
@@ -55,9 +56,10 @@ export function Card({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+  base: {
+    borderWidth: 1,
     overflow: 'hidden',
   },
 });
+
+export default Card;

@@ -1,130 +1,69 @@
-# ✈️ TripSplit
+# TripSplit 🌍✈️
 
-> Split travel expenses with friends & family — effortlessly.
+> Split expenses effortlessly with friends and family on any adventure.
 
-TripSplit is a React Native mobile application built with Expo that helps groups of travelers track shared expenses, split bills using various methods, and settle debts with minimal transactions.
-
----
-
-## 📋 Table of Contents
-
-- [Architecture Overview](#architecture-overview)
-- [Project Structure](#project-structure)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Development Workflow](#development-workflow)
-- [Phase Roadmap](#phase-roadmap)
-- [Core Domain Types](#core-domain-types)
+TripSplit is a mobile app built with **React Native + Expo** that makes shared travel expense tracking painless. Add trips, invite companions, log expenses, and let TripSplit handle the math.
 
 ---
 
-## 🏗️ Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                      App.tsx                            │
-│         (ThemeProvider + NavigationContainer)           │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-         ┌────────────▼────────────┐
-         │     RootNavigator       │
-         │  (Bottom Tab Navigator) │
-         └──┬──────────┬───────────┘
-            │          │           
-     ┌──────▼──┐  ┌────▼───────┐  ┌──────────────┐
-     │  Home   │  │   Trips    │  │   Settings   │
-     │ Screen  │  │   Stack    │  │    Screen    │
-     └─────────┘  └────┬───────┘  └──────────────┘
-                       │
-              ┌────────▼────────────┐
-              │   TripStackNavigator│
-              │  ┌───────────────┐  │
-              │  │  TripsList    │  │
-              │  │  TripDetail   │  │
-              │  │  TripCreate   │  │
-              │  │  ExpenseCreate│  │
-              │  └───────────────┘  │
-              └─────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│                    State & Data Layer                    │
-│                                                         │
-│  ThemeContext ──── AsyncStorage (persistence)           │
-│  (light/dark)                                           │
-│                                                         │
-│  [Phase 2+] TripContext ── AsyncStorage                 │
-│             ExpenseContext                              │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📁 Project Structure
+## 📐 Architecture Overview
 
 ```
 tripsplit/
-├── App.tsx                     # Root component
-├── app.json                    # Expo configuration
-├── package.json                # Dependencies
-├── tsconfig.json               # TypeScript config (strict)
-├── babel.config.js             # Babel config with path aliases
-├── .eslintrc.js                # ESLint rules
-├── .prettierrc                 # Prettier rules
-├── .husky/
-│   └── pre-commit              # Pre-commit hooks
-├── assets/
-│   ├── icon.png                # App icon
-│   └── splash.png              # Splash screen
-└── src/
-    ├── index.ts                # Public API barrel export
-    ├── types/
-    │   └── index.ts            # Core domain interfaces
-    ├── constants/
-    │   ├── theme.ts            # Colors, spacing, typography tokens
-    │   ├── routes.ts           # Route name enums
-    │   └── index.ts
-    ├── context/
-    │   ├── ThemeContext.tsx     # Light/dark theme provider + hook
-    │   └── index.ts
-    ├── navigation/
-    │   ├── RootNavigator.tsx   # Bottom tab navigator
-    │   ├── TripStackNavigator.tsx
-    │   └── index.ts
-    ├── screens/
-    │   ├── HomeScreen.tsx      # App home / landing
-    │   ├── TripsScreen.tsx     # Trip list
-    │   ├── SettingsScreen.tsx  # Settings / preferences
-    │   └── index.ts
-    ├── components/
-    │   ├── common/
-    │   │   ├── Card.tsx        # Reusable card container
-    │   │   ├── Button.tsx      # Themed button component
-    │   │   └── Typography.tsx  # Heading, Body, Caption, Label
-    │   └── index.ts
-    ├── hooks/
-    │   ├── useAsyncStorage.ts  # AsyncStorage CRUD hook
-    │   └── index.ts
-    └── utils/
-        ├── currency.ts         # Currency formatting helpers
-        ├── date.ts             # Date formatting helpers
-        ├── id.ts               # UUID generation
-        └── index.ts
+├── App.tsx                    # Root: ThemeProvider + NavigationContainer
+├── app.json                   # Expo config (icon, splash, build settings)
+├── assets/                    # Static assets (icon, splash)
+├── src/
+│   ├── components/
+│   │   └── common/            # Reusable UI primitives
+│   │       ├── Button.tsx
+│   │       ├── Card.tsx
+│   │       └── Typography.tsx
+│   ├── constants/
+│   │   ├── routes.ts          # Route name enums
+│   │   ├── theme.ts           # Design tokens (colors, spacing, etc.)
+│   │   └── index.ts
+│   ├── context/
+│   │   └── ThemeContext.tsx   # Light/dark theme provider + useTheme hook
+│   ├── hooks/
+│   │   ├── useAsyncStorage.ts # Typed AsyncStorage wrapper hook
+│   │   └── index.ts
+│   ├── navigation/
+│   │   ├── RootNavigator.tsx  # Bottom tab navigator (Home / Trips / Settings)
+│   │   ├── TripStackNavigator.tsx
+│   │   └── index.ts
+│   ├── screens/
+│   │   ├── HomeScreen.tsx
+│   │   ├── TripsScreen.tsx
+│   │   ├── SettingsScreen.tsx
+│   │   └── index.ts
+│   ├── types/
+│   │   └── index.ts           # Core domain types: Trip, Expense, Split, etc.
+│   └── utils/
+│       ├── currency.ts        # Money formatting utilities
+│       ├── date.ts            # Date formatting utilities
+│       ├── id.ts              # ID generation helpers
+│       └── index.ts
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## 🗺️ Domain Model
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | React Native (Expo Managed) |
-| Language | TypeScript 5 (strict mode) |
-| Navigation | React Navigation v6 (Stack + Bottom Tabs) |
-| Theming | Custom ThemeContext + React Native StyleSheet |
-| Persistence | AsyncStorage (Phase 1) |
-| Linting | ESLint + TypeScript-ESLint |
-| Formatting | Prettier |
-| Git Hooks | Husky + lint-staged |
+```
+Trip
+ ├── id, name, description, destination
+ ├── currency (default)
+ ├── status: planning | active | completed | archived
+ ├── participants: Participant[]
+ └── expenses: Expense[]
+         ├── id, title, amount, currency, category
+         ├── paidBy: participantId
+         └── split: Split
+                  ├── method: equal | exact | percentage | shares
+                  └── shares: SplitShare[]
+                           └── participantId, amount, settled
+```
 
 ---
 
@@ -134,8 +73,8 @@ tripsplit/
 
 - Node.js 18+
 - npm or yarn
-- Expo CLI (`npm install -g expo-cli`)
-- iOS Simulator (macOS) or Android Emulator — or the **Expo Go** app on a physical device
+- Expo CLI: `npm install -g expo-cli`
+- iOS Simulator (macOS) or Android Emulator, or the **Expo Go** app on your device
 
 ### Installation
 
@@ -147,117 +86,148 @@ cd tripsplit
 # 2. Install dependencies
 npm install
 
-# 3. Set up Husky git hooks
-npm run prepare
-
-# 4. Start the development server
+# 3. Start the Expo development server
 npm start
-```
 
-### Running on a device
-
-```bash
-# iOS Simulator
-npm run ios
-
-# Android Emulator
-npm run android
-
-# Web (preview only)
-npm run web
+# 4. Open on your preferred platform
+#    Press 'i' for iOS simulator
+#    Press 'a' for Android emulator
+#    Scan QR code with Expo Go for physical device
 ```
 
 ---
 
-## 🔧 Development Workflow
-
-### Scripts
+## 🛠️ Available Scripts
 
 | Command | Description |
-|---------|-------------|
+|---|---|
 | `npm start` | Start Expo dev server |
-| `npm run lint` | Run ESLint (with auto-fix) |
-| `npm run lint:check` | Run ESLint (no fix, for CI) |
-| `npm run type-check` | Run TypeScript compiler check |
+| `npm run ios` | Open in iOS Simulator |
+| `npm run android` | Open in Android Emulator |
+| `npm run lint` | Run ESLint (zero warnings) |
+| `npm run lint:fix` | Auto-fix ESLint issues |
 | `npm run format` | Format all files with Prettier |
-| `npm run format:check` | Check formatting (for CI) |
-| `npm test` | Run Jest tests |
+| `npm run format:check` | Check formatting without writing |
+| `npm run type-check` | Run TypeScript compiler check |
+| `npm test` | Run Vitest in watch mode |
+| `npm run test:run` | Run Vitest once (CI) |
 
-### Pre-commit Hooks
+---
 
-Every commit automatically runs:
-1. **lint-staged** — ESLint + Prettier on staged files
-2. **tsc --noEmit** — TypeScript type checking
+## 🎨 Design System
 
-### Path Aliases
+### Theming
 
-Use `@/`, `@screens/`, `@components/`, etc. instead of relative paths:
+TripSplit uses a **token-based design system** with full light/dark mode support.
 
-```ts
-// ❌ Don't do this
-import { Button } from '../../components/common/Button';
+```tsx
+import { useTheme } from '@context/ThemeContext';
 
-// ✅ Do this
-import { Button } from '@components/common/Button';
+function MyComponent() {
+  const { colors, isDark, toggleTheme } = useTheme();
+  return <View style={{ backgroundColor: colors.background }} />;
+}
+```
+
+### Color Palette
+
+| Token | Light | Dark |
+|---|---|---|
+| `primary` | `#6C63FF` | `#8B6EFF` |
+| `background` | `#F9FAFB` | `#0A0A0F` |
+| `surface` | `#FFFFFF` | `#12121A` |
+| `text` | `#111827` | `#F9FAFB` |
+| `success` | `#22C55E` | `#4ADE80` |
+| `error` | `#EF4444` | `#F87171` |
+
+### Spacing Scale
+
+Uses a 4px base grid: `spacing[1] = 4px`, `spacing[4] = 16px`, `spacing[8] = 32px`.
+
+---
+
+## 📱 Navigation Structure
+
+```
+RootNavigator (Bottom Tabs)
+├── HomeScreen               # Dashboard & getting started
+├── TripStackNavigator       # Stack navigator
+│   └── TripsScreen          # List of all trips
+└── SettingsScreen           # App preferences
 ```
 
 ---
 
-## 🗺️ Phase Roadmap
+## 🔧 Code Quality
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| **Phase 1** | Foundation & Project Setup | ✅ Current |
-| **Phase 2** | Trip CRUD & AsyncStorage | 🔜 Planned |
-| **Phase 3** | Expense Tracking | 🔜 Planned |
-| **Phase 4** | Split Logic Engine | 🔜 Planned |
-| **Phase 5** | Settlement & Balances | 🔜 Planned |
-| **Phase 6** | Polish & Animations | 🔜 Planned |
-| **Phase 7** | Backend / Sync | 🔜 Planned |
+### ESLint
+
+Uses `@typescript-eslint/recommended` + `react-hooks` + `react-native` plugins.
+
+```bash
+npm run lint        # Check
+npm run lint:fix    # Auto-fix
+```
+
+### Prettier
+
+Enforces consistent formatting (single quotes, trailing commas, 100-char line width).
+
+```bash
+npm run format        # Write
+npm run format:check  # Check only (CI)
+```
+
+### Husky Pre-commit Hooks
+
+Automatically runs `lint-staged` + `tsc --noEmit` before every commit. No broken code gets committed.
+
+### TypeScript
+
+Strict mode enabled with path aliases (`@/`, `@components/`, `@screens/`, etc.).
 
 ---
 
-## 📐 Core Domain Types
+## 📦 Key Dependencies
 
-```ts
-interface Trip {
-  id: string;
-  name: string;
-  destination?: string;
-  startDate?: string;    // ISO 8601
-  endDate?: string;      // ISO 8601
-  currency: CurrencyCode;
-  status: 'planning' | 'active' | 'completed' | 'archived';
-  participants: Participant[];
-  expenses: Expense[];
-}
+| Package | Version | Purpose |
+|---|---|---|
+| `expo` | ~50.0.0 | Managed workflow runtime |
+| `react-native` | 0.73.x | Core framework |
+| `@react-navigation/native` | ^6.x | Navigation primitives |
+| `@react-navigation/bottom-tabs` | ^6.x | Tab navigator |
+| `@react-navigation/native-stack` | ^6.x | Stack navigator |
+| `@react-native-async-storage/async-storage` | 1.21.x | Local persistence |
+| `typescript` | ^5.3 | Type safety |
 
-interface Expense {
-  id: string;
-  tripId: string;
-  title: string;
-  amount: number;        // minor units (cents)
-  currency: CurrencyCode;
-  category: ExpenseCategory;
-  paidBy: string;        // participantId
-  split: Split;
-}
+---
 
-interface Split {
-  id: string;
-  method: 'equal' | 'exact' | 'percentage' | 'shares';
-  shares: SplitShare[];
-}
+## 🗓️ Development Phases
 
-interface Participant {
-  id: string;
-  name: string;
-  email?: string;
-}
-```
+| Phase | Status | Description |
+|---|---|---|
+| **Phase 1** | ✅ Current | Foundation, navigation, theming, folder structure |
+| Phase 2 | 🔜 | Trip CRUD — create, list, and view trips |
+| Phase 3 | 🔜 | Expense tracking — add and categorize expenses |
+| Phase 4 | 🔜 | Smart splitting — equal, exact, percentage, shares |
+| Phase 5 | 🔜 | Settlement flow — mark debts as paid |
+| Phase 6 | 🔜 | Multi-currency support |
+| Phase 7 | 🔜 | Export & sharing — PDF, CSV, share sheets |
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feat/my-feature`
+3. Commit your changes: `git commit -m 'feat: add my feature'`
+4. Push to the branch: `git push origin feat/my-feature`
+5. Open a Pull Request
+
+All commits must pass the pre-commit hooks (lint + type-check).
 
 ---
 
 ## 📄 License
 
-MIT © 2026 TripSplit
+MIT © TripSplit Contributors

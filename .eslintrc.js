@@ -8,7 +8,6 @@ module.exports = {
       jsx: true,
     },
     project: './tsconfig.json',
-    tsconfigRootDir: __dirname,
   },
   settings: {
     react: {
@@ -16,65 +15,57 @@ module.exports = {
     },
   },
   env: {
-    browser: false,
-    es2020: true,
     'react-native/react-native': true,
+    es2020: true,
+    node: true,
   },
   extends: [
     'eslint:recommended',
     'plugin:react/recommended',
+    'plugin:react/jsx-runtime',
     'plugin:react-hooks/recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:@typescript-eslint/recommended-requiring-type-checking',
-    'plugin:react-native/all',
-    'plugin:prettier/recommended',
   ],
   plugins: [
     'react',
     'react-hooks',
-    '@typescript-eslint',
     'react-native',
-    'prettier',
+    '@typescript-eslint',
   ],
   rules: {
+    // TypeScript
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    '@typescript-eslint/no-explicit-any': 'error',
+    '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+    '@typescript-eslint/no-floating-promises': 'error',
+    '@typescript-eslint/await-thenable': 'error',
+
     // React
-    'react/react-in-jsx-scope': 'off',
     'react/prop-types': 'off',
     'react/display-name': 'off',
-
-    // React Hooks
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
 
-    // TypeScript
-    '@typescript-eslint/explicit-function-return-type': 'off',
-    '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    '@typescript-eslint/no-explicit-any': 'warn',
-    '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
-
     // React Native
     'react-native/no-unused-styles': 'error',
-    'react-native/split-platform-components': 'warn',
     'react-native/no-inline-styles': 'warn',
     'react-native/no-color-literals': 'warn',
-    'react-native/no-raw-text': 'off',
-
-    // Prettier
-    'prettier/prettier': 'error',
 
     // General
     'no-console': ['warn', { allow: ['warn', 'error'] }],
     'prefer-const': 'error',
     'no-var': 'error',
+    'eqeqeq': ['error', 'always'],
   },
   ignorePatterns: [
     'node_modules/',
     'dist/',
-    'coverage/',
     '.expo/',
+    'coverage/',
     'babel.config.js',
-    'metro.config.js',
     'rollup.config.ts',
     'vite.config.ts',
     'vitest.config.ts',
