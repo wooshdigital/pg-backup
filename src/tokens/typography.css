@@ -1,0 +1,189 @@
+/**
+ * Typography Design Tokens
+ *
+ * Defines font families, sizes, weights, line heights, and letter spacing
+ * as CSS custom properties. Based on a modular type scale.
+ *
+ * Font size naming convention:
+ * --font-size-{t-shirt-size}
+ *
+ * All sizes use rem units for accessibility (respects user browser font settings).
+ * Base: 1rem = 16px (browser default)
+ */
+
+:root {
+  /* ============================================
+     FONT FAMILIES
+     ============================================ */
+
+  /* System font stacks for performance and native feel */
+  --font-family-sans:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    'Noto Sans',
+    sans-serif,
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+    'Segoe UI Symbol',
+    'Noto Color Emoji';
+
+  --font-family-serif:
+    Georgia,
+    Cambria,
+    'Times New Roman',
+    Times,
+    serif;
+
+  --font-family-mono:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    'Liberation Mono',
+    'Courier New',
+    monospace;
+
+  /* Semantic aliases */
+  --font-family-body: var(--font-family-sans);
+  --font-family-heading: var(--font-family-sans);
+  --font-family-code: var(--font-family-mono);
+
+  /* ============================================
+     FONT SIZES (Modular scale, ratio: 1.25)
+     ============================================ */
+  --font-size-2xs: 0.625rem;   /* 10px */
+  --font-size-xs: 0.75rem;     /* 12px */
+  --font-size-sm: 0.875rem;    /* 14px */
+  --font-size-md: 1rem;        /* 16px - base */
+  --font-size-lg: 1.125rem;    /* 18px */
+  --font-size-xl: 1.25rem;     /* 20px */
+  --font-size-2xl: 1.5rem;     /* 24px */
+  --font-size-3xl: 1.875rem;   /* 30px */
+  --font-size-4xl: 2.25rem;    /* 36px */
+  --font-size-5xl: 3rem;       /* 48px */
+  --font-size-6xl: 3.75rem;    /* 60px */
+  --font-size-7xl: 4.5rem;     /* 72px */
+
+  /* ============================================
+     FONT WEIGHTS
+     ============================================ */
+  --font-weight-thin: 100;
+  --font-weight-extralight: 200;
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
+
+  /* ============================================
+     LINE HEIGHTS
+     ============================================ */
+  --line-height-none: 1;
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;    /* WCAG recommended minimum for body text */
+  --line-height-relaxed: 1.625;
+  --line-height-loose: 2;
+
+  /* ============================================
+     LETTER SPACING (TRACKING)
+     ============================================ */
+  --letter-spacing-tighter: -0.05em;
+  --letter-spacing-tight: -0.025em;
+  --letter-spacing-normal: 0em;
+  --letter-spacing-wide: 0.025em;
+  --letter-spacing-wider: 0.05em;
+  --letter-spacing-widest: 0.1em;
+
+  /* ============================================
+     SEMANTIC TYPOGRAPHY TOKENS
+     ============================================ */
+
+  /* Body text */
+  --typography-body-sm-size: var(--font-size-sm);
+  --typography-body-sm-weight: var(--font-weight-normal);
+  --typography-body-sm-line-height: var(--line-height-normal);
+
+  --typography-body-md-size: var(--font-size-md);
+  --typography-body-md-weight: var(--font-weight-normal);
+  --typography-body-md-line-height: var(--line-height-normal);
+
+  --typography-body-lg-size: var(--font-size-lg);
+  --typography-body-lg-weight: var(--font-weight-normal);
+  --typography-body-lg-line-height: var(--line-height-relaxed);
+
+  /* Headings */
+  --typography-heading-xs-size: var(--font-size-sm);
+  --typography-heading-xs-weight: var(--font-weight-semibold);
+  --typography-heading-xs-line-height: var(--line-height-snug);
+
+  --typography-heading-sm-size: var(--font-size-md);
+  --typography-heading-sm-weight: var(--font-weight-semibold);
+  --typography-heading-sm-line-height: var(--line-height-snug);
+
+  --typography-heading-md-size: var(--font-size-xl);
+  --typography-heading-md-weight: var(--font-weight-semibold);
+  --typography-heading-md-line-height: var(--line-height-tight);
+
+  --typography-heading-lg-size: var(--font-size-2xl);
+  --typography-heading-lg-weight: var(--font-weight-bold);
+  --typography-heading-lg-line-height: var(--line-height-tight);
+
+  --typography-heading-xl-size: var(--font-size-3xl);
+  --typography-heading-xl-weight: var(--font-weight-bold);
+  --typography-heading-xl-line-height: var(--line-height-tight);
+
+  --typography-heading-2xl-size: var(--font-size-4xl);
+  --typography-heading-2xl-weight: var(--font-weight-extrabold);
+  --typography-heading-2xl-line-height: var(--line-height-none);
+
+  /* Labels (form elements) */
+  --typography-label-sm-size: var(--font-size-xs);
+  --typography-label-sm-weight: var(--font-weight-medium);
+  --typography-label-sm-line-height: var(--line-height-normal);
+
+  --typography-label-md-size: var(--font-size-sm);
+  --typography-label-md-weight: var(--font-weight-medium);
+  --typography-label-md-line-height: var(--line-height-normal);
+
+  --typography-label-lg-size: var(--font-size-md);
+  --typography-label-lg-weight: var(--font-weight-medium);
+  --typography-label-lg-line-height: var(--line-height-normal);
+
+  /* Code / monospace */
+  --typography-code-size: var(--font-size-sm);
+  --typography-code-weight: var(--font-weight-normal);
+  --typography-code-line-height: var(--line-height-relaxed);
+  --typography-code-font-family: var(--font-family-code);
+
+  /* Helper / caption text */
+  --typography-helper-size: var(--font-size-xs);
+  --typography-helper-weight: var(--font-weight-normal);
+  --typography-helper-line-height: var(--line-height-normal);
+
+  /* ============================================
+     PARAGRAPH SPACING
+     WCAG 1.4.12 Text Spacing requirements:
+     - Line height >= 1.5× font size
+     - Letter spacing >= 0.12× font size
+     - Word spacing >= 0.16× font size
+     - Paragraph spacing >= 2× font size
+     ============================================ */
+  --paragraph-spacing: 1em;
+  --paragraph-indent: 0;
+
+  /* ============================================
+     MAXIMUM LINE LENGTH
+     WCAG 1.4.8 recommends max 80 characters
+     ============================================ */
+  --text-max-width: 65ch;
+  --text-narrow-max-width: 45ch;
+  --text-wide-max-width: 80ch;
+}

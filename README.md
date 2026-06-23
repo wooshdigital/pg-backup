@@ -1,200 +1,146 @@
-# SplitWise Travel ✈️💰
+# Accessible React Component Library
 
-> Split travel expenses effortlessly with friends and family.
+A production-ready, fully accessible React component library built with TypeScript, following WCAG 2.1 AA guidelines.
 
-A mobile app built with React Native (Expo) that helps travelers track, split, and settle shared expenses across any currency.
+## Accessibility Philosophy
 
----
+Every component in this library is designed with accessibility as a first-class concern, not an afterthought. We adhere to the following principles:
 
-## 📱 Features (Planned)
+1. **Keyboard Navigation**: All interactive components are fully operable via keyboard
+2. **Screen Reader Support**: Proper ARIA roles, states, and properties are applied throughout
+3. **Focus Management**: Visible focus indicators and logical focus order
+4. **Color Contrast**: All color combinations meet WCAG 2.1 AA contrast ratios (4.5:1 for text, 3:1 for UI components)
+5. **Semantic HTML**: We use the right element for the right job
+6. **Error Identification**: Form errors are clearly communicated to all users
 
-- **Trip Management** — Create and manage trips with multiple participants
-- **Expense Tracking** — Log expenses in any currency with automatic conversion
-- **Flexible Splits** — Equal, exact, percentage, or share-based splits
-- **Balance Calculations** — Real-time per-person balance tracking
-- **Settlement Suggestions** — Minimized debt settlement recommendations
-- **Offline-First** — Works without internet, syncs when connected
-- **Dark Mode** — Full light/dark theme support
+## Installation
 
----
-
-## 🏗️ Architecture
-
-```
-splitwise-travel/
-├── App.tsx                    # Root component
-├── app.json                   # Expo configuration
-├── src/
-│   ├── types/
-│   │   └── index.ts           # Core TypeScript interfaces
-│   ├── constants/
-│   │   ├── theme.ts           # Design tokens (colors, spacing, etc.)
-│   │   └── routes.ts          # Route name enums & param lists
-│   ├── context/
-│   │   └── ThemeContext.tsx   # Light/dark theme provider
-│   ├── navigation/
-│   │   ├── RootNavigator.tsx  # Bottom tab navigator
-│   │   └── TripStackNavigator.tsx
-│   ├── screens/
-│   │   ├── HomeScreen.tsx
-│   │   ├── TripsScreen.tsx
-│   │   └── SettingsScreen.tsx
-│   ├── components/
-│   │   └── common/
-│   │       ├── Card.tsx
-│   │       ├── Button.tsx
-│   │       └── Typography.tsx
-│   ├── hooks/
-│   │   └── useAsyncStorage.ts
-│   └── utils/
-│       ├── currency.ts
-│       ├── date.ts
-│       └── id.ts
+```bash
+npm install @your-org/accessible-components
+# or
+yarn add @your-org/accessible-components
+# or
+pnpm add @your-org/accessible-components
 ```
 
-### Data Flow
+## Quick Start
 
+```tsx
+import { /* components */ } from '@your-org/accessible-components';
+import '@your-org/accessible-components/dist/styles.css';
+
+function App() {
+  return (
+    <div>
+      {/* Your accessible components here */}
+    </div>
+  );
+}
 ```
-AsyncStorage (persistence)
-       ↕
-  React Context (state)
-       ↕
-   Screens / Hooks
-       ↕
-  UI Components
-```
 
----
-
-## 🚀 Getting Started
+## Development
 
 ### Prerequisites
 
-- **Node.js** ≥ 18
-- **npm** or **yarn**
-- **Expo CLI**: `npm install -g expo-cli`
-- **Expo Go** app on your iOS/Android device, or an emulator
+- Node.js >= 18
+- pnpm >= 8
 
-### Installation
+### Setup
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/yourorg/splitwise-travel.git
-cd splitwise-travel
-
-# 2. Install dependencies
-npm install
-
-# 3. Install Husky hooks
-npm run prepare
-
-# 4. Start the development server
-npm start
+pnpm install
 ```
 
-### Running on a Device / Emulator
+### Scripts
 
-```bash
-# iOS Simulator
-npm run ios
+| Command | Description |
+|---------|-------------|
+| `pnpm dev` | Start Vite development server |
+| `pnpm build` | Build library for production |
+| `pnpm test` | Run unit tests with Vitest |
+| `pnpm test:watch` | Run tests in watch mode |
+| `pnpm test:coverage` | Run tests with coverage report |
+| `pnpm storybook` | Start Storybook development server |
+| `pnpm build-storybook` | Build static Storybook site |
+| `pnpm lint` | Run ESLint |
+| `pnpm lint:fix` | Run ESLint with auto-fix |
+| `pnpm type-check` | Run TypeScript type checking |
 
-# Android Emulator
-npm run android
+### Project Structure
 
-# Web (limited support)
-npm run web
+```
+src/
+├── components/        # UI components
+│   └── common/        # Shared/primitive components
+├── hooks/             # Custom React hooks
+│   ├── useId.ts       # Stable ID generation
+│   └── useFocusVisible.ts  # Focus visibility detection
+├── tokens/            # Design tokens (CSS custom properties)
+│   ├── colors.css     # Color palette
+│   ├── spacing.css    # Spacing scale
+│   ├── typography.css # Typography tokens
+│   ├── focus.css      # Focus ring styles
+│   └── index.css      # Barrel import
+├── utils/             # Utility functions
+│   ├── aria.ts        # ARIA helper utilities
+│   ├── keys.ts        # Keyboard event constants
+│   └── classNames.ts  # Class name utility
+├── types.ts           # Shared TypeScript types
+├── index.ts           # Main library exports
+└── test-setup.ts      # Test configuration
+.storybook/            # Storybook configuration
 ```
 
----
+## Contributing
 
-## 🛠️ Development
+### Code Style
 
-### Code Quality
+- TypeScript strict mode is enforced
+- ESLint with `eslint-plugin-jsx-a11y` rules set to error
+- All components must pass automated accessibility tests
+- Every component requires a Storybook story
 
-```bash
-# Lint (zero warnings policy)
-npm run lint
+### Testing Requirements
 
-# Auto-fix lint issues
-npm run lint:fix
+All components must have:
+1. Unit tests with `@testing-library/react`
+2. Accessibility tests with `jest-axe`
+3. Keyboard interaction tests
+4. A Storybook story with accessibility addon enabled
 
-# Format with Prettier
-npm run format
+### Accessibility Testing
 
-# TypeScript type check
-npm run type-check
+```tsx
+import { render } from '@testing-library/react';
+import { axe, toHaveNoViolations } from 'jest-axe';
+
+expect.extend(toHaveNoViolations);
+
+test('component has no accessibility violations', async () => {
+  const { container } = render(<YourComponent />);
+  const results = await axe(container);
+  expect(results).toHaveNoViolations();
+});
 ```
 
-### Pre-commit Hooks
+### Commit Convention
 
-Husky runs automatically before each commit:
-1. `lint-staged` — lints and formats changed files
-2. `tsc --noEmit` — full TypeScript type check
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
----
+- `feat:` New feature
+- `fix:` Bug fix
+- `a11y:` Accessibility improvement
+- `docs:` Documentation changes
+- `test:` Test additions/changes
+- `chore:` Maintenance tasks
 
-## 📐 Design System
+## Browser Support
 
-### Theme Tokens
+- Chrome/Edge 88+
+- Firefox 78+
+- Safari 14+
+- iOS Safari 14+
 
-| Token Category | Description |
-|---|---|
-| `colors` | Brand, semantic, and neutral color palette |
-| `fontSizes` | `xs` (11) → `5xl` (40) |
-| `fontWeights` | `regular` → `extraBold` |
-| `spacing` | 4px base unit scale |
-| `borderRadius` | `xs` (2) → `full` (9999) |
-| `shadows` | `none` → `xl` |
+## License
 
-### Color Palette
-
-| Name | Light | Dark |
-|---|---|---|
-| Primary | `#6C63FF` | `#8B6BFF` |
-| Accent | `#38B2AC` | `#4FD1C5` |
-| Background | `#F9FAFB` | `#111827` |
-| Surface | `#FFFFFF` | `#1F2937` |
-
----
-
-## 🗺️ Roadmap
-
-### Phase 1 ✅ — Foundation & Project Setup
-- [x] Expo project with TypeScript
-- [x] React Navigation v6 (Stack + Bottom Tabs)
-- [x] Global ThemeContext with light/dark palette
-- [x] Core TypeScript interfaces
-- [x] ESLint + Prettier + Husky
-- [x] Component library foundation
-
-### Phase 2 — Core Expense Features
-- [ ] Trip CRUD (create, read, update, delete)
-- [ ] Participant management
-- [ ] Expense creation with split logic
-- [ ] AsyncStorage persistence layer
-
-### Phase 3 — Balance & Settlement
-- [ ] Balance calculation engine
-- [ ] Settlement suggestions
-- [ ] Expense history & filtering
-
-### Phase 4 — Polish & Export
-- [ ] Data export (CSV/PDF)
-- [ ] Currency conversion API
-- [ ] Onboarding flow
-- [ ] Animations & micro-interactions
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit your changes (pre-commit hooks will run automatically)
-4. Push and open a pull request
-
----
-
-## 📄 License
-
-MIT © Your Company
+MIT

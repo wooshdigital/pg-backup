@@ -1,0 +1,25 @@
+/**
+ * Design Tokens - Barrel Import File
+ *
+ * Imports all design token files in the correct order.
+ * Import this file once at your application root.
+ *
+ * @example
+ * // In your main entry file (e.g., main.tsx or App.tsx):
+ * import '@your-org/accessible-components/dist/tokens/index.css';
+ *
+ * // Or if using the library directly:
+ * import './src/tokens/index.css';
+ */
+
+/* 1. Colors - must come first as other tokens may reference color tokens */
+@import './colors.css';
+
+/* 2. Spacing - layout primitives */
+@import './spacing.css';
+
+/* 3. Typography - font definitions */
+@import './typography.css';
+
+/* 4. Focus - focus ring styles (may reference color and spacing tokens) */
+@import './focus.css';

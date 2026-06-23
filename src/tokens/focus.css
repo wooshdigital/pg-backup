@@ -1,0 +1,217 @@
+/**
+ * Focus Ring Design Tokens & Styles
+ *
+ * Implements standardized, accessible focus indicators following WCAG 2.1 AA
+ * and the updated WCAG 2.2 Success Criterion 2.4.11 (Focus Appearance).
+ *
+ * WCAG 2.2 Focus Appearance Requirements:
+ * - Focus indicator area must be at least the perimeter of the component
+ * - Focus indicator must have a contrast ratio of at least 3:1 against adjacent colors
+ * - Minimum area of the focus indicator must be at least 1 CSS pixel
+ *
+ * Implementation uses :focus-visible to only show focus rings during
+ * keyboard navigation (not mouse clicks), improving aesthetics while
+ * maintaining accessibility.
+ */
+
+:root {
+  /* ============================================
+     FOCUS RING TOKENS
+     ============================================ */
+
+  /* Ring color - high contrast blue visible on both light and dark backgrounds */
+  --focus-ring-color: #2563eb;                  /* Blue 600 */
+  --focus-ring-color-offset: #ffffff;           /* White offset for dark backgrounds */
+  --focus-ring-color-dark: #60a5fa;             /* Blue 400 for dark mode */
+  --focus-ring-color-offset-dark: #1f2937;      /* Gray 800 for dark mode */
+
+  /* Ring dimensions */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --focus-ring-style: solid;
+
+  /* Shorthand for common usage */
+  --focus-ring: var(--focus-ring-width) var(--focus-ring-style) var(--focus-ring-color);
+  --focus-ring-offset-shadow: 0 0 0 var(--focus-ring-offset) var(--focus-ring-color-offset);
+  --focus-ring-combined:
+    0 0 0 var(--focus-ring-offset) var(--focus-ring-color-offset),
+    0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--focus-ring-color);
+
+  /* High contrast variant */
+  --focus-ring-high-contrast-color: Highlight;
+  --focus-ring-high-contrast-width: 3px;
+}
+
+/* ============================================
+   GLOBAL FOCUS RESET
+   Remove default outline only when we provide our own
+   ============================================ */
+
+/* Apply our custom focus ring to all focusable elements */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: var(--focus-ring-width) var(--focus-ring-style) var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/**
+ * Standard focus ring using outline (preferred method)
+ * Use this for most interactive elements
+ */
+.focus-ring {
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) var(--focus-ring-style) var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+
+/**
+ * Box-shadow focus ring (for elements where outline doesn't work well,
+ * e.g. elements with border-radius that clips outlines in some browsers)
+ */
+.focus-ring-shadow {
+  &:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring-combined);
+  }
+}
+
+/**
+ * Inset focus ring (for elements that need focus inside the border)
+ */
+.focus-ring-inset {
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: var(--focus-ring-width) var(--focus-ring-style) var(--focus-ring-color);
+    outline-offset: calc(var(--focus-ring-offset) * -1);
+  }
+}
+
+/**
+ * Skip to main content link (visually hidden until focused)
+ */
+.skip-link {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+  z-index: var(--z-index-toast, 700);
+
+  &:focus-visible {
+    position: fixed;
+    top: var(--spacing-4, 16px);
+    left: var(--spacing-4, 16px);
+    width: auto;
+    height: auto;
+    padding: var(--spacing-3, 12px) var(--spacing-6, 24px);
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    background-color: var(--color-bg-primary, #ffffff);
+    color: var(--color-text-primary, #111827);
+    font-size: var(--font-size-md, 1rem);
+    font-weight: var(--font-weight-semibold, 600);
+    border-radius: var(--radius-md, 6px);
+    outline: var(--focus-ring-width) var(--focus-ring-style) var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+    text-decoration: none;
+  }
+}
+
+/**
+ * Visually hidden (screen reader only) utility class
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/**
+ * Make a visually hidden element visible (undo sr-only)
+ */
+.not-sr-only {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ============================================
+   DARK MODE ADJUSTMENTS
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --focus-ring-color: var(--focus-ring-color-dark);
+    --focus-ring-color-offset: var(--focus-ring-color-offset-dark);
+    --focus-ring-combined:
+      0 0 0 var(--focus-ring-offset) var(--focus-ring-color-offset-dark),
+      0 0 0 calc(var(--focus-ring-offset) + var(--focus-ring-width)) var(--focus-ring-color-dark);
+  }
+}
+
+/* ============================================
+   HIGH CONTRAST / FORCED COLORS MODE
+   Windows High Contrast Mode / Microsoft Edge forced colors
+   ============================================ */
+@media (forced-colors: active) {
+  :root {
+    --focus-ring-color: Highlight;
+    --focus-ring-color-offset: ButtonFace;
+  }
+
+  *:focus-visible {
+    outline: var(--focus-ring-high-contrast-width) solid Highlight;
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .focus-ring-shadow:focus-visible {
+    outline: var(--focus-ring-high-contrast-width) solid Highlight;
+    box-shadow: none;
+  }
+}
+
+/* ============================================
+   REDUCED MOTION
+   Ensure focus transitions don't cause motion issues
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *:focus-visible {
+    transition: none;
+  }
+}

@@ -1,0 +1,130 @@
+/**
+ * Spacing Design Tokens
+ *
+ * Based on a 4px base unit scale.
+ * All spacing values are multiples of 4px for visual consistency.
+ *
+ * Usage:
+ * - padding, margin: Use spacing tokens for consistent whitespace
+ * - gap: Use for flexbox/grid gaps
+ * - border-radius: Uses its own scale but follows the 4px system
+ *
+ * Naming convention:
+ * --spacing-{n} where n represents the multiplier
+ * --spacing-1 = 4px, --spacing-2 = 8px, etc.
+ *
+ * Also provides semantic spacing for common use cases.
+ */
+
+:root {
+  /* ============================================
+     BASE UNIT
+     ============================================ */
+  --spacing-base: 4px;
+
+  /* ============================================
+     NUMERIC SCALE
+     ============================================ */
+  --spacing-0: 0px;
+  --spacing-px: 1px;
+  --spacing-0-5: 2px;    /* 0.5 × 4px */
+  --spacing-1: 4px;      /* 1 × 4px */
+  --spacing-1-5: 6px;    /* 1.5 × 4px */
+  --spacing-2: 8px;      /* 2 × 4px */
+  --spacing-2-5: 10px;   /* 2.5 × 4px */
+  --spacing-3: 12px;     /* 3 × 4px */
+  --spacing-3-5: 14px;   /* 3.5 × 4px */
+  --spacing-4: 16px;     /* 4 × 4px */
+  --spacing-5: 20px;     /* 5 × 4px */
+  --spacing-6: 24px;     /* 6 × 4px */
+  --spacing-7: 28px;     /* 7 × 4px */
+  --spacing-8: 32px;     /* 8 × 4px */
+  --spacing-9: 36px;     /* 9 × 4px */
+  --spacing-10: 40px;    /* 10 × 4px */
+  --spacing-11: 44px;    /* 11 × 4px - minimum touch target size */
+  --spacing-12: 48px;    /* 12 × 4px */
+  --spacing-14: 56px;    /* 14 × 4px */
+  --spacing-16: 64px;    /* 16 × 4px */
+  --spacing-20: 80px;    /* 20 × 4px */
+  --spacing-24: 96px;    /* 24 × 4px */
+  --spacing-28: 112px;   /* 28 × 4px */
+  --spacing-32: 128px;   /* 32 × 4px */
+  --spacing-36: 144px;   /* 36 × 4px */
+  --spacing-40: 160px;   /* 40 × 4px */
+  --spacing-44: 176px;   /* 44 × 4px */
+  --spacing-48: 192px;   /* 48 × 4px */
+  --spacing-52: 208px;   /* 52 × 4px */
+  --spacing-56: 224px;   /* 56 × 4px */
+  --spacing-60: 240px;   /* 60 × 4px */
+  --spacing-64: 256px;   /* 64 × 4px */
+  --spacing-72: 288px;   /* 72 × 4px */
+  --spacing-80: 320px;   /* 80 × 4px */
+  --spacing-96: 384px;   /* 96 × 4px */
+
+  /* ============================================
+     SEMANTIC SPACING TOKENS
+     ============================================ */
+
+  /* Component internal padding */
+  --spacing-component-xs: var(--spacing-1);    /* 4px */
+  --spacing-component-sm: var(--spacing-2);    /* 8px */
+  --spacing-component-md: var(--spacing-3);    /* 12px */
+  --spacing-component-lg: var(--spacing-4);    /* 16px */
+  --spacing-component-xl: var(--spacing-6);    /* 24px */
+
+  /* Layout sections */
+  --spacing-layout-xs: var(--spacing-4);       /* 16px */
+  --spacing-layout-sm: var(--spacing-6);       /* 24px */
+  --spacing-layout-md: var(--spacing-8);       /* 32px */
+  --spacing-layout-lg: var(--spacing-12);      /* 48px */
+  --spacing-layout-xl: var(--spacing-16);      /* 64px */
+  --spacing-layout-2xl: var(--spacing-24);     /* 96px */
+
+  /* Inline (horizontal) gaps */
+  --spacing-inline-xs: var(--spacing-1);       /* 4px */
+  --spacing-inline-sm: var(--spacing-2);       /* 8px */
+  --spacing-inline-md: var(--spacing-3);       /* 12px */
+  --spacing-inline-lg: var(--spacing-4);       /* 16px */
+
+  /* Stack (vertical) gaps */
+  --spacing-stack-xs: var(--spacing-1);        /* 4px */
+  --spacing-stack-sm: var(--spacing-2);        /* 8px */
+  --spacing-stack-md: var(--spacing-4);        /* 16px */
+  --spacing-stack-lg: var(--spacing-6);        /* 24px */
+  --spacing-stack-xl: var(--spacing-8);        /* 32px */
+
+  /* ============================================
+     MINIMUM TOUCH TARGET SIZES (WCAG 2.5.5)
+     Minimum 44×44 CSS pixels for touch targets
+     ============================================ */
+  --touch-target-min: 44px;
+  --touch-target-comfortable: 48px;
+  --touch-target-large: 56px;
+
+  /* ============================================
+     BORDER RADIUS SCALE
+     ============================================ */
+  --radius-none: 0px;
+  --radius-sm: 2px;
+  --radius-default: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-full: 9999px;
+
+  /* ============================================
+     Z-INDEX SCALE
+     ============================================ */
+  --z-index-below: -1;
+  --z-index-base: 0;
+  --z-index-raised: 10;
+  --z-index-dropdown: 100;
+  --z-index-sticky: 200;
+  --z-index-overlay: 300;
+  --z-index-modal: 400;
+  --z-index-popover: 500;
+  --z-index-tooltip: 600;
+  --z-index-toast: 700;
+}
