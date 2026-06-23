@@ -1,5 +1,5 @@
-// Package dumper provides functionality for invoking pg_dump and streaming
-// its output to an io.Writer.
+// Package dumper provides utilities for invoking pg_dump and streaming
+// its output to an arbitrary io.Writer.
 package dumper
 
 import (
@@ -12,165 +12,148 @@ import (
 	"time"
 )
 
-// ExecRunner abstracts how a command is created, allowing tests to inject a
-// mock runner without spawning a real subprocess.
-type ExecRunner func(ctx context.Context, name string, args ...string) Cmd
-
-// Cmd is the minimal interface over *exec.Cmd that Dumper needs.
-type Cmd interface {
-	// SetStdout sets the writer that receives the command's standard output.
-	SetStdout(w io.Writer)
-	// SetStderr sets the writer that receives the command's standard error.
-	SetStderr(w io.Writer)
-	// SetEnv sets the complete environment for the command.
-	SetEnv(env []string)
-	// Run starts the command and waits for it to exit.
-	Run() error
-}
-
 // DumpResult contains metadata about a completed dump operation.
 type DumpResult struct {
-	// StartedAt is the wall-clock time at which the dump began.
+	// StartedAt is when the dump began.
 	StartedAt time.Time
 	// Duration is how long the dump took.
 	Duration time.Duration
-	// BytesWritten is the number of bytes streamed to the destination writer.
+	// BytesWritten is the number of bytes written to the destination writer.
 	BytesWritten int64
 }
 
-// Dumper is the public interface for running a database dump.
+// Dumper is the interface for running a database dump.
 type Dumper interface {
-	// Dump executes pg_dump for the given DSN and writes the output to dst.
-	// The context may be used to cancel the dump mid-stream.
-	Dump(ctx context.Context, dsn string, dst io.Writer) (DumpResult, error)
+	// Dump executes a pg_dump of the database described by dsn, writing the
+	// output to w. It respects ctx for cancellation.
+	Dump(ctx context.Context, dsn string, w io.Writer) (*DumpResult, error)
 }
 
-// PgDumper implements Dumper by invoking the pg_dump binary.
+// ExecRunner abstracts os/exec so it can be replaced in tests.
+type ExecRunner func(ctx context.Context, name string, args []string, env []string, stdout io.Writer, stderr io.Writer) error
+
+// DefaultExecRunner is the production ExecRunner that uses os/exec.
+func DefaultExecRunner(ctx context.Context, name string, args []string, env []string, stdout io.Writer, stderr io.Writer) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	// Inherit the current process environment, then append our overrides.
+	cmd.Env = append(os.Environ(), env...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd.Run()
+}
+
+// PgDumper implements Dumper using the pg_dump binary.
 type PgDumper struct {
 	// PgDumpPath is the path to the pg_dump executable.
-	// If empty, "pg_dump" is resolved via PATH.
+	// If empty, "pg_dump" is looked up on PATH.
 	PgDumpPath string
 
-	// ExtraArgs are appended verbatim to the pg_dump invocation.
-	// Example: []string{"--format=custom", "--compress=9"}
+	// ExtraArgs are additional flags passed to pg_dump before the database name.
+	// For example: []string{"--format=custom", "--compress=9"}
 	ExtraArgs []string
 
-	// runner creates Cmd instances. Defaults to defaultExecRunner when nil.
-	runner ExecRunner
+	// Runner is the function used to invoke pg_dump. Defaults to
+	// DefaultExecRunner when nil.
+	Runner ExecRunner
 }
 
-// Option is a functional option for configuring PgDumper.
-type Option func(*PgDumper)
-
-// WithPgDumpPath overrides the path to the pg_dump binary.
-func WithPgDumpPath(path string) Option {
-	return func(d *PgDumper) { d.PgDumpPath = path }
-}
-
-// WithExtraArgs appends extra command-line arguments to pg_dump.
-func WithExtraArgs(args ...string) Option {
-	return func(d *PgDumper) { d.ExtraArgs = append(d.ExtraArgs, args...) }
-}
-
-// withExecRunner injects a custom runner (used in tests).
-func withExecRunner(r ExecRunner) Option {
-	return func(d *PgDumper) { d.runner = r }
-}
-
-// NewPgDumper constructs a PgDumper with the provided options.
-func NewPgDumper(opts ...Option) *PgDumper {
-	d := &PgDumper{}
-	for _, o := range opts {
-		o(d)
+// NewPgDumper returns a PgDumper with sensible defaults.
+func NewPgDumper() *PgDumper {
+	return &PgDumper{
+		PgDumpPath: "pg_dump",
+		Runner:     DefaultExecRunner,
 	}
-	return d
 }
 
-// Dump implements Dumper. It:
-//  1. Parses the DSN.
-//  2. Builds pg_dump arguments.
-//  3. Streams stdout to dst via a counting writer.
-//  4. Captures stderr for error messages.
-//  5. Returns a DumpResult with timing and byte-count metadata.
-func (d *PgDumper) Dump(ctx context.Context, dsn string, dst io.Writer) (DumpResult, error) {
+// Dump runs pg_dump for the given DSN and streams the output to w.
+// It returns a DumpResult containing timing and byte-count metadata.
+//
+// The dump is cancelled if ctx is cancelled. If pg_dump exits with a
+// non-zero status, Dump returns a DumpError containing the captured stderr.
+func (d *PgDumper) Dump(ctx context.Context, dsn string, w io.Writer) (*DumpResult, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("context must not be nil")
+	}
+	if w == nil {
+		return nil, fmt.Errorf("writer must not be nil")
+	}
+
 	params, err := ParseDSN(dsn)
 	if err != nil {
-		return DumpResult{}, fmt.Errorf("dumper: parsing DSN: %w", err)
+		return nil, fmt.Errorf("invalid DSN: %w", err)
 	}
 
-	pgDumpBin := d.PgDumpPath
-	if pgDumpBin == "" {
-		pgDumpBin = "pg_dump"
+	pgDumpPath := d.PgDumpPath
+	if pgDumpPath == "" {
+		pgDumpPath = "pg_dump"
 	}
 
-	args := params.ToPgDumpArgs(d.ExtraArgs...)
-
-	runner := d.runner
+	runner := d.Runner
 	if runner == nil {
-		runner = defaultExecRunner
+		runner = DefaultExecRunner
 	}
 
-	cmd := runner(ctx, pgDumpBin, args...)
+	args := params.PgDumpArgs(d.ExtraArgs...)
+	env := params.Env()
 
-	// Password via environment variable to avoid appearing in process list.
-	env := os.Environ()
-	if params.Password != "" {
-		env = append(env, "PGPASSWORD="+params.Password)
-	}
-	cmd.SetEnv(env)
-
-	// Count bytes written to dst.
-	cw := &countWriter{dst: dst}
-	cmd.SetStdout(cw)
-
-	// Capture stderr for error reporting.
+	// Capture stderr separately so we can include it in error messages.
 	var stderrBuf bytes.Buffer
-	cmd.SetStderr(&stderrBuf)
+
+	// Wrap w to count bytes written.
+	cw := &countingWriter{w: w}
 
 	startedAt := time.Now()
 
-	if err := cmd.Run(); err != nil {
-		stderr := stderrBuf.String()
-		return DumpResult{
-			StartedAt:    startedAt,
-			Duration:     time.Since(startedAt),
-			BytesWritten: cw.n,
-		}, fmt.Errorf("dumper: pg_dump failed: %w\nstderr: %s", err, stderr)
+	if err := runner(ctx, pgDumpPath, args, env, cw, &stderrBuf); err != nil {
+		// Check if the context was cancelled.
+		if ctx.Err() != nil {
+			return nil, &DumpError{
+				Cause:  ctx.Err(),
+				Stderr: stderrBuf.String(),
+			}
+		}
+		return nil, &DumpError{
+			Cause:  err,
+			Stderr: stderrBuf.String(),
+		}
 	}
 
-	return DumpResult{
+	duration := time.Since(startedAt)
+	return &DumpResult{
 		StartedAt:    startedAt,
-		Duration:     time.Since(startedAt),
+		Duration:     duration,
 		BytesWritten: cw.n,
 	}, nil
 }
 
-// countWriter wraps an io.Writer and tracks how many bytes have been written.
-type countWriter struct {
-	dst io.Writer
-	n   int64
+// DumpError is returned when pg_dump exits with a non-zero status or the
+// context is cancelled.
+type DumpError struct {
+	// Cause is the underlying error (exec error or context error).
+	Cause error
+	// Stderr contains the captured stderr output from pg_dump.
+	Stderr string
 }
 
-func (cw *countWriter) Write(p []byte) (int, error) {
-	n, err := cw.dst.Write(p)
+func (e *DumpError) Error() string {
+	if e.Stderr != "" {
+		return fmt.Sprintf("pg_dump failed: %v\nstderr: %s", e.Cause, e.Stderr)
+	}
+	return fmt.Sprintf("pg_dump failed: %v", e.Cause)
+}
+
+func (e *DumpError) Unwrap() error {
+	return e.Cause
+}
+
+// countingWriter wraps an io.Writer and counts the total bytes written.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
 	cw.n += int64(n)
 	return n, err
 }
-
-// --- default exec runner ---
-
-// defaultExecRunner is the production ExecRunner that creates real *exec.Cmd
-// instances.
-func defaultExecRunner(ctx context.Context, name string, args ...string) Cmd {
-	return &realCmd{cmd: exec.CommandContext(ctx, name, args...)}
-}
-
-// realCmd adapts *exec.Cmd to the Cmd interface.
-type realCmd struct {
-	cmd *exec.Cmd
-}
-
-func (r *realCmd) SetStdout(w io.Writer) { r.cmd.Stdout = w }
-func (r *realCmd) SetStderr(w io.Writer) { r.cmd.Stderr = w }
-func (r *realCmd) SetEnv(env []string)   { r.cmd.Env = env }
-func (r *realCmd) Run() error            { return r.cmd.Run() }

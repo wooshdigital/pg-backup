@@ -1,4 +1,5 @@
 //go:build integration
+// +build integration
 
 package dumper
 
@@ -9,32 +10,32 @@ import (
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
-	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const (
-	testDBUser     = "testuser"
-	testDBPassword = "testpassword"
-	testDBName     = "testdb"
-	postgresImage  = "postgres:15-alpine"
-)
-
-// postgresContainer wraps a running Postgres testcontainer.
-type postgresContainer struct {
-	container *tcpostgres.PostgresContainer
-	dsn       string
+// pgContainer holds a running Postgres testcontainer.
+type pgContainer struct {
+	container *postgres.PostgresContainer
+	DSN       string
 }
 
-// startPostgres spins up a Postgres container and returns its DSN.
-func startPostgres(ctx context.Context, t *testing.T) *postgresContainer {
+// startPostgres starts a Postgres container and returns connection info.
+func startPostgres(ctx context.Context, t *testing.T) *pgContainer {
 	t.Helper()
 
-	pgContainer, err := tcpostgres.RunContainer(ctx,
-		testcontainers.WithImage(postgresImage),
-		tcpostgres.WithDatabase(testDBName),
-		tcpostgres.WithUsername(testDBUser),
-		tcpostgres.WithPassword(testDBPassword),
+	const (
+		dbName   = "testdb"
+		dbUser   = "testuser"
+		dbPass   = "testpass"
+		pgImage  = "postgres:15-alpine"
+	)
+
+	pgC, err := postgres.RunContainer(ctx,
+		testcontainers.WithImage(pgImage),
+		postgres.WithDatabase(dbName),
+		postgres.WithUsername(dbUser),
+		postgres.WithPassword(dbPass),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -46,25 +47,25 @@ func startPostgres(ctx context.Context, t *testing.T) *postgresContainer {
 	}
 
 	t.Cleanup(func() {
-		if err := pgContainer.Terminate(context.Background()); err != nil {
+		if err := pgC.Terminate(context.Background()); err != nil {
 			t.Logf("warning: failed to terminate postgres container: %v", err)
 		}
 	})
 
-	host, err := pgContainer.Host(ctx)
+	host, err := pgC.Host(ctx)
 	if err != nil {
-		t.Fatalf("failed to get container host: %v", err)
+		t.Fatalf("getting container host: %v", err)
 	}
-	port, err := pgContainer.MappedPort(ctx, "5432")
+	port, err := pgC.MappedPort(ctx, "5432")
 	if err != nil {
-		t.Fatalf("failed to get container port: %v", err)
+		t.Fatalf("getting mapped port: %v", err)
 	}
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		testDBUser, testDBPassword, host, port.Port(), testDBName)
+		dbUser, dbPass, host, port.Port(), dbName)
 
-	return &postgresContainer{
-		container: pgContainer,
-		dsn:       dsn,
+	return &pgContainer{
+		container: pgC,
+		DSN:       dsn,
 	}
 }

@@ -1,7 +1,20 @@
 //go:build !integration
+// +build !integration
 
 package dumper
 
-// This file intentionally left empty for non-integration builds.
-// The integration helpers are compiled only when the "integration" build tag
-// is active (see integration_helpers_test.go).
+import (
+	"context"
+	"testing"
+)
+
+// pgContainer is a stub for non-integration builds.
+type pgContainer struct {
+	DSN string
+}
+
+func startPostgres(_ context.Context, t *testing.T) *pgContainer {
+	t.Helper()
+	t.Skip("skipping integration test: build tag 'integration' not set")
+	return nil
+}
