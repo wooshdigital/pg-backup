@@ -1,47 +1,45 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { TripsScreen } from '../screens/TripsScreen';
 import { useTheme } from '../context/ThemeContext';
-import { TripRoute } from '../constants/routes';
-import { typography } from '../constants/theme';
+import { TripsScreen } from '../screens/TripsScreen';
+import { TripRoutes } from '../constants/routes';
 import type { TripStackParamList } from '../types';
 
-// ─── Navigator ────────────────────────────────────────────────────────────────
+// ─── Stack ────────────────────────────────────────────────────────────────────
 
 const Stack = createNativeStackNavigator<TripStackParamList>();
 
+// ─── Navigator ────────────────────────────────────────────────────────────────
+
 export function TripStackNavigator() {
-  const { colors } = useTheme();
+  const { theme } = useTheme();
 
   return (
     <Stack.Navigator
-      initialRouteName={TripRoute.TRIPS_LIST}
+      initialRouteName={TripRoutes.TripsList}
       screenOptions={{
         headerStyle: {
-          backgroundColor: colors.surface,
+          backgroundColor: theme.colors.surface,
         },
-        headerTintColor: colors.text,
+        headerTintColor: theme.colors.primary,
         headerTitleStyle: {
-          fontWeight: typography.fontWeight.semibold,
-          fontSize: typography.fontSize.md,
-          color: colors.text,
+          fontWeight: theme.typography.fontWeight.bold,
+          color: theme.colors.text,
+          fontSize: theme.typography.fontSize.lg,
         },
         headerShadowVisible: false,
-        headerBackTitleVisible: false,
         contentStyle: {
-          backgroundColor: colors.background,
+          backgroundColor: theme.colors.background,
         },
+        animation: 'slide_from_right',
       }}
     >
       <Stack.Screen
-        name={TripRoute.TRIPS_LIST}
+        name={TripRoutes.TripsList}
         component={TripsScreen}
-        options={{
-          title: 'My Trips',
-        }}
+        options={{ headerShown: false }}
       />
+      {/* Future screens will be added here in later phases */}
     </Stack.Navigator>
   );
 }
-
-export default TripStackNavigator;

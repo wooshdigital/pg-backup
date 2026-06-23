@@ -1,23 +1,10 @@
-// Screens
-export * from './screens';
+// Re-export public API of the src package for convenient imports
 
-// Navigation
-export * from './navigation';
-
-// Context
-export * from './context';
-
-// Components
-export * from './components';
-
-// Hooks
-export * from './hooks';
-
-// Utils
-export * from './utils';
-
-// Constants
+export * from './types';
 export * from './constants';
-
-// Types
-export type * from './types';
+export * from './context';
+export * from './components';
+export * from './screens';
+export * from './navigation';
+export * from './hooks';
+export * from './utils';

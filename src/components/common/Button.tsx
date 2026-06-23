@@ -1,194 +1,189 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
-  type PressableProps,
+  TouchableOpacity,
+  View,
+  type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import { borderRadius, spacing, typography } from '../../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
-type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends Omit<PressableProps, 'style'> {
+interface ButtonProps {
   label: string;
+  onPress: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
-  loading?: boolean;
   disabled?: boolean;
+  loading?: boolean;
   fullWidth?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
+  testID?: string;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
-
-// ─── Size Config ─────────────────────────────────────────────────────────────
-
-const sizeConfig = {
-  sm: {
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
-    fontSize: typography.fontSize.sm,
-    borderRadius: borderRadius.md,
-    iconSize: 14,
-  },
-  md: {
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[5],
-    fontSize: typography.fontSize.base,
-    borderRadius: borderRadius.lg,
-    iconSize: 16,
-  },
-  lg: {
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[6],
-    fontSize: typography.fontSize.md,
-    borderRadius: borderRadius.xl,
-    iconSize: 20,
-  },
-} as const;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Button({
   label,
+  onPress,
   variant = 'primary',
   size = 'md',
-  loading = false,
   disabled = false,
+  loading = false,
   fullWidth = false,
   leftIcon,
   rightIcon,
   style,
   textStyle,
-  ...rest
+  testID,
+  accessibilityLabel,
+  accessibilityHint,
 }: ButtonProps) {
-  const { colors } = useTheme();
-  const config = sizeConfig[size];
+  const { theme } = useTheme();
+
   const isDisabled = disabled || loading;
 
-  const variantStyles = getVariantStyles(variant, colors, isDisabled);
+  // ── Size styles ──────────────────────────────────────────────────────────
+
+  const sizeStyles: Record<ButtonSize, { container: ViewStyle; text: TextStyle }> = {
+    sm: {
+      container: {
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: 6,
+        borderRadius: theme.borderRadius.md,
+      },
+      text: {
+        fontSize: theme.typography.fontSize.sm,
+        fontWeight: theme.typography.fontWeight.medium,
+      },
+    },
+    md: {
+      container: {
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: 12,
+        borderRadius: theme.borderRadius.lg,
+      },
+      text: {
+        fontSize: theme.typography.fontSize.md,
+        fontWeight: theme.typography.fontWeight.semibold,
+      },
+    },
+    lg: {
+      container: {
+        paddingHorizontal: theme.spacing.lg,
+        paddingVertical: 16,
+        borderRadius: theme.borderRadius.lg,
+      },
+      text: {
+        fontSize: theme.typography.fontSize.lg,
+        fontWeight: theme.typography.fontWeight.semibold,
+      },
+    },
+  };
+
+  // ── Variant styles ───────────────────────────────────────────────────────
+
+  const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextStyle }> = {
+    primary: {
+      container: {
+        backgroundColor: isDisabled ? theme.colors.primaryLight : theme.colors.primary,
+      },
+      text: { color: theme.colors.textInverse },
+    },
+    secondary: {
+      container: {
+        backgroundColor: isDisabled ? theme.colors.secondaryLight : theme.colors.secondary,
+      },
+      text: { color: theme.colors.textInverse },
+    },
+    outline: {
+      container: {
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderColor: isDisabled ? theme.colors.border : theme.colors.primary,
+      },
+      text: { color: isDisabled ? theme.colors.textDisabled : theme.colors.primary },
+    },
+    ghost: {
+      container: {
+        backgroundColor: 'transparent',
+      },
+      text: { color: isDisabled ? theme.colors.textDisabled : theme.colors.primary },
+    },
+    danger: {
+      container: {
+        backgroundColor: isDisabled ? '#FCA5A5' : theme.colors.error,
+      },
+      text: { color: theme.colors.textInverse },
+    },
+  };
+
+  const containerStyle: ViewStyle = {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: isDisabled ? 0.6 : 1,
+    alignSelf: fullWidth ? 'stretch' : 'flex-start',
+    ...sizeStyles[size].container,
+    ...variantStyles[variant].container,
+  };
+
+  const labelStyle: TextStyle = {
+    ...sizeStyles[size].text,
+    ...variantStyles[variant].text,
+  };
 
   return (
-    <Pressable
+    <TouchableOpacity
+      onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => [
-        styles.base,
-        {
-          paddingVertical: config.paddingVertical,
-          paddingHorizontal: config.paddingHorizontal,
-          borderRadius: config.borderRadius,
-          opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
-          alignSelf: fullWidth ? 'stretch' : 'flex-start',
-          ...variantStyles.container,
-        },
-        style,
-      ]}
+      style={[containerStyle, style]}
+      activeOpacity={0.8}
+      testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
-      {...rest}
     >
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variantStyles.textColor}
+          color={variantStyles[variant].text.color as string}
+          style={styles.loadingIndicator}
         />
       ) : (
         <>
-          {leftIcon}
-          <Text
-            style={[
-              styles.label,
-              {
-                fontSize: config.fontSize,
-                color: variantStyles.textColor,
-                marginLeft: leftIcon ? spacing[2] : 0,
-                marginRight: rightIcon ? spacing[2] : 0,
-              },
-              textStyle,
-            ]}
-          >
-            {label}
-          </Text>
-          {rightIcon}
+          {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
+          <Text style={[labelStyle, textStyle]}>{label}</Text>
+          {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
         </>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
-}
-
-// ─── Variant Styles Helper ───────────────────────────────────────────────────
-
-function getVariantStyles(
-  variant: ButtonVariant,
-  colors: ReturnType<typeof useTheme>['colors'],
-  _isDisabled: boolean,
-): { container: ViewStyle; textColor: string } {
-  switch (variant) {
-    case 'primary':
-      return {
-        container: {
-          backgroundColor: colors.primary,
-          borderWidth: 0,
-        },
-        textColor: colors.textInverse,
-      };
-    case 'secondary':
-      return {
-        container: {
-          backgroundColor: colors.secondary,
-          borderWidth: 0,
-        },
-        textColor: colors.textInverse,
-      };
-    case 'outline':
-      return {
-        container: {
-          backgroundColor: 'transparent',
-          borderWidth: 1.5,
-          borderColor: colors.primary,
-        },
-        textColor: colors.primary,
-      };
-    case 'ghost':
-      return {
-        container: {
-          backgroundColor: 'transparent',
-          borderWidth: 0,
-        },
-        textColor: colors.primary,
-      };
-    case 'danger':
-      return {
-        container: {
-          backgroundColor: colors.error,
-          borderWidth: 0,
-        },
-        textColor: colors.textInverse,
-      };
-  }
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  base: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  loadingIndicator: {
+    marginHorizontal: 4,
   },
-  label: {
-    fontWeight: typography.fontWeight.semibold,
-    textAlign: 'center',
+  leftIcon: {
+    marginRight: 6,
+  },
+  rightIcon: {
+    marginLeft: 6,
   },
 });
-
-export default Button;

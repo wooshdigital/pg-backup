@@ -1,239 +1,170 @@
 import React from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  View,
-  Text,
-} from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Heading, Body, Caption } from '../components/common/Typography';
-import { spacing } from '../constants/theme';
 
 // ─── Quick Stat Card ──────────────────────────────────────────────────────────
 
-interface QuickStatProps {
-  emoji: string;
+interface StatCardProps {
   label: string;
   value: string;
+  subtitle: string;
 }
 
-function QuickStat({ emoji, label, value }: QuickStatProps) {
-  const { colors } = useTheme();
+function StatCard({ label, value, subtitle }: StatCardProps) {
+  const { theme } = useTheme();
   return (
-    <Card elevation="sm" style={styles.statCard} padding={3}>
-      <Text style={styles.statEmoji}>{emoji}</Text>
-      <Heading level={3} style={{ color: colors.primary }}>
+    <Card style={styles.statCard} elevation={2}>
+      <Caption>{label}</Caption>
+      <Heading level={2} color={theme.colors.primary} style={styles.statValue}>
         {value}
       </Heading>
-      <Caption>{label}</Caption>
+      <Caption>{subtitle}</Caption>
     </Card>
   );
 }
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
+// ─── Home Screen ─────────────────────────────────────────────────────────────
 
 export function HomeScreen() {
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { theme, isDark, toggleTheme } = useTheme();
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
+    >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.container,
+          { paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.xxl },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <View>
-            <Caption uppercase weight="semibold" color={colors.primary}>
-              Welcome back
-            </Caption>
-            <Heading level={1}>TripSplit 🌍</Heading>
-            <Body secondary style={styles.tagline}>
-              Split expenses effortlessly with friends and family on any adventure.
-            </Body>
-          </View>
-
-          <Button
-            label={isDark ? '☀️ Light' : '🌙 Dark'}
-            variant="ghost"
-            size="sm"
-            onPress={toggleTheme}
-          />
+          <Caption color={theme.colors.primary} weight="medium">
+            WELCOME BACK
+          </Caption>
+          <Heading level={1} style={styles.title}>
+            SplitWise
+          </Heading>
+          <Body color={theme.colors.textSecondary} style={styles.tagline}>
+            Split expenses effortlessly with friends and family. No more awkward money
+            conversations.
+          </Body>
         </View>
 
-        {/* Quick Stats */}
-        <View style={styles.section}>
-          <Caption uppercase weight="semibold" style={styles.sectionLabel}>
-            Quick Overview
-          </Caption>
-          <View style={styles.statsRow}>
-            <QuickStat emoji="✈️" label="Total Trips" value="0" />
-            <QuickStat emoji="💸" label="Total Spent" value="$0" />
-            <QuickStat emoji="👥" label="Friends" value="0" />
-          </View>
+        {/* ── Quick Stats ──────────────────────────────────────────────────── */}
+        <View style={styles.statsRow}>
+          <StatCard label="TOTAL TRIPS" value="0" subtitle="Start your first trip!" />
+          <View style={{ width: theme.spacing.sm }} />
+          <StatCard label="YOU ARE OWED" value="$0.00" subtitle="All settled up" />
         </View>
 
-        {/* Getting Started */}
-        <View style={styles.section}>
-          <Caption uppercase weight="semibold" style={styles.sectionLabel}>
-            Get Started
-          </Caption>
-          <Card elevation="md">
-            <Text style={styles.heroEmoji}>🗺️</Text>
-            <Heading level={2} style={styles.cardTitle}>
-              Plan your first trip
+        {/* ── CTA Card ─────────────────────────────────────────────────────── */}
+        <Card
+          style={[styles.ctaCard, { backgroundColor: theme.colors.primary }]}
+          elevation={3}
+          noPadding
+        >
+          <View style={{ padding: theme.spacing.md }}>
+            <Heading level={2} color={theme.colors.textInverse}>
+              Plan your next trip ✈️
             </Heading>
-            <Body secondary size="sm" style={styles.cardBody}>
-              Add a trip, invite your travel companions, and start tracking expenses in real time.
-              TripSplit handles the math so you can focus on the memories.
+            <Body color="rgba(255,255,255,0.8)" style={styles.ctaSubtext} size="sm">
+              Create a trip, invite friends, and start tracking shared expenses in seconds.
             </Body>
-            <View style={styles.cardActions}>
-              <Button
-                label="Create a Trip"
-                variant="primary"
-                size="md"
-                onPress={() => {
-                  /* Navigate to trip creation */
-                }}
-              />
-              <Button
-                label="Learn more"
-                variant="ghost"
-                size="md"
-                style={styles.learnMore}
-                onPress={() => {
-                  /* Navigate to onboarding */
-                }}
-              />
-            </View>
+            <Button
+              label="Create a Trip"
+              onPress={() => {}}
+              variant="outline"
+              style={styles.ctaButton}
+            />
+          </View>
+        </Card>
+
+        {/* ── Recent Activity ───────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <Heading level={3} style={styles.sectionTitle}>
+            Recent Activity
+          </Heading>
+          <Card style={styles.emptyCard}>
+            <Body color={theme.colors.textSecondary} align="center">
+              No activity yet.{'\n'}Create a trip to get started!
+            </Body>
           </Card>
         </View>
 
-        {/* Features */}
-        <View style={styles.section}>
-          <Caption uppercase weight="semibold" style={styles.sectionLabel}>
-            Features
-          </Caption>
-          {FEATURES.map((f) => (
-            <Card key={f.title} elevation="sm" style={styles.featureCard}>
-              <View style={styles.featureRow}>
-                <Text style={styles.featureEmoji}>{f.emoji}</Text>
-                <View style={styles.featureText}>
-                  <Body weight="semibold">{f.title}</Body>
-                  <Body size="sm" secondary>
-                    {f.description}
-                  </Body>
-                </View>
-              </View>
-            </Card>
-          ))}
-        </View>
+        {/* ── Dev: Theme Toggle ─────────────────────────────────────────────── */}
+        <Button
+          label={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+          onPress={() => void toggleTheme()}
+          variant="ghost"
+          size="sm"
+          style={styles.themeToggle}
+        />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── Data ────────────────────────────────────────────────────────────────────
-
-const FEATURES = [
-  {
-    emoji: '⚡',
-    title: 'Instant Splitting',
-    description: 'Split by equal shares, exact amounts, or percentages.',
-  },
-  {
-    emoji: '💱',
-    title: 'Multi-Currency',
-    description: 'Track expenses in any currency with automatic conversion.',
-  },
-  {
-    emoji: '📊',
-    title: 'Smart Summaries',
-    description: 'See who owes what at a glance with clear breakdowns.',
-  },
-  {
-    emoji: '📸',
-    title: 'Receipt Capture',
-    description: 'Attach photos of receipts to any expense.',
-  },
-] as const;
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safe: {
     flex: 1,
   },
-  scrollContent: {
-    padding: spacing[4],
-    paddingBottom: spacing[10],
+  container: {
+    paddingTop: 24,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing[6],
-    paddingTop: spacing[2],
+    marginBottom: 24,
+  },
+  title: {
+    marginTop: 4,
+    marginBottom: 8,
   },
   tagline: {
-    marginTop: spacing[1],
-    maxWidth: 240,
-  },
-  section: {
-    marginBottom: spacing[6],
-  },
-  sectionLabel: {
-    marginBottom: spacing[3],
+    lineHeight: 22,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: spacing[3],
+    marginBottom: 16,
   },
   statCard: {
     flex: 1,
+  },
+  statValue: {
+    marginVertical: 4,
+  },
+  ctaCard: {
+    marginBottom: 24,
+    overflow: 'hidden',
+  },
+  ctaSubtext: {
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  ctaButton: {
+    borderColor: 'rgba(255,255,255,0.7)',
+    alignSelf: 'flex-start',
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    marginBottom: 12,
+  },
+  emptyCard: {
     alignItems: 'center',
+    paddingVertical: 32,
   },
-  statEmoji: {
-    fontSize: 24,
-    marginBottom: spacing[1],
-  },
-  heroEmoji: {
-    fontSize: 48,
-    marginBottom: spacing[3],
-  },
-  cardTitle: {
-    marginBottom: spacing[2],
-  },
-  cardBody: {
-    marginBottom: spacing[4],
-    lineHeight: 20,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[2],
-  },
-  learnMore: {
-    marginLeft: spacing[1],
-  },
-  featureCard: {
-    marginBottom: spacing[2],
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  featureEmoji: {
-    fontSize: 28,
-    marginRight: spacing[3],
-  },
-  featureText: {
-    flex: 1,
-    gap: spacing[0.5],
+  themeToggle: {
+    alignSelf: 'center',
+    marginTop: 8,
   },
 });
-
-export default HomeScreen;

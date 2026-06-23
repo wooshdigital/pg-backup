@@ -1,233 +1,220 @@
-# TripSplit 🌍✈️
+# SplitWise Clone
 
-> Split expenses effortlessly with friends and family on any adventure.
+> Split expenses effortlessly with friends and family — a React Native / Expo app.
 
-TripSplit is a mobile app built with **React Native + Expo** that makes shared travel expense tracking painless. Add trips, invite companions, log expenses, and let TripSplit handle the math.
-
----
-
-## 📐 Architecture Overview
-
-```
-tripsplit/
-├── App.tsx                    # Root: ThemeProvider + NavigationContainer
-├── app.json                   # Expo config (icon, splash, build settings)
-├── assets/                    # Static assets (icon, splash)
-├── src/
-│   ├── components/
-│   │   └── common/            # Reusable UI primitives
-│   │       ├── Button.tsx
-│   │       ├── Card.tsx
-│   │       └── Typography.tsx
-│   ├── constants/
-│   │   ├── routes.ts          # Route name enums
-│   │   ├── theme.ts           # Design tokens (colors, spacing, etc.)
-│   │   └── index.ts
-│   ├── context/
-│   │   └── ThemeContext.tsx   # Light/dark theme provider + useTheme hook
-│   ├── hooks/
-│   │   ├── useAsyncStorage.ts # Typed AsyncStorage wrapper hook
-│   │   └── index.ts
-│   ├── navigation/
-│   │   ├── RootNavigator.tsx  # Bottom tab navigator (Home / Trips / Settings)
-│   │   ├── TripStackNavigator.tsx
-│   │   └── index.ts
-│   ├── screens/
-│   │   ├── HomeScreen.tsx
-│   │   ├── TripsScreen.tsx
-│   │   ├── SettingsScreen.tsx
-│   │   └── index.ts
-│   ├── types/
-│   │   └── index.ts           # Core domain types: Trip, Expense, Split, etc.
-│   └── utils/
-│       ├── currency.ts        # Money formatting utilities
-│       ├── date.ts            # Date formatting utilities
-│       ├── id.ts              # ID generation helpers
-│       └── index.ts
-```
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://typescriptlang.org)
+[![Expo](https://img.shields.io/badge/Expo-~50.0-000020.svg)](https://expo.dev)
+[![React Navigation](https://img.shields.io/badge/React%20Navigation-v6-7B68EE.svg)](https://reactnavigation.org)
 
 ---
 
-## 🗺️ Domain Model
+## Table of Contents
+
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Development](#development)
+- [Roadmap](#roadmap)
+
+---
+
+## Overview
+
+A mobile-first expense splitting app that makes sharing costs with groups simple and transparent. Track trips, log expenses, split bills with configurable methods (equal, exact, percentage, shares), and settle up with ease.
+
+**Phase 1 status:** Foundation complete — navigation, theming, placeholder screens, and the full dev toolchain are configured.
+
+---
+
+## Architecture
 
 ```
-Trip
- ├── id, name, description, destination
- ├── currency (default)
- ├── status: planning | active | completed | archived
- ├── participants: Participant[]
- └── expenses: Expense[]
-         ├── id, title, amount, currency, category
-         ├── paidBy: participantId
-         └── split: Split
-                  ├── method: equal | exact | percentage | shares
-                  └── shares: SplitShare[]
-                           └── participantId, amount, settled
+┌─────────────────────────────────────────────────────────────────┐
+│                          App.tsx                                 │
+│                 (ThemeProvider + NavigationContainer)            │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+              ┌──────────▼──────────┐
+              │    RootNavigator    │  (Bottom Tab Navigator)
+              └─────────┬───────────┘
+          ┌─────────────┼─────────────┐
+          │             │             │
+   ┌──────▼─────┐ ┌─────▼──────┐ ┌───▼──────────┐
+   │ HomeScreen │ │TripStack   │ │SettingsScreen│
+   │            │ │Navigator   │ │              │
+   └────────────┘ └─────┬──────┘ └──────────────┘
+                        │
+              ┌─────────▼──────────┐
+              │   TripsScreen      │
+              │   TripDetailScreen │  (Phase 2+)
+              │   AddExpenseScreen │  (Phase 2+)
+              └────────────────────┘
+
+State / Persistence
+┌──────────────────────────────────────────────────────────────┐
+│  ThemeContext  │  TripContext (Phase 2)  │  AsyncStorage      │
+│  (light/dark)  │  (trips, expenses)     │  (persistence)     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Getting Started
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | React Native 0.73 via Expo ~50 (managed workflow) |
+| Language | TypeScript 5.3 (strict mode) |
+| Navigation | React Navigation v6 (Bottom Tabs + Native Stack) |
+| State | React Context + AsyncStorage |
+| Styling | StyleSheet API + Token-based theme system |
+| Linting | ESLint 8 + @typescript-eslint |
+| Formatting | Prettier 3 |
+| Git hooks | Husky 8 + lint-staged |
+
+---
+
+## Project Structure
+
+```
+/
+├── App.tsx                  # Entry point: ThemeProvider + NavigationContainer
+├── app.json                 # Expo metadata
+├── assets/                  # Static assets (icon, splash)
+└── src/
+    ├── components/
+    │   └── common/
+    │       ├── Button.tsx   # Themed button (5 variants, 3 sizes)
+    │       ├── Card.tsx     # Reusable card with elevation
+    │       └── Typography.tsx # Heading, Body, Caption, Label, Display
+    ├── constants/
+    │   ├── routes.ts        # Screen name enums
+    │   └── theme.ts         # Light/dark palette, spacing, typography tokens
+    ├── context/
+    │   └── ThemeContext.tsx  # Theme provider + useTheme hook
+    ├── hooks/
+    │   ├── useAsyncStorage.ts # AsyncStorage-backed persistent state
+    │   ├── useFocusVisible.ts # Keyboard focus detection
+    │   └── useId.ts         # Stable unique ID generation
+    ├── navigation/
+    │   ├── RootNavigator.tsx     # Bottom tab navigator
+    │   └── TripStackNavigator.tsx # Trip stack navigator
+    ├── screens/
+    │   ├── HomeScreen.tsx   # Dashboard / home
+    │   ├── TripsScreen.tsx  # Trip list
+    │   └── SettingsScreen.tsx # App settings
+    ├── types/
+    │   └── index.ts         # Trip, Participant, Expense, Split, AppTheme
+    └── utils/
+        ├── currency.ts      # Format/parse currency amounts
+        ├── date.ts          # Format dates, relative time
+        └── id.ts            # UUID generation
+```
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
-- Expo CLI: `npm install -g expo-cli`
-- iOS Simulator (macOS) or Android Emulator, or the **Expo Go** app on your device
+- [Node.js](https://nodejs.org) ≥ 18
+- [Expo CLI](https://docs.expo.dev/get-started/installation/)
+- [iOS Simulator](https://developer.apple.com/xcode/) or [Android Emulator](https://developer.android.com/studio), or the [Expo Go](https://expo.dev/go) app
 
 ### Installation
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/tripsplit.git
-cd tripsplit
+# Clone the repository
+git clone https://github.com/yourname/splitwise-clone.git
+cd splitwise-clone
 
-# 2. Install dependencies
+# Install dependencies
 npm install
 
-# 3. Start the Expo development server
+# Install Husky hooks
+npm run prepare
+```
+
+### Running the App
+
+```bash
+# Start Expo dev server
 npm start
 
-# 4. Open on your preferred platform
-#    Press 'i' for iOS simulator
-#    Press 'a' for Android emulator
-#    Scan QR code with Expo Go for physical device
+# Or target a specific platform
+npm run ios
+npm run android
+npm run web
 ```
 
 ---
 
-## 🛠️ Available Scripts
+## Development
+
+### Available Scripts
 
 | Command | Description |
-|---|---|
+|---------|-------------|
 | `npm start` | Start Expo dev server |
-| `npm run ios` | Open in iOS Simulator |
-| `npm run android` | Open in Android Emulator |
-| `npm run lint` | Run ESLint (zero warnings) |
-| `npm run lint:fix` | Auto-fix ESLint issues |
-| `npm run format` | Format all files with Prettier |
-| `npm run format:check` | Check formatting without writing |
-| `npm run type-check` | Run TypeScript compiler check |
-| `npm test` | Run Vitest in watch mode |
-| `npm run test:run` | Run Vitest once (CI) |
+| `npm run lint` | Lint and auto-fix |
+| `npm run lint:check` | Lint without fixing |
+| `npm run type-check` | TypeScript type check |
+| `npm run format` | Format all files |
+| `npm test` | Run tests with Jest |
 
----
+### Code Style
 
-## 🎨 Design System
+- **TypeScript strict mode** — no implicit any, all return types checked
+- **Prettier** enforces consistent formatting (single quotes, 100 char width)
+- **ESLint** catches React, React Native, and TypeScript anti-patterns
+- **Husky pre-commit** runs lint-staged + type-check before every commit
+- **Path aliases** — use `@components/`, `@screens/`, `@hooks/` etc.
 
-### Theming
+### Theme System
 
-TripSplit uses a **token-based design system** with full light/dark mode support.
+The app uses a token-based theme system with full light/dark support:
 
-```tsx
+```typescript
 import { useTheme } from '@context/ThemeContext';
 
 function MyComponent() {
-  const { colors, isDark, toggleTheme } = useTheme();
-  return <View style={{ backgroundColor: colors.background }} />;
+  const { theme, isDark, toggleTheme } = useTheme();
+
+  return (
+    <View style={{ backgroundColor: theme.colors.background }}>
+      <Text style={{ color: theme.colors.text, fontSize: theme.typography.fontSize.md }}>
+        Hello World
+      </Text>
+    </View>
+  );
 }
 ```
 
-### Color Palette
+### Adding a New Screen
 
-| Token | Light | Dark |
-|---|---|---|
-| `primary` | `#6C63FF` | `#8B6EFF` |
-| `background` | `#F9FAFB` | `#0A0A0F` |
-| `surface` | `#FFFFFF` | `#12121A` |
-| `text` | `#111827` | `#F9FAFB` |
-| `success` | `#22C55E` | `#4ADE80` |
-| `error` | `#EF4444` | `#F87171` |
-
-### Spacing Scale
-
-Uses a 4px base grid: `spacing[1] = 4px`, `spacing[4] = 16px`, `spacing[8] = 32px`.
+1. Create `src/screens/MyScreen.tsx`
+2. Export from `src/screens/index.ts`
+3. Add the route name to `src/constants/routes.ts`
+4. Add the param type to `src/types/index.ts`
+5. Register in the appropriate navigator
 
 ---
 
-## 📱 Navigation Structure
+## Roadmap
 
-```
-RootNavigator (Bottom Tabs)
-├── HomeScreen               # Dashboard & getting started
-├── TripStackNavigator       # Stack navigator
-│   └── TripsScreen          # List of all trips
-└── SettingsScreen           # App preferences
-```
-
----
-
-## 🔧 Code Quality
-
-### ESLint
-
-Uses `@typescript-eslint/recommended` + `react-hooks` + `react-native` plugins.
-
-```bash
-npm run lint        # Check
-npm run lint:fix    # Auto-fix
-```
-
-### Prettier
-
-Enforces consistent formatting (single quotes, trailing commas, 100-char line width).
-
-```bash
-npm run format        # Write
-npm run format:check  # Check only (CI)
-```
-
-### Husky Pre-commit Hooks
-
-Automatically runs `lint-staged` + `tsc --noEmit` before every commit. No broken code gets committed.
-
-### TypeScript
-
-Strict mode enabled with path aliases (`@/`, `@components/`, `@screens/`, etc.).
+| Phase | Features |
+|-------|---------|
+| ✅ Phase 1 | Foundation, navigation, theming, placeholder screens |
+| 🔲 Phase 2 | Trip CRUD, participant management, AsyncStorage persistence |
+| 🔲 Phase 3 | Expense entry, split calculation engine, balance tracking |
+| 🔲 Phase 4 | Settlement suggestions, activity feed, charts |
+| 🔲 Phase 5 | Multi-currency support, export, sharing |
+| 🔲 Phase 6 | Backend sync, authentication, real-time updates |
 
 ---
 
-## 📦 Key Dependencies
+## License
 
-| Package | Version | Purpose |
-|---|---|---|
-| `expo` | ~50.0.0 | Managed workflow runtime |
-| `react-native` | 0.73.x | Core framework |
-| `@react-navigation/native` | ^6.x | Navigation primitives |
-| `@react-navigation/bottom-tabs` | ^6.x | Tab navigator |
-| `@react-navigation/native-stack` | ^6.x | Stack navigator |
-| `@react-native-async-storage/async-storage` | 1.21.x | Local persistence |
-| `typescript` | ^5.3 | Type safety |
-
----
-
-## 🗓️ Development Phases
-
-| Phase | Status | Description |
-|---|---|---|
-| **Phase 1** | ✅ Current | Foundation, navigation, theming, folder structure |
-| Phase 2 | 🔜 | Trip CRUD — create, list, and view trips |
-| Phase 3 | 🔜 | Expense tracking — add and categorize expenses |
-| Phase 4 | 🔜 | Smart splitting — equal, exact, percentage, shares |
-| Phase 5 | 🔜 | Settlement flow — mark debts as paid |
-| Phase 6 | 🔜 | Multi-currency support |
-| Phase 7 | 🔜 | Export & sharing — PDF, CSV, share sheets |
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Commit your changes: `git commit -m 'feat: add my feature'`
-4. Push to the branch: `git push origin feat/my-feature`
-5. Open a Pull Request
-
-All commits must pass the pre-commit hooks (lint + type-check).
-
----
-
-## 📄 License
-
-MIT © TripSplit Contributors
+MIT © 2026 Your Name

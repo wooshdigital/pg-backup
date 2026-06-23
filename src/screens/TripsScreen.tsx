@@ -1,83 +1,111 @@
 import React from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  View,
-  Text,
-} from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Heading, Body, Caption } from '../components/common/Typography';
-import { spacing, borderRadius } from '../constants/theme';
 
 // ─── Empty State ─────────────────────────────────────────────────────────────
 
 function EmptyState() {
+  const { theme } = useTheme();
   return (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyEmoji}>✈️</Text>
-      <Heading level={2} align="center" style={styles.emptyTitle}>
+    <Card style={styles.emptyCard} elevation={1}>
+      <View style={styles.emptyIconContainer}>
+        <Heading level={1} align="center">
+          🗺️
+        </Heading>
+      </View>
+      <Heading level={3} align="center" style={styles.emptyTitle}>
         No trips yet
       </Heading>
-      <Body secondary align="center" size="sm" style={styles.emptyBody}>
-        Create your first trip to start splitting expenses with friends and family.
+      <Body color={theme.colors.textSecondary} align="center" style={styles.emptySubtext}>
+        Create your first trip and start splitting expenses with friends and family.
       </Body>
       <Button
         label="+ Create Trip"
+        onPress={() => {}}
         variant="primary"
-        size="lg"
+        fullWidth
         style={styles.emptyButton}
-        onPress={() => {
-          /* Navigate to TripCreate */
-        }}
       />
-    </View>
+    </Card>
   );
 }
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
+// ─── Trips Screen ─────────────────────────────────────────────────────────────
 
 export function TripsScreen() {
-  const { colors } = useTheme();
-  // In future phases, trips will come from context/store
+  const { theme } = useTheme();
+  // Placeholder – trips will come from context/storage in a later phase
   const trips: unknown[] = [];
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      {/* Floating action header */}
-      <View style={[styles.topBar, { backgroundColor: colors.background, borderBottomColor: colors.borderLight }]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: theme.colors.background }]}
+      edges={['top']}
+    >
+      {/* ── Header ────────────────────────────────────────────────────────── */}
+      <View
+        style={[
+          styles.headerRow,
+          {
+            paddingHorizontal: theme.spacing.md,
+            paddingTop: theme.spacing.md,
+            paddingBottom: theme.spacing.sm,
+          },
+        ]}
+      >
         <Heading level={1}>My Trips</Heading>
-        <Button
-          label="+ New"
-          variant="primary"
-          size="sm"
-          onPress={() => {
-            /* Navigate to TripCreate */
-          }}
-        />
+        {trips.length > 0 && (
+          <Button label="+ New" onPress={() => {}} variant="primary" size="sm" />
+        )}
       </View>
 
-      {trips.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Trip cards will be rendered here in Phase 2 */}
-        </ScrollView>
-      )}
-
-      {/* Status bar info */}
-      <View style={[styles.footer, { borderTopColor: colors.borderLight, backgroundColor: colors.surface }]}>
-        <Caption align="center">
-          {trips.length === 0
-            ? 'No active trips'
-            : `${trips.length} trip${trips.length === 1 ? '' : 's'}`}
-        </Caption>
+      {/* ── Filter Pills (placeholder) ───────────────────────────────────── */}
+      <View
+        style={[
+          styles.filterRow,
+          { paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm },
+        ]}
+      >
+        {(['All', 'Active', 'Planning', 'Completed'] as const).map((filter) => (
+          <View
+            key={filter}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: filter === 'All' ? theme.colors.primary : theme.colors.surface,
+                borderColor: theme.colors.border,
+                marginRight: theme.spacing.xs,
+              },
+            ]}
+          >
+            <Caption
+              color={filter === 'All' ? theme.colors.textInverse : theme.colors.textSecondary}
+              weight="medium"
+            >
+              {filter}
+            </Caption>
+          </View>
+        ))}
       </View>
+
+      {/* ── Content ───────────────────────────────────────────────────────── */}
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.xxl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {trips.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <Body>Trip list goes here</Body>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -85,47 +113,44 @@ export function TripsScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safe: {
     flex: 1,
   },
-  topBar: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderBottomWidth: 1,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   scrollContent: {
-    padding: spacing[4],
-    paddingBottom: spacing[10],
+    paddingTop: 8,
   },
-  emptyContainer: {
-    flex: 1,
+  emptyCard: {
+    marginTop: 24,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing[8],
+    paddingVertical: 32,
+    paddingHorizontal: 24,
   },
-  emptyEmoji: {
-    fontSize: 72,
-    marginBottom: spacing[4],
+  emptyIconContainer: {
+    marginBottom: 12,
   },
   emptyTitle: {
-    marginBottom: spacing[2],
+    marginBottom: 8,
   },
-  emptyBody: {
-    marginBottom: spacing[6],
-    lineHeight: 20,
-    maxWidth: 260,
+  emptySubtext: {
+    marginBottom: 24,
+    lineHeight: 22,
   },
   emptyButton: {
-    borderRadius: borderRadius.xl,
-    minWidth: 180,
-  },
-  footer: {
-    paddingVertical: spacing[2],
-    borderTopWidth: 1,
+    marginTop: 0,
   },
 });
-
-export default TripsScreen;

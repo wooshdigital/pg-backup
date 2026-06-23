@@ -1,6 +1,16 @@
 // ─── Currency ────────────────────────────────────────────────────────────────
 
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD' | 'CHF' | 'CNY' | 'INR' | string;
+export type CurrencyCode =
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'JPY'
+  | 'CAD'
+  | 'AUD'
+  | 'CHF'
+  | 'CNY'
+  | 'INR'
+  | 'BRL';
 
 export interface Currency {
   code: CurrencyCode;
@@ -9,37 +19,31 @@ export interface Currency {
   decimalPlaces: number;
 }
 
-// ─── Money ───────────────────────────────────────────────────────────────────
-
-export interface Money {
-  amount: number; // stored in smallest unit (cents)
-  currency: CurrencyCode;
-}
-
 // ─── Participant ──────────────────────────────────────────────────────────────
 
 export interface Participant {
   id: string;
   name: string;
   email?: string;
-  avatarUri?: string;
+  avatarUrl?: string;
+  /** Net balance across all expenses in a trip (positive = owed to them, negative = they owe) */
+  balance: number;
   createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
 }
 
-// ─── Split ───────────────────────────────────────────────────────────────────
+// ─── Split ────────────────────────────────────────────────────────────────────
 
 export type SplitMethod = 'equal' | 'exact' | 'percentage' | 'shares';
 
 export interface SplitShare {
   participantId: string;
-  /** Amount owed in smallest currency unit */
+  /** Amount this participant owes for this expense */
   amount: number;
-  /** Used when splitMethod is 'percentage' */
+  /** Percentage of the total (for 'percentage' split method) */
   percentage?: number;
-  /** Used when splitMethod is 'shares' */
+  /** Number of shares (for 'shares' split method) */
   shares?: number;
-  /** Whether this participant has settled their share */
-  settled: boolean;
 }
 
 export interface Split {
@@ -47,9 +51,11 @@ export interface Split {
   expenseId: string;
   method: SplitMethod;
   shares: SplitShare[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-// ─── Expense ─────────────────────────────────────────────────────────────────
+// ─── Expense ──────────────────────────────────────────────────────────────────
 
 export type ExpenseCategory =
   | 'food'
@@ -66,18 +72,19 @@ export interface Expense {
   tripId: string;
   title: string;
   description?: string;
-  amount: number; // in smallest currency unit
-  currency: CurrencyCode;
+  amount: number;
+  currencyCode: CurrencyCode;
   category: ExpenseCategory;
-  paidBy: string; // participantId
-  paidAt: string; // ISO 8601
+  /** ID of the participant who paid */
+  paidByParticipantId: string;
   split: Split;
-  receiptUri?: string;
+  receiptImageUrl?: string;
+  date: string; // ISO 8601
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
 
-// ─── Trip ────────────────────────────────────────────────────────────────────
+// ─── Trip ─────────────────────────────────────────────────────────────────────
 
 export type TripStatus = 'planning' | 'active' | 'completed' | 'archived';
 
@@ -86,19 +93,20 @@ export interface Trip {
   name: string;
   description?: string;
   destination?: string;
-  coverImageUri?: string;
-  currency: CurrencyCode;
+  coverImageUrl?: string;
   status: TripStatus;
+  defaultCurrencyCode: CurrencyCode;
   participants: Participant[];
   expenses: Expense[];
   startDate?: string; // ISO 8601
   endDate?: string; // ISO 8601
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
-  createdBy: string; // participantId
+  /** ID of the participant who created / owns this trip */
+  createdByParticipantId: string;
 }
 
-// ─── Navigation Params ───────────────────────────────────────────────────────
+// ─── Navigation ───────────────────────────────────────────────────────────────
 
 export type RootTabParamList = {
   Home: undefined;
@@ -109,38 +117,93 @@ export type RootTabParamList = {
 export type TripStackParamList = {
   TripsList: undefined;
   TripDetail: { tripId: string };
-  TripCreate: undefined;
-  ExpenseCreate: { tripId: string };
+  AddExpense: { tripId: string };
   ExpenseDetail: { tripId: string; expenseId: string };
+  AddParticipant: { tripId: string };
 };
 
-// ─── Theme ───────────────────────────────────────────────────────────────────
+// ─── Theme ────────────────────────────────────────────────────────────────────
 
-export type ColorScheme = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark' | 'system';
 
-export interface ThemeColors {
-  primary: string;
-  primaryLight: string;
-  primaryDark: string;
-  secondary: string;
-  accent: string;
-  background: string;
-  surface: string;
-  surfaceElevated: string;
-  border: string;
-  borderLight: string;
-  text: string;
-  textSecondary: string;
-  textDisabled: string;
-  textInverse: string;
-  success: string;
-  warning: string;
-  error: string;
-  info: string;
-  shadow: string;
+export interface AppTheme {
+  mode: ThemeMode;
+  colors: {
+    primary: string;
+    primaryLight: string;
+    primaryDark: string;
+    secondary: string;
+    secondaryLight: string;
+    secondaryDark: string;
+    background: string;
+    surface: string;
+    surfaceVariant: string;
+    error: string;
+    success: string;
+    warning: string;
+    info: string;
+    text: string;
+    textSecondary: string;
+    textDisabled: string;
+    textInverse: string;
+    border: string;
+    borderLight: string;
+    shadow: string;
+    overlay: string;
+    card: string;
+  };
+  typography: {
+    fontFamily: {
+      regular: string;
+      medium: string;
+      bold: string;
+    };
+    fontSize: {
+      xs: number;
+      sm: number;
+      md: number;
+      lg: number;
+      xl: number;
+      xxl: number;
+      xxxl: number;
+    };
+    lineHeight: {
+      tight: number;
+      normal: number;
+      relaxed: number;
+    };
+    fontWeight: {
+      regular: '400';
+      medium: '500';
+      semibold: '600';
+      bold: '700';
+    };
+  };
+  spacing: {
+    xs: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    xxl: number;
+    xxxl: number;
+  };
+  borderRadius: {
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    full: number;
+  };
 }
 
-export interface Theme {
-  colors: ThemeColors;
-  colorScheme: ColorScheme;
+// ─── Storage ──────────────────────────────────────────────────────────────────
+
+export interface StorageSchema {
+  trips: Trip[];
+  participants: Participant[];
+  themeMode: ThemeMode;
+  onboardingCompleted: boolean;
 }
+
+export type StorageKey = keyof StorageSchema;

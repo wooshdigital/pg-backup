@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "TripSplit",
-    "slug": "tripsplit",
+    "name": "SplitWise Clone",
+    "slug": "splitwise-clone",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,19 +11,22 @@
       "resizeMode": "contain",
       "backgroundColor": "#6C63FF"
     },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.tripsplit.app"
+      "bundleIdentifier": "com.yourcompany.splitwiseclone"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#6C63FF"
       },
-      "package": "com.tripsplit.app"
+      "package": "com.yourcompany.splitwiseclone"
     },
     "web": {
       "favicon": "./assets/icon.png"
