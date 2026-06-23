@@ -1,71 +1,200 @@
-# pgbackup
+# SplitWise Travel ✈️💰
 
-A production-ready PostgreSQL backup tool implemented in Go.
+> Split travel expenses effortlessly with friends and family.
 
-## Project Structure
+A mobile app built with React Native (Expo) that helps travelers track, split, and settle shared expenses across any currency.
+
+---
+
+## 📱 Features (Planned)
+
+- **Trip Management** — Create and manage trips with multiple participants
+- **Expense Tracking** — Log expenses in any currency with automatic conversion
+- **Flexible Splits** — Equal, exact, percentage, or share-based splits
+- **Balance Calculations** — Real-time per-person balance tracking
+- **Settlement Suggestions** — Minimized debt settlement recommendations
+- **Offline-First** — Works without internet, syncs when connected
+- **Dark Mode** — Full light/dark theme support
+
+---
+
+## 🏗️ Architecture
 
 ```
-.
-├── cmd/worker/          # Main entrypoint
-├── internal/
-│   ├── config/          # Configuration loading
-│   ├── dumper/          # pg_dump invocation and DSN parsing
-│   └── tempfile/        # Safe temporary file management
-├── config.yaml.example  # Example configuration
-├── go.mod
-└── Makefile
+splitwise-travel/
+├── App.tsx                    # Root component
+├── app.json                   # Expo configuration
+├── src/
+│   ├── types/
+│   │   └── index.ts           # Core TypeScript interfaces
+│   ├── constants/
+│   │   ├── theme.ts           # Design tokens (colors, spacing, etc.)
+│   │   └── routes.ts          # Route name enums & param lists
+│   ├── context/
+│   │   └── ThemeContext.tsx   # Light/dark theme provider
+│   ├── navigation/
+│   │   ├── RootNavigator.tsx  # Bottom tab navigator
+│   │   └── TripStackNavigator.tsx
+│   ├── screens/
+│   │   ├── HomeScreen.tsx
+│   │   ├── TripsScreen.tsx
+│   │   └── SettingsScreen.tsx
+│   ├── components/
+│   │   └── common/
+│   │       ├── Card.tsx
+│   │       ├── Button.tsx
+│   │       └── Typography.tsx
+│   ├── hooks/
+│   │   └── useAsyncStorage.ts
+│   └── utils/
+│       ├── currency.ts
+│       ├── date.ts
+│       └── id.ts
 ```
 
-## Phase 2: PostgreSQL Dump Integration
+### Data Flow
 
-### Overview
+```
+AsyncStorage (persistence)
+       ↕
+  React Context (state)
+       ↕
+   Screens / Hooks
+       ↕
+  UI Components
+```
 
-The `internal/dumper` package provides:
+---
 
-- **`Dumper` interface** — the core abstraction for running PostgreSQL dumps.
-- **`PgDumper` struct** — invokes `pg_dump` via `os/exec`, streaming stdout
-  directly to an `io.Writer` to avoid buffering large dumps in memory.
-- **`ParseDSN`** — parses both URL-style (`postgres://...`) and libpq
-  key=value DSNs into a `ConnParams` struct.
-- **`ConnParams.BuildPgDumpArgs`** — converts connection parameters into
-  `pg_dump` command-line flags.
+## 🚀 Getting Started
 
-The `internal/tempfile` package provides safe temp-file creation with atomic
-commit (rename) and explicit discard semantics.
+### Prerequisites
 
-### Running Tests
+- **Node.js** ≥ 18
+- **npm** or **yarn**
+- **Expo CLI**: `npm install -g expo-cli`
+- **Expo Go** app on your iOS/Android device, or an emulator
 
-**Unit tests** (no Docker required):
+### Installation
 
 ```bash
-make test
-# or
-go test ./... -race
+# 1. Clone the repository
+git clone https://github.com/yourorg/splitwise-travel.git
+cd splitwise-travel
+
+# 2. Install dependencies
+npm install
+
+# 3. Install Husky hooks
+npm run prepare
+
+# 4. Start the development server
+npm start
 ```
 
-**Integration tests** (Docker required, `pg_dump` must be in PATH):
+### Running on a Device / Emulator
 
 ```bash
-make integration-test
-# or
-INTEGRATION_TESTS=1 go test -tags integration ./... -race -timeout 120s -v
+# iOS Simulator
+npm run ios
+
+# Android Emulator
+npm run android
+
+# Web (limited support)
+npm run web
 ```
 
-### Design Decisions
+---
 
-1. **Streaming I/O**: `cmd.Stdout` is connected directly to a counting wrapper
-   around the caller-provided `io.Writer`. This means even a multi-GB dump is
-   never held in memory.
+## 🛠️ Development
 
-2. **Password handling**: Passwords are passed via the `PGPASSWORD` environment
-   variable, never on the command line (which would appear in `ps` output).
+### Code Quality
 
-3. **Context cancellation**: `exec.CommandContext` is used so that context
-   cancellation or timeout kills the `pg_dump` process promptly.
+```bash
+# Lint (zero warnings policy)
+npm run lint
 
-4. **Testability**: The `ExecRunner` func type allows unit tests to inject a
-   fake command without any Docker or real Postgres.
+# Auto-fix lint issues
+npm run lint:fix
 
-5. **Integration tests**: Guarded by both a build tag (`-tags integration`) and
-   an environment variable (`INTEGRATION_TESTS=1`) to prevent accidental
-   execution in CI environments without Docker.
+# Format with Prettier
+npm run format
+
+# TypeScript type check
+npm run type-check
+```
+
+### Pre-commit Hooks
+
+Husky runs automatically before each commit:
+1. `lint-staged` — lints and formats changed files
+2. `tsc --noEmit` — full TypeScript type check
+
+---
+
+## 📐 Design System
+
+### Theme Tokens
+
+| Token Category | Description |
+|---|---|
+| `colors` | Brand, semantic, and neutral color palette |
+| `fontSizes` | `xs` (11) → `5xl` (40) |
+| `fontWeights` | `regular` → `extraBold` |
+| `spacing` | 4px base unit scale |
+| `borderRadius` | `xs` (2) → `full` (9999) |
+| `shadows` | `none` → `xl` |
+
+### Color Palette
+
+| Name | Light | Dark |
+|---|---|---|
+| Primary | `#6C63FF` | `#8B6BFF` |
+| Accent | `#38B2AC` | `#4FD1C5` |
+| Background | `#F9FAFB` | `#111827` |
+| Surface | `#FFFFFF` | `#1F2937` |
+
+---
+
+## 🗺️ Roadmap
+
+### Phase 1 ✅ — Foundation & Project Setup
+- [x] Expo project with TypeScript
+- [x] React Navigation v6 (Stack + Bottom Tabs)
+- [x] Global ThemeContext with light/dark palette
+- [x] Core TypeScript interfaces
+- [x] ESLint + Prettier + Husky
+- [x] Component library foundation
+
+### Phase 2 — Core Expense Features
+- [ ] Trip CRUD (create, read, update, delete)
+- [ ] Participant management
+- [ ] Expense creation with split logic
+- [ ] AsyncStorage persistence layer
+
+### Phase 3 — Balance & Settlement
+- [ ] Balance calculation engine
+- [ ] Settlement suggestions
+- [ ] Expense history & filtering
+
+### Phase 4 — Polish & Export
+- [ ] Data export (CSV/PDF)
+- [ ] Currency conversion API
+- [ ] Onboarding flow
+- [ ] Animations & micro-interactions
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Commit your changes (pre-commit hooks will run automatically)
+4. Push and open a pull request
+
+---
+
+## 📄 License
+
+MIT © Your Company
