@@ -1,5 +1,5 @@
-// Package tempfile provides helpers for creating and managing temporary files
-// for database dump operations.
+// Package tempfile provides helpers for creating and safely cleaning up
+// named temporary files.
 package tempfile
 
 import (
@@ -9,48 +9,107 @@ import (
 	"path/filepath"
 )
 
-// TempFile represents a temporary file that can be written to and then
-// either persisted (moved to a final destination) or cleaned up.
+// TempFile represents a named temporary file that can be used as an io.Writer
+// and later renamed to its final destination or deleted.
 type TempFile struct {
 	f    *os.File
 	path string
 }
 
-// New creates a new temporary file in dir with the given prefix and suffix.
-// If dir is empty the system default temporary directory is used.
+// New creates a new temporary file in the given directory with the given
+// prefix. If dir is empty, os.TempDir() is used.
 //
-// The caller is responsible for calling either Persist or Cleanup (or Close
-// followed by one of those) when done with the file.
-func New(dir, prefix, suffix string) (*TempFile, error) {
-	if dir != "" {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			return nil, fmt.Errorf("tempfile: create directory %q: %w", dir, err)
-		}
+// The caller is responsible for calling either Commit or Discard when done.
+func New(dir, prefix string) (*TempFile, error) {
+	if dir == "" {
+		dir = os.TempDir()
 	}
 
-	f, err := os.CreateTemp(dir, prefix+"*"+suffix)
+	f, err := os.CreateTemp(dir, prefix+"*.tmp")
 	if err != nil {
-		return nil, fmt.Errorf("tempfile: create temp file: %w", err)
+		return nil, fmt.Errorf("tempfile: create: %w", err)
 	}
 
-	return &TempFile{f: f, path: f.Name()}, nil
+	return &TempFile{
+		f:    f,
+		path: f.Name(),
+	}, nil
 }
 
-// Write implements io.Writer, writing data to the underlying temp file.
+// Write implements io.Writer.
 func (t *TempFile) Write(p []byte) (int, error) {
-	n, err := t.f.Write(p)
-	if err != nil {
-		return n, fmt.Errorf("tempfile: write: %w", err)
-	}
-	return n, nil
+	return t.f.Write(p)
 }
 
-// Path returns the absolute path of the temporary file.
+// Path returns the path to the temporary file.
 func (t *TempFile) Path() string {
 	return t.path
 }
 
-// Size returns the current size of the temporary file in bytes.
+// File returns the underlying *os.File for direct access (e.g., Seek, Stat).
+func (t *TempFile) File() *os.File {
+	return t.f
+}
+
+// Sync flushes the file's contents to stable storage.
+func (t *TempFile) Sync() error {
+	if err := t.f.Sync(); err != nil {
+		return fmt.Errorf("tempfile: sync: %w", err)
+	}
+	return nil
+}
+
+// Close closes the underlying file without deleting it.
+// After Close, the file can still be committed or discarded by path.
+func (t *TempFile) Close() error {
+	if err := t.f.Close(); err != nil {
+		return fmt.Errorf("tempfile: close: %w", err)
+	}
+	return nil
+}
+
+// Commit closes the file and renames it atomically to dest.
+// On most Unix systems the rename is atomic as long as src and dest are on
+// the same filesystem; for cross-device moves it falls back to a copy.
+func (t *TempFile) Commit(dest string) error {
+	if err := t.f.Sync(); err != nil {
+		return fmt.Errorf("tempfile: sync before commit: %w", err)
+	}
+	if err := t.f.Close(); err != nil {
+		return fmt.Errorf("tempfile: close before commit: %w", err)
+	}
+
+	// Ensure destination directory exists
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return fmt.Errorf("tempfile: mkdir: %w", err)
+	}
+
+	// Attempt atomic rename first
+	if err := os.Rename(t.path, dest); err != nil {
+		// Fall back to copy if rename fails (e.g., cross-device)
+		if copyErr := copyFile(t.path, dest); copyErr != nil {
+			return fmt.Errorf("tempfile: commit (rename failed: %v; copy failed: %w)", err, copyErr)
+		}
+		// Remove the temp file since copy succeeded
+		_ = os.Remove(t.path)
+	}
+
+	return nil
+}
+
+// Discard closes and removes the temporary file. It is safe to call even if
+// the file has already been committed or closed.
+func (t *TempFile) Discard() error {
+	// Best-effort close; ignore error since file may already be closed.
+	_ = t.f.Close()
+
+	if err := os.Remove(t.path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("tempfile: discard: %w", err)
+	}
+	return nil
+}
+
+// Size returns the number of bytes written to the temp file.
 func (t *TempFile) Size() (int64, error) {
 	info, err := t.f.Stat()
 	if err != nil {
@@ -59,73 +118,7 @@ func (t *TempFile) Size() (int64, error) {
 	return info.Size(), nil
 }
 
-// Close closes the underlying file handle without removing the file.
-// It is safe to call Close multiple times.
-func (t *TempFile) Close() error {
-	if t.f == nil {
-		return nil
-	}
-	err := t.f.Close()
-	t.f = nil
-	if err != nil {
-		return fmt.Errorf("tempfile: close: %w", err)
-	}
-	return nil
-}
-
-// Persist moves the temporary file to dst.
-// The file handle is closed first if it is still open.
-// On success the TempFile must not be used further.
-func (t *TempFile) Persist(dst string) error {
-	if err := t.Close(); err != nil {
-		return err
-	}
-
-	// Ensure the destination directory exists.
-	dstDir := filepath.Dir(dst)
-	if err := os.MkdirAll(dstDir, 0o750); err != nil {
-		return fmt.Errorf("tempfile: create destination directory %q: %w", dstDir, err)
-	}
-
-	// os.Rename is atomic on the same filesystem.
-	if err := os.Rename(t.path, dst); err != nil {
-		// Fall back to a copy + delete if rename fails (cross-device).
-		if copyErr := copyFile(t.path, dst); copyErr != nil {
-			return fmt.Errorf("tempfile: persist (rename failed: %v; copy failed: %w)", err, copyErr)
-		}
-		_ = os.Remove(t.path)
-	}
-
-	t.path = dst
-	return nil
-}
-
-// Cleanup removes the temporary file and closes the handle if open.
-// It is safe to call Cleanup after Persist (the destination file is not removed).
-// It is safe to call Cleanup multiple times.
-func (t *TempFile) Cleanup() error {
-	_ = t.Close() // best-effort close
-	if t.path == "" {
-		return nil
-	}
-	if err := os.Remove(t.path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("tempfile: cleanup %q: %w", t.path, err)
-	}
-	return nil
-}
-
-// Reader returns a new *os.File opened for reading the temp file.
-// The caller is responsible for closing the returned file.
-func (t *TempFile) Reader() (*os.File, error) {
-	r, err := os.Open(t.path)
-	if err != nil {
-		return nil, fmt.Errorf("tempfile: open for reading: %w", err)
-	}
-	return r, nil
-}
-
-// copyFile copies src to dst using io.Copy. Used as a fallback for cross-device
-// renames.
+// copyFile copies src to dst using io.Copy.
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -133,16 +126,16 @@ func copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = out.Close()
+	}()
 
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		os.Remove(dst)
 		return err
 	}
-
-	return out.Close()
+	return out.Sync()
 }

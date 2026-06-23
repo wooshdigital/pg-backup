@@ -1,62 +1,46 @@
 package tempfile
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestNew_CreatesFile(t *testing.T) {
-	t.Parallel()
-
-	tf, err := New("", "test-", ".dump")
+func TestNew(t *testing.T) {
+	tf, err := New("", "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer tf.Cleanup()
+	defer tf.Discard()
 
 	if tf.Path() == "" {
 		t.Error("Path() should not be empty")
 	}
+	if !strings.Contains(filepath.Base(tf.Path()), "test") {
+		t.Errorf("Path() = %q, want it to contain 'test'", tf.Path())
+	}
 
+	// File should exist
 	if _, err := os.Stat(tf.Path()); err != nil {
-		t.Errorf("temp file should exist on disk: %v", err)
+		t.Errorf("temp file should exist: %v", err)
 	}
 }
 
-func TestNew_CustomDir(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	tf, err := New(dir, "custom-", ".tmp")
+func TestTempFile_Write(t *testing.T) {
+	tf, err := New("", "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
-	defer tf.Cleanup()
+	defer tf.Discard()
 
-	if filepath.Dir(tf.Path()) != dir {
-		t.Errorf("expected file in %q, got %q", dir, tf.Path())
-	}
-}
-
-func TestTempFile_WriteAndSize(t *testing.T) {
-	t.Parallel()
-
-	tf, err := New("", "write-test-", ".tmp")
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer tf.Cleanup()
-
-	data := []byte("hello, world!")
+	data := []byte("hello, world")
 	n, err := tf.Write(data)
 	if err != nil {
 		t.Fatalf("Write() error: %v", err)
 	}
 	if n != len(data) {
-		t.Errorf("Write() = %d bytes, want %d", n, len(data))
+		t.Errorf("Write() = %d, want %d", n, len(data))
 	}
 
 	size, err := tf.Size()
@@ -68,108 +52,58 @@ func TestTempFile_WriteAndSize(t *testing.T) {
 	}
 }
 
-func TestTempFile_Cleanup(t *testing.T) {
-	t.Parallel()
+func TestTempFile_Commit(t *testing.T) {
+	tf, err := New("", "test")
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
 
-	tf, err := New("", "cleanup-", ".tmp")
+	data := []byte("committed content")
+	if _, err := tf.Write(data); err != nil {
+		t.Fatalf("Write() error: %v", err)
+	}
+
+	dest := filepath.Join(t.TempDir(), "subdir", "final.txt")
+	if err := tf.Commit(dest); err != nil {
+		t.Fatalf("Commit() error: %v", err)
+	}
+
+	// Dest should exist
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile(dest) error: %v", err)
+	}
+	if string(got) != string(data) {
+		t.Errorf("committed file content = %q, want %q", got, data)
+	}
+
+	// Temp file should be gone (either renamed or removed after copy)
+	if _, err := os.Stat(tf.Path()); !os.IsNotExist(err) {
+		// On some systems rename works, on others a copy+remove is done.
+		// It's also possible the temp and dest are the same file if rename succeeded.
+		if tf.Path() != dest {
+			t.Errorf("temp file should be gone after Commit, but Stat returned: %v", err)
+		}
+	}
+}
+
+func TestTempFile_Discard(t *testing.T) {
+	tf, err := New("", "test")
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
 
 	path := tf.Path()
-	if err := tf.Cleanup(); err != nil {
-		t.Fatalf("Cleanup() error: %v", err)
+	if err := tf.Discard(); err != nil {
+		t.Fatalf("Discard() error: %v", err)
 	}
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("file should have been removed after Cleanup()")
+		t.Error("file should not exist after Discard")
 	}
 
-	// Second call should be a no-op.
-	if err := tf.Cleanup(); err != nil {
-		t.Errorf("second Cleanup() should not error, got: %v", err)
-	}
-}
-
-func TestTempFile_Persist(t *testing.T) {
-	t.Parallel()
-
-	tf, err := New("", "persist-", ".dump")
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-
-	content := []byte("pg dump content")
-	if _, err := tf.Write(content); err != nil {
-		t.Fatalf("Write() error: %v", err)
-	}
-
-	dst := filepath.Join(t.TempDir(), "subdir", "final.dump")
-	if err := tf.Persist(dst); err != nil {
-		t.Fatalf("Persist() error: %v", err)
-	}
-
-	// Destination file should exist with correct content.
-	got, err := os.ReadFile(dst)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error: %v", dst, err)
-	}
-	if !bytes.Equal(got, content) {
-		t.Errorf("persisted content = %q, want %q", got, content)
-	}
-
-	// Cleanup after Persist should not remove the destination.
-	_ = tf.Cleanup()
-	if _, err := os.Stat(dst); err != nil {
-		t.Errorf("destination should still exist after Cleanup: %v", err)
-	}
-}
-
-func TestTempFile_Reader(t *testing.T) {
-	t.Parallel()
-
-	tf, err := New("", "reader-", ".tmp")
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer tf.Cleanup()
-
-	content := []byte("readable content")
-	if _, err := tf.Write(content); err != nil {
-		t.Fatalf("Write() error: %v", err)
-	}
-	if err := tf.Close(); err != nil {
-		t.Fatalf("Close() error: %v", err)
-	}
-
-	r, err := tf.Reader()
-	if err != nil {
-		t.Fatalf("Reader() error: %v", err)
-	}
-	defer r.Close()
-
-	got, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll error: %v", err)
-	}
-	if !bytes.Equal(got, content) {
-		t.Errorf("Reader content = %q, want %q", got, content)
-	}
-}
-
-func TestTempFile_CloseIdempotent(t *testing.T) {
-	t.Parallel()
-
-	tf, err := New("", "close-", ".tmp")
-	if err != nil {
-		t.Fatalf("New() error: %v", err)
-	}
-	defer tf.Cleanup()
-
-	if err := tf.Close(); err != nil {
-		t.Fatalf("first Close() error: %v", err)
-	}
-	if err := tf.Close(); err != nil {
-		t.Errorf("second Close() should be a no-op, got: %v", err)
+	// Double-discard should not error
+	if err := tf.Discard(); err != nil {
+		t.Errorf("second Discard() error: %v", err)
 	}
 }

@@ -1,28 +1,22 @@
-.PHONY: build test test-integration lint vet fmt tidy clean
+.PHONY: build test lint clean integration-test
 
-BINARY_NAME := pgbackup
-CMD_DIR     := ./cmd/worker
+# Go binary output directory
+BIN_DIR := ./bin
 
 build:
-	go build -o bin/$(BINARY_NAME) $(CMD_DIR)
+	@mkdir -p $(BIN_DIR)
+	go build -o $(BIN_DIR)/worker ./cmd/worker/...
 
 test:
-	go test -v -race -count=1 ./...
-
-test-integration:
-	go test -v -race -count=1 -tags=integration -timeout 10m ./...
+	go test ./... -race -timeout 60s
 
 lint:
+	@which golangci-lint > /dev/null 2>&1 || (echo "golangci-lint not found; install from https://golangci-lint.run" && exit 1)
 	golangci-lint run ./...
 
-vet:
-	go vet ./...
-
-fmt:
-	gofmt -w .
-
-tidy:
-	go mod tidy
+# Integration tests require Docker and INTEGRATION_TESTS=1
+integration-test:
+	INTEGRATION_TESTS=1 go test -tags integration ./... -race -timeout 120s -v
 
 clean:
-	rm -rf bin/
+	rm -rf $(BIN_DIR)
