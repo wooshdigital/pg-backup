@@ -1,77 +1,53 @@
 import React from 'react';
 import {
-  type StyleProp,
   StyleSheet,
-  TouchableOpacity,
-  type TouchableOpacityProps,
   View,
+  type ViewProps,
+  type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { BorderRadius, Shadows, Spacing } from '../../constants/theme';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-export type CardVariant = 'elevated' | 'outlined' | 'flat';
+type CardElevation = 'none' | 'sm' | 'md' | 'lg' | 'xl';
 
-interface CardProps {
+interface CardProps extends ViewProps {
   children: React.ReactNode;
-  variant?: CardVariant;
+  elevation?: CardElevation;
+  padding?: number;
   style?: StyleProp<ViewStyle>;
-  contentStyle?: StyleProp<ViewStyle>;
-  onPress?: TouchableOpacityProps['onPress'];
-  disabled?: boolean;
-  testID?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Card({
   children,
-  variant = 'elevated',
+  elevation = 'md',
+  padding = Spacing[4],
   style,
-  contentStyle,
-  onPress,
-  disabled = false,
-  testID,
+  ...props
 }: CardProps) {
   const { theme } = useTheme();
 
-  const containerStyle = [
-    styles.container,
-    {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-    },
-    variant === 'elevated' && {
-      ...theme.shadows.md,
-    },
-    variant === 'outlined' && {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    variant === 'flat' && {
-      backgroundColor: theme.colors.surfaceElevated,
-    },
-    style,
-  ];
-
-  if (onPress) {
-    return (
-      <TouchableOpacity
-        style={containerStyle}
-        onPress={onPress}
-        disabled={disabled}
-        activeOpacity={0.7}
-        testID={testID}
-      >
-        <View style={[styles.content, contentStyle]}>{children}</View>
-      </TouchableOpacity>
-    );
-  }
+  const shadowStyle = elevation === 'none' ? {} : Shadows[elevation];
 
   return (
-    <View style={containerStyle} testID={testID}>
-      <View style={[styles.content, contentStyle]}>{children}</View>
+    <View
+      style={[
+        styles.card,
+        shadowStyle,
+        {
+          backgroundColor: theme.colors.cardBackground,
+          borderColor: theme.colors.border,
+          padding,
+        },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
     </View>
   );
 }
@@ -79,10 +55,9 @@ export function Card({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
+  card: {
+    borderRadius: BorderRadius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-  },
-  content: {
-    padding: 16,
   },
 });

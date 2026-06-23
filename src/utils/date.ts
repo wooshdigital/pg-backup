@@ -1,52 +1,86 @@
 /**
- * Format an ISO date string (YYYY-MM-DD) to a human-readable format.
+ * Format an ISO 8601 date string as a human-readable date.
+ * e.g. "2026-06-23T12:00:00Z" => "Jun 23, 2026"
  */
-export function formatDate(isoDateString: string, locale = 'en-US'): string {
-  try {
-    const date = new Date(isoDateString + 'T00:00:00');
-    return date.toLocaleDateString(locale, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  } catch {
-    return isoDateString;
-  }
+export function formatDate(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 /**
- * Format an ISO timestamp to a relative time string (e.g. "2 hours ago").
+ * Format a date range as a readable string.
+ * e.g. "Jun 20 – Jun 27, 2026"
  */
-export function formatRelativeTime(isoTimestamp: string): string {
-  try {
-    const date = new Date(isoTimestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSecs = Math.floor(diffMs / 1000);
-    const diffMins = Math.floor(diffSecs / 60);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
+export function formatDateRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
 
-    if (diffSecs < 60) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return formatDate(isoTimestamp.split('T')[0]);
-  } catch {
-    return isoTimestamp;
-  }
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const sameMonth = sameYear && start.getMonth() === end.getMonth();
+
+  const startStr = start.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: sameYear ? undefined : 'numeric',
+  });
+
+  const endStr = end.toLocaleDateString('en-US', {
+    month: sameMonth ? undefined : 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  return `${startStr} – ${endStr}`;
 }
 
 /**
- * Get the current date as an ISO date string (YYYY-MM-DD).
+ * Return the number of days between two dates.
  */
-export function getTodayISO(): string {
-  return new Date().toISOString().split('T')[0];
+export function daysBetween(startIso: string, endIso: string): number {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.round((end.getTime() - start.getTime()) / msPerDay);
 }
 
 /**
- * Get the current timestamp as an ISO 8601 string.
+ * Return a relative time string like "2 days ago", "just now", etc.
  */
-export function getNowISO(): string {
+export function timeAgo(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+  const diffWeek = Math.floor(diffDay / 7);
+  const diffMonth = Math.floor(diffDay / 30);
+  const diffYear = Math.floor(diffDay / 365);
+
+  if (diffSec < 60) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffWeek < 4) return `${diffWeek}w ago`;
+  if (diffMonth < 12) return `${diffMonth}mo ago`;
+  return `${diffYear}y ago`;
+}
+
+/**
+ * Get today's ISO date string (date-only, no time).
+ */
+export function todayISO(): string {
+  return new Date().toISOString().split('T')[0] ?? '';
+}
+
+/**
+ * Get a full ISO timestamp string.
+ */
+export function nowISO(): string {
   return new Date().toISOString();
 }

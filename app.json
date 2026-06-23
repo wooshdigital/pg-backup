@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SplitWise Travel",
-    "slug": "splitwise-travel",
+    "name": "TripSplit",
+    "slug": "tripsplit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,21 +11,25 @@
       "resizeMode": "contain",
       "backgroundColor": "#6C63FF"
     },
-    "assetBundlePatterns": ["**/*"],
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.splitwisetravel"
+      "bundleIdentifier": "com.tripsplit.app"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#6C63FF"
       },
-      "package": "com.yourcompany.splitwisetravel"
+      "package": "com.tripsplit.app"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": []
+      "favicon": "./assets/icon.png"
+    }
   }
 }

@@ -1,9 +1,43 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { Heading, Body, Caption } from '../components/common/Typography';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
-import { Heading, Body, Caption } from '../components/common/Typography';
+import { Spacing } from '../constants/theme';
+
+// ─── Placeholder Trip Data ────────────────────────────────────────────────────
+
+const PLACEHOLDER_TRIPS = [
+  {
+    id: '1',
+    name: 'Weekend in Barcelona',
+    destination: 'Barcelona, Spain',
+    participants: 4,
+    totalExpenses: '$842.50',
+    status: 'active',
+    emoji: '🇪🇸',
+  },
+  {
+    id: '2',
+    name: 'Tokyo Adventure',
+    destination: 'Tokyo, Japan',
+    participants: 3,
+    totalExpenses: '$2,150.00',
+    status: 'completed',
+    emoji: '🇯🇵',
+  },
+  {
+    id: '3',
+    name: 'NYC Road Trip',
+    destination: 'New York, USA',
+    participants: 6,
+    totalExpenses: '$0.00',
+    status: 'planning',
+    emoji: '🗽',
+  },
+];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -13,68 +47,91 @@ export function TripsScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+      edges={['top', 'left', 'right']}
     >
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: theme.colors.divider }]}>
         <Heading level={2}>My Trips</Heading>
-        <Button
-          title="+ New Trip"
-          onPress={() => {
-            // Wire up navigation in Phase 2
-          }}
-          variant="primary"
-          size="sm"
-        />
+        <Button label="+ New Trip" onPress={() => {}} size="sm" variant="primary" />
       </View>
 
-      {/* Empty State */}
-      <View style={styles.emptyState}>
-        <Body style={styles.emptyEmoji}>🗺️</Body>
-        <Heading level={3} align="center" style={{ marginBottom: 8 }}>
-          No trips yet
-        </Heading>
-        <Body
-          size="sm"
-          color={theme.colors.textSecondary}
-          align="center"
-          style={{ marginBottom: 24, paddingHorizontal: 32 }}
-        >
-          Start your first adventure! Create a trip and invite your travel
-          companions to track expenses together.
-        </Body>
-        <Button
-          title="Create Your First Trip"
-          onPress={() => {
-            // Wire up navigation in Phase 2
-          }}
-          variant="primary"
-        />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Trips List */}
+        {PLACEHOLDER_TRIPS.map((trip) => (
+          <Card key={trip.id} style={styles.tripCard} elevation="md">
+            <View style={styles.tripHeader}>
+              <View style={styles.tripTitleRow}>
+                <Body size="lg" weight="semiBold">
+                  {trip.emoji} {trip.name}
+                </Body>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        trip.status === 'active'
+                          ? theme.colors.success + '20'
+                          : trip.status === 'planning'
+                            ? theme.colors.info + '20'
+                            : theme.colors.surfaceVariant,
+                    },
+                  ]}
+                >
+                  <Caption
+                    color={
+                      trip.status === 'active'
+                        ? theme.colors.success
+                        : trip.status === 'planning'
+                          ? theme.colors.info
+                          : theme.colors.textSecondary
+                    }
+                  >
+                    {trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}
+                  </Caption>
+                </View>
+              </View>
 
-        {/* Preview Card */}
-        <Card
-          variant="outlined"
-          style={styles.previewCard}
-          contentStyle={styles.previewCardContent}
-        >
-          <Caption style={{ marginBottom: 4 }}>PREVIEW</Caption>
-          <Heading level={4} style={{ marginBottom: 4 }}>
-            🇯🇵 Tokyo Adventure
-          </Heading>
-          <Caption color={theme.colors.textTertiary}>
-            Jun 2026 · 4 participants · ¥0 spent
-          </Caption>
-          <View
-            style={[
-              styles.previewDivider,
-              { backgroundColor: theme.colors.border },
-            ]}
-          />
-          <Body size="sm" color={theme.colors.textSecondary}>
-            Your trips will look like this card. Tap to see details, expenses,
-            and balances.
-          </Body>
-        </Card>
-      </View>
+              <Caption muted>{trip.destination}</Caption>
+            </View>
+
+            <View style={[styles.tripMeta, { borderTopColor: theme.colors.divider }]}>
+              <View style={styles.metaItem}>
+                <Caption muted>Participants</Caption>
+                <Body size="sm" weight="semiBold">
+                  {trip.participants} people
+                </Body>
+              </View>
+              <View style={styles.metaItem}>
+                <Caption muted>Total Spent</Caption>
+                <Body size="sm" weight="semiBold" color={theme.colors.primary}>
+                  {trip.totalExpenses}
+                </Body>
+              </View>
+            </View>
+          </Card>
+        ))}
+
+        {/* Empty state placeholder */}
+        {PLACEHOLDER_TRIPS.length === 0 && (
+          <View style={styles.emptyState}>
+            <Heading level={3} align="center">
+              🗺️ No trips yet
+            </Heading>
+            <Body color={theme.colors.textSecondary} align="center" style={styles.emptyBody}>
+              Create your first trip and start splitting expenses with friends.
+            </Body>
+            <Button
+              label="Create your first trip"
+              onPress={() => {}}
+              variant="primary"
+              size="lg"
+            />
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -89,31 +146,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  scroll: {
+    flexGrow: 1,
+    padding: Spacing[4],
+    gap: Spacing[3],
+  },
+  tripCard: {
+    gap: Spacing[0],
+  },
+  tripHeader: {
+    gap: Spacing[1],
+    marginBottom: Spacing[3],
+  },
+  tripTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing[2],
+    flexWrap: 'wrap',
+  },
+  statusBadge: {
+    paddingHorizontal: Spacing[2],
+    paddingVertical: Spacing[0.5],
+    borderRadius: 100,
+  },
+  tripMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: Spacing[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  metaItem: {
+    alignItems: 'center',
+    gap: Spacing[0.5],
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    paddingVertical: Spacing[12],
+    gap: Spacing[4],
   },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  previewCard: {
-    marginTop: 32,
-    width: '100%',
-  },
-  previewCardContent: {
-    padding: 16,
-  },
-  previewDivider: {
-    height: 1,
-    width: '100%',
-    marginVertical: 12,
+  emptyBody: {
+    maxWidth: 280,
   },
 });

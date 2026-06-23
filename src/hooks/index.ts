@@ -1,1 +1,1 @@
-export * from './useAsyncStorage';
+export { useAsyncStorage } from './useAsyncStorage';

@@ -1,146 +1,263 @@
-# Accessible React Component Library
+# ✈️ TripSplit
 
-A production-ready, fully accessible React component library built with TypeScript, following WCAG 2.1 AA guidelines.
+> Split travel expenses with friends & family — effortlessly.
 
-## Accessibility Philosophy
+TripSplit is a React Native mobile application built with Expo that helps groups of travelers track shared expenses, split bills using various methods, and settle debts with minimal transactions.
 
-Every component in this library is designed with accessibility as a first-class concern, not an afterthought. We adhere to the following principles:
+---
 
-1. **Keyboard Navigation**: All interactive components are fully operable via keyboard
-2. **Screen Reader Support**: Proper ARIA roles, states, and properties are applied throughout
-3. **Focus Management**: Visible focus indicators and logical focus order
-4. **Color Contrast**: All color combinations meet WCAG 2.1 AA contrast ratios (4.5:1 for text, 3:1 for UI components)
-5. **Semantic HTML**: We use the right element for the right job
-6. **Error Identification**: Form errors are clearly communicated to all users
+## 📋 Table of Contents
 
-## Installation
+- [Architecture Overview](#architecture-overview)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Development Workflow](#development-workflow)
+- [Phase Roadmap](#phase-roadmap)
+- [Core Domain Types](#core-domain-types)
 
-```bash
-npm install @your-org/accessible-components
-# or
-yarn add @your-org/accessible-components
-# or
-pnpm add @your-org/accessible-components
+---
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      App.tsx                            │
+│         (ThemeProvider + NavigationContainer)           │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+         ┌────────────▼────────────┐
+         │     RootNavigator       │
+         │  (Bottom Tab Navigator) │
+         └──┬──────────┬───────────┘
+            │          │           
+     ┌──────▼──┐  ┌────▼───────┐  ┌──────────────┐
+     │  Home   │  │   Trips    │  │   Settings   │
+     │ Screen  │  │   Stack    │  │    Screen    │
+     └─────────┘  └────┬───────┘  └──────────────┘
+                       │
+              ┌────────▼────────────┐
+              │   TripStackNavigator│
+              │  ┌───────────────┐  │
+              │  │  TripsList    │  │
+              │  │  TripDetail   │  │
+              │  │  TripCreate   │  │
+              │  │  ExpenseCreate│  │
+              │  └───────────────┘  │
+              └─────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│                    State & Data Layer                    │
+│                                                         │
+│  ThemeContext ──── AsyncStorage (persistence)           │
+│  (light/dark)                                           │
+│                                                         │
+│  [Phase 2+] TripContext ── AsyncStorage                 │
+│             ExpenseContext                              │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+---
 
-```tsx
-import { /* components */ } from '@your-org/accessible-components';
-import '@your-org/accessible-components/dist/styles.css';
+## 📁 Project Structure
 
-function App() {
-  return (
-    <div>
-      {/* Your accessible components here */}
-    </div>
-  );
-}
+```
+tripsplit/
+├── App.tsx                     # Root component
+├── app.json                    # Expo configuration
+├── package.json                # Dependencies
+├── tsconfig.json               # TypeScript config (strict)
+├── babel.config.js             # Babel config with path aliases
+├── .eslintrc.js                # ESLint rules
+├── .prettierrc                 # Prettier rules
+├── .husky/
+│   └── pre-commit              # Pre-commit hooks
+├── assets/
+│   ├── icon.png                # App icon
+│   └── splash.png              # Splash screen
+└── src/
+    ├── index.ts                # Public API barrel export
+    ├── types/
+    │   └── index.ts            # Core domain interfaces
+    ├── constants/
+    │   ├── theme.ts            # Colors, spacing, typography tokens
+    │   ├── routes.ts           # Route name enums
+    │   └── index.ts
+    ├── context/
+    │   ├── ThemeContext.tsx     # Light/dark theme provider + hook
+    │   └── index.ts
+    ├── navigation/
+    │   ├── RootNavigator.tsx   # Bottom tab navigator
+    │   ├── TripStackNavigator.tsx
+    │   └── index.ts
+    ├── screens/
+    │   ├── HomeScreen.tsx      # App home / landing
+    │   ├── TripsScreen.tsx     # Trip list
+    │   ├── SettingsScreen.tsx  # Settings / preferences
+    │   └── index.ts
+    ├── components/
+    │   ├── common/
+    │   │   ├── Card.tsx        # Reusable card container
+    │   │   ├── Button.tsx      # Themed button component
+    │   │   └── Typography.tsx  # Heading, Body, Caption, Label
+    │   └── index.ts
+    ├── hooks/
+    │   ├── useAsyncStorage.ts  # AsyncStorage CRUD hook
+    │   └── index.ts
+    └── utils/
+        ├── currency.ts         # Currency formatting helpers
+        ├── date.ts             # Date formatting helpers
+        ├── id.ts               # UUID generation
+        └── index.ts
 ```
 
-## Development
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | React Native (Expo Managed) |
+| Language | TypeScript 5 (strict mode) |
+| Navigation | React Navigation v6 (Stack + Bottom Tabs) |
+| Theming | Custom ThemeContext + React Native StyleSheet |
+| Persistence | AsyncStorage (Phase 1) |
+| Linting | ESLint + TypeScript-ESLint |
+| Formatting | Prettier |
+| Git Hooks | Husky + lint-staged |
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js >= 18
-- pnpm >= 8
+- Node.js 18+
+- npm or yarn
+- Expo CLI (`npm install -g expo-cli`)
+- iOS Simulator (macOS) or Android Emulator — or the **Expo Go** app on a physical device
 
-### Setup
+### Installation
 
 ```bash
-pnpm install
+# 1. Clone the repository
+git clone https://github.com/your-org/tripsplit.git
+cd tripsplit
+
+# 2. Install dependencies
+npm install
+
+# 3. Set up Husky git hooks
+npm run prepare
+
+# 4. Start the development server
+npm start
 ```
+
+### Running on a device
+
+```bash
+# iOS Simulator
+npm run ios
+
+# Android Emulator
+npm run android
+
+# Web (preview only)
+npm run web
+```
+
+---
+
+## 🔧 Development Workflow
 
 ### Scripts
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start Vite development server |
-| `pnpm build` | Build library for production |
-| `pnpm test` | Run unit tests with Vitest |
-| `pnpm test:watch` | Run tests in watch mode |
-| `pnpm test:coverage` | Run tests with coverage report |
-| `pnpm storybook` | Start Storybook development server |
-| `pnpm build-storybook` | Build static Storybook site |
-| `pnpm lint` | Run ESLint |
-| `pnpm lint:fix` | Run ESLint with auto-fix |
-| `pnpm type-check` | Run TypeScript type checking |
+| `npm start` | Start Expo dev server |
+| `npm run lint` | Run ESLint (with auto-fix) |
+| `npm run lint:check` | Run ESLint (no fix, for CI) |
+| `npm run type-check` | Run TypeScript compiler check |
+| `npm run format` | Format all files with Prettier |
+| `npm run format:check` | Check formatting (for CI) |
+| `npm test` | Run Jest tests |
 
-### Project Structure
+### Pre-commit Hooks
 
-```
-src/
-├── components/        # UI components
-│   └── common/        # Shared/primitive components
-├── hooks/             # Custom React hooks
-│   ├── useId.ts       # Stable ID generation
-│   └── useFocusVisible.ts  # Focus visibility detection
-├── tokens/            # Design tokens (CSS custom properties)
-│   ├── colors.css     # Color palette
-│   ├── spacing.css    # Spacing scale
-│   ├── typography.css # Typography tokens
-│   ├── focus.css      # Focus ring styles
-│   └── index.css      # Barrel import
-├── utils/             # Utility functions
-│   ├── aria.ts        # ARIA helper utilities
-│   ├── keys.ts        # Keyboard event constants
-│   └── classNames.ts  # Class name utility
-├── types.ts           # Shared TypeScript types
-├── index.ts           # Main library exports
-└── test-setup.ts      # Test configuration
-.storybook/            # Storybook configuration
+Every commit automatically runs:
+1. **lint-staged** — ESLint + Prettier on staged files
+2. **tsc --noEmit** — TypeScript type checking
+
+### Path Aliases
+
+Use `@/`, `@screens/`, `@components/`, etc. instead of relative paths:
+
+```ts
+// ❌ Don't do this
+import { Button } from '../../components/common/Button';
+
+// ✅ Do this
+import { Button } from '@components/common/Button';
 ```
 
-## Contributing
+---
 
-### Code Style
+## 🗺️ Phase Roadmap
 
-- TypeScript strict mode is enforced
-- ESLint with `eslint-plugin-jsx-a11y` rules set to error
-- All components must pass automated accessibility tests
-- Every component requires a Storybook story
+| Phase | Description | Status |
+|-------|-------------|--------|
+| **Phase 1** | Foundation & Project Setup | ✅ Current |
+| **Phase 2** | Trip CRUD & AsyncStorage | 🔜 Planned |
+| **Phase 3** | Expense Tracking | 🔜 Planned |
+| **Phase 4** | Split Logic Engine | 🔜 Planned |
+| **Phase 5** | Settlement & Balances | 🔜 Planned |
+| **Phase 6** | Polish & Animations | 🔜 Planned |
+| **Phase 7** | Backend / Sync | 🔜 Planned |
 
-### Testing Requirements
+---
 
-All components must have:
-1. Unit tests with `@testing-library/react`
-2. Accessibility tests with `jest-axe`
-3. Keyboard interaction tests
-4. A Storybook story with accessibility addon enabled
+## 📐 Core Domain Types
 
-### Accessibility Testing
+```ts
+interface Trip {
+  id: string;
+  name: string;
+  destination?: string;
+  startDate?: string;    // ISO 8601
+  endDate?: string;      // ISO 8601
+  currency: CurrencyCode;
+  status: 'planning' | 'active' | 'completed' | 'archived';
+  participants: Participant[];
+  expenses: Expense[];
+}
 
-```tsx
-import { render } from '@testing-library/react';
-import { axe, toHaveNoViolations } from 'jest-axe';
+interface Expense {
+  id: string;
+  tripId: string;
+  title: string;
+  amount: number;        // minor units (cents)
+  currency: CurrencyCode;
+  category: ExpenseCategory;
+  paidBy: string;        // participantId
+  split: Split;
+}
 
-expect.extend(toHaveNoViolations);
+interface Split {
+  id: string;
+  method: 'equal' | 'exact' | 'percentage' | 'shares';
+  shares: SplitShare[];
+}
 
-test('component has no accessibility violations', async () => {
-  const { container } = render(<YourComponent />);
-  const results = await axe(container);
-  expect(results).toHaveNoViolations();
-});
+interface Participant {
+  id: string;
+  name: string;
+  email?: string;
+}
 ```
 
-### Commit Convention
+---
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
+## 📄 License
 
-- `feat:` New feature
-- `fix:` Bug fix
-- `a11y:` Accessibility improvement
-- `docs:` Documentation changes
-- `test:` Test additions/changes
-- `chore:` Maintenance tasks
-
-## Browser Support
-
-- Chrome/Edge 88+
-- Firefox 78+
-- Safari 14+
-- iOS Safari 14+
-
-## License
-
-MIT
+MIT © 2026 TripSplit

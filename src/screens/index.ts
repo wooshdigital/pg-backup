@@ -1,3 +1,3 @@
-export * from './HomeScreen';
-export * from './TripsScreen';
-export * from './SettingsScreen';
+export { HomeScreen } from './HomeScreen';
+export { TripsScreen } from './TripsScreen';
+export { SettingsScreen } from './SettingsScreen';

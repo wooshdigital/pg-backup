@@ -8,23 +8,22 @@ import React, {
 } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { type Theme, createTheme } from '../constants/theme';
+import { DarkTheme, LightTheme } from '../constants/theme';
+import type { Theme, ThemeMode } from '../constants/theme';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Storage Key ─────────────────────────────────────────────────────────────
 
-export type ThemeMode = 'light' | 'dark' | 'system';
+const THEME_STORAGE_KEY = '@tripsplit/theme_mode';
+
+// ─── Context Types ────────────────────────────────────────────────────────────
 
 interface ThemeContextValue {
   theme: Theme;
   themeMode: ThemeMode;
   isDark: boolean;
-  setThemeMode: (mode: ThemeMode) => Promise<void>;
-  toggleTheme: () => Promise<void>;
+  toggleTheme: () => void;
+  setThemeMode: (mode: ThemeMode) => void;
 }
-
-// ─── Storage Key ─────────────────────────────────────────────────────────────
-
-const THEME_MODE_KEY = '@splitwise_travel/theme_mode';
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
@@ -38,62 +37,64 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const systemColorScheme = useColorScheme();
-  const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(
+    systemColorScheme === 'dark' ? 'dark' : 'light',
+  );
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load persisted theme preference on mount
   useEffect(() => {
     const loadTheme = async () => {
       try {
-        const stored = await AsyncStorage.getItem(THEME_MODE_KEY);
-        if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === 'light' || stored === 'dark') {
           setThemeModeState(stored);
+        } else if (systemColorScheme) {
+          setThemeModeState(systemColorScheme === 'dark' ? 'dark' : 'light');
         }
       } catch (error) {
-        console.warn('Failed to load theme preference:', error);
+        console.warn('[ThemeContext] Failed to load theme preference:', error);
       } finally {
         setIsLoaded(true);
       }
     };
 
     void loadTheme();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isDark = useMemo(() => {
-    if (themeMode === 'system') {
-      return systemColorScheme === 'dark';
-    }
-    return themeMode === 'dark';
-  }, [themeMode, systemColorScheme]);
-
-  const theme = useMemo(() => createTheme(isDark), [isDark]);
-
+  // Persist theme change
   const setThemeMode = useCallback(async (mode: ThemeMode) => {
     try {
-      await AsyncStorage.setItem(THEME_MODE_KEY, mode);
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
       setThemeModeState(mode);
     } catch (error) {
-      console.warn('Failed to save theme preference:', error);
+      console.warn('[ThemeContext] Failed to persist theme preference:', error);
+      setThemeModeState(mode);
     }
   }, []);
 
-  const toggleTheme = useCallback(async () => {
-    const next: ThemeMode = isDark ? 'light' : 'dark';
-    await setThemeMode(next);
-  }, [isDark, setThemeMode]);
+  const toggleTheme = useCallback(() => {
+    void setThemeMode(themeMode === 'light' ? 'dark' : 'light');
+  }, [themeMode, setThemeMode]);
 
-  const value = useMemo<ThemeContextValue>(
+  const theme: Theme = useMemo(
+    () => (themeMode === 'dark' ? DarkTheme : LightTheme),
+    [themeMode],
+  );
+
+  const value: ThemeContextValue = useMemo(
     () => ({
       theme,
       themeMode,
-      isDark,
-      setThemeMode,
+      isDark: themeMode === 'dark',
       toggleTheme,
+      setThemeMode: (mode: ThemeMode) => void setThemeMode(mode),
     }),
-    [theme, themeMode, isDark, setThemeMode, toggleTheme],
+    [theme, themeMode, toggleTheme, setThemeMode],
   );
 
-  // Prevent flash of incorrect theme while loading persisted preference
+  // Prevent flash of wrong theme
   if (!isLoaded) {
     return null;
   }
@@ -105,8 +106,11 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
 export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
 }
+
+export type { ThemeContextValue };
+export { ThemeContext };

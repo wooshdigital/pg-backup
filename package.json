@@ -1,89 +1,60 @@
 {
-  "name": "@your-org/accessible-components",
+  "name": "tripsplit",
   "version": "1.0.0",
-  "description": "A production-ready, fully accessible React component library",
-  "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
-    },
-    "./styles.css": "./dist/styles.css"
-  },
-  "files": [
-    "dist"
-  ],
+  "main": "node_modules/expo/AppEntry.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && rollup -c rollup.config.ts --configPlugin @rollup/plugin-typescript",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build",
-    "lint": "eslint . --ext .ts,.tsx",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "eslint . --ext .ts,.tsx --fix",
+    "lint:check": "eslint . --ext .ts,.tsx",
     "type-check": "tsc --noEmit",
-    "prepublishOnly": "pnpm build"
-  },
-  "keywords": [
-    "react",
-    "accessibility",
-    "a11y",
-    "wcag",
-    "components",
-    "typescript",
-    "aria"
-  ],
-  "author": "Your Organization",
-  "license": "MIT",
-  "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
-  },
-  "devDependencies": {
-    "@axe-core/react": "^4.9.1",
-    "@rollup/plugin-commonjs": "^25.0.7",
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-typescript": "^11.1.6",
-    "@storybook/addon-a11y": "^8.3.5",
-    "@storybook/addon-docs": "^8.3.5",
-    "@storybook/addon-essentials": "^8.3.5",
-    "@storybook/addon-interactions": "^8.3.5",
-    "@storybook/react": "^8.3.5",
-    "@storybook/react-vite": "^8.3.5",
-    "@storybook/test": "^8.3.5",
-    "@testing-library/jest-dom": "^6.4.6",
-    "@testing-library/react": "^16.0.0",
-    "@testing-library/user-event": "^14.5.2",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@typescript-eslint/eslint-plugin": "^7.13.0",
-    "@typescript-eslint/parser": "^7.13.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "@vitest/coverage-v8": "^1.6.0",
-    "axe-core": "^4.9.1",
-    "eslint": "^8.57.0",
-    "eslint-plugin-jsx-a11y": "^6.8.0",
-    "eslint-plugin-react": "^7.34.3",
-    "eslint-plugin-react-hooks": "^4.6.2",
-    "jest-axe": "^9.0.0",
-    "jsdom": "^24.1.0",
-    "rollup": "^4.18.0",
-    "rollup-plugin-copy": "^3.5.0",
-    "rollup-plugin-peer-deps-external": "^2.2.4",
-    "rollup-plugin-postcss": "^4.0.2",
-    "storybook": "^8.3.5",
-    "tslib": "^2.6.3",
-    "typescript": "^5.4.5",
-    "vite": "^5.3.1",
-    "vitest": "^1.6.0"
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.{ts,tsx,js,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.{ts,tsx,js,json}\"",
+    "test": "jest",
+    "prepare": "husky install"
   },
   "dependencies": {
-    "clsx": "^2.1.1"
-  }
+    "@react-native-async-storage/async-storage": "1.18.2",
+    "@react-navigation/bottom-tabs": "^6.5.11",
+    "@react-navigation/native": "^6.1.9",
+    "@react-navigation/native-stack": "^6.9.17",
+    "expo": "~49.0.15",
+    "expo-status-bar": "~1.6.0",
+    "react": "18.2.0",
+    "react-native": "0.72.6",
+    "react-native-safe-area-context": "4.6.3",
+    "react-native-screens": "~3.22.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@types/react": "~18.2.14",
+    "@types/react-native": "~0.72.2",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-native": "^4.0.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^14.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.1.3"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "jest": {
+    "preset": "jest-expo"
+  },
+  "private": true
 }
