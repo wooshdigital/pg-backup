@@ -1,81 +1,119 @@
+// Command worker is the main entry point for the pgdumper worker process.
+// It reads a configuration file and runs pg_dump, streaming the output to a
+// local file.
 package main
 
 import (
+	"context"
+	"flag"
+	"fmt"
+	"log/slog"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
 
-	"github.com/org/pg-s3-backup/internal/config"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/yourorg/pgdumper/internal/config"
+	"github.com/yourorg/pgdumper/internal/dumper"
+	"github.com/yourorg/pgdumper/internal/tempfile"
 )
 
-const banner = `
-██████╗  ██████╗       ███████╗██████╗      ██████╗  █████╗  ██████╗██╗  ██╗██╗   ██╗██████╗
-██╔══██╗██╔════╝       ██╔════╝╚════██╗     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██║   ██║██╔══██╗
-██████╔╝██║  ███╗█████╗███████╗ █████╔╝     ██████╔╝███████║██║     █████╔╝ ██║   ██║██████╔╝
-██╔═══╝ ██║   ██║╚════╝╚════██║ ╚═══██╗     ██╔══██╗██╔══██║██║     ██╔═██╗ ██║   ██║██╔═══╝
-██║     ╚██████╔╝      ███████║██████╔╝     ██████╔╝██║  ██║╚██████╗██║  ██╗╚██████╔╝██║
-╚═╝      ╚═════╝       ╚══════╝╚═════╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝
-`
-
 func main() {
-	// Bootstrap a console logger for startup before config is loaded
-	consoleWriter := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05Z07:00"}
-	bootstrapLogger := zerolog.New(consoleWriter).With().Timestamp().Logger()
+	cfgPath := flag.String("config", "config.yaml", "path to configuration file")
+	flag.Parse()
 
-	bootstrapLogger.Info().Msg("pg-s3-backup starting up...")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
 
-	// Load and validate configuration
-	cfg, err := config.Load()
-	if err != nil {
-		bootstrapLogger.Fatal().Err(err).Msg("failed to load configuration")
+	if err := run(*cfgPath, logger); err != nil {
+		logger.Error("fatal error", "error", err)
+		os.Exit(1)
 	}
-
-	// Configure the global logger based on config
-	logger := setupLogger(cfg)
-
-	// Print startup banner
-	logger.Info().Msg(banner)
-
-	// Log configuration summary
-	logConfigSummary(logger, cfg)
-
-	logger.Info().Msg("configuration validated successfully — ready to run")
-	os.Exit(0)
 }
 
-// setupLogger configures zerolog based on the loaded config.
-func setupLogger(cfg *config.Config) zerolog.Logger {
-	level, err := zerolog.ParseLevel(cfg.LogLevel)
+func run(cfgPath string, logger *slog.Logger) error {
+	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		level = zerolog.InfoLevel
+		return fmt.Errorf("loading config: %w", err)
 	}
 
-	zerolog.SetGlobalLevel(level)
-
-	if cfg.LogLevel == "debug" || cfg.LogLevel == "trace" {
-		// Pretty console output for development
-		consoleWriter := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05Z07:00"}
-		return zerolog.New(consoleWriter).With().Timestamp().Caller().Logger()
+	// Ensure output directory exists.
+	if err := os.MkdirAll(cfg.OutputDir, 0o750); err != nil {
+		return fmt.Errorf("creating output dir %q: %w", cfg.OutputDir, err)
 	}
 
-	// Structured JSON for production
-	return zerolog.New(os.Stderr).With().Timestamp().Logger()
+	// Handle graceful shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	return doDump(ctx, cfg, logger)
 }
 
-// logConfigSummary logs a human-readable summary of the active configuration.
-func logConfigSummary(logger zerolog.Logger, cfg *config.Config) {
-	// Mask the DSN to avoid leaking credentials in logs
-	maskedDSN := config.MaskDSN(cfg.DatabaseDSN)
+func doDump(ctx context.Context, cfg *config.Config, logger *slog.Logger) error {
+	// Create a temp file in the output directory. We'll rename it on success
+	// to ensure we never leave a partial dump with the final name.
+	tf, err := tempfile.NewInDir(cfg.OutputDir, "pgdump-inprogress-*.tmp")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	// Clean up temp file if we don't make it to the rename step.
+	success := false
+	defer func() {
+		if !success {
+			tf.CleanupWithLog(func(msg string) { logger.Warn(msg) })
+		}
+	}()
 
-	logger.Info().
-		Str("database_dsn", maskedDSN).
-		Str("s3_bucket", cfg.S3Bucket).
-		Str("s3_region", cfg.S3Region).
-		Str("s3_prefix", cfg.S3Prefix).
-		Str("schedule", cfg.Schedule).
-		Int("retention_days", cfg.RetentionDays).
-		Str("log_level", cfg.LogLevel).
-		Msg("active configuration")
+	opts := []dumper.Option{
+		dumper.WithExtraArgs(cfg.PgDump.ExtraArgs...),
+	}
+	if cfg.PgDump.BinaryPath != "" {
+		opts = append(opts, dumper.WithPgDumpPath(cfg.PgDump.BinaryPath))
+	}
+	if cfg.PgDump.Format != "" {
+		opts = append(opts, dumper.WithExtraArgs("--format="+cfg.PgDump.Format))
+	}
 
-	log.Logger = logger
+	d := dumper.NewPgDumper(opts...)
+
+	logger.Info("starting dump", "dsn_host", dsnHost(cfg.DSN))
+
+	result, err := d.Dump(ctx, cfg.DSN, tf.File())
+	if err != nil {
+		return fmt.Errorf("dump failed: %w", err)
+	}
+
+	if err := tf.File().Sync(); err != nil {
+		return fmt.Errorf("syncing dump file: %w", err)
+	}
+
+	finalName := filepath.Join(cfg.OutputDir, dumpFileName())
+	if err := os.Rename(tf.Name(), finalName); err != nil {
+		return fmt.Errorf("renaming dump file to %q: %w", finalName, err)
+	}
+	success = true
+
+	logger.Info("dump complete",
+		"file", finalName,
+		"bytes", result.BytesWritten,
+		"duration", result.Duration,
+	)
+	return nil
+}
+
+// dumpFileName returns a timestamped file name for the dump.
+func dumpFileName() string {
+	return fmt.Sprintf("pgdump-%s.dump", time.Now().UTC().Format("2006-01-02T15-04-05Z"))
+}
+
+// dsnHost extracts a safe-to-log host identifier from a DSN string.
+// This avoids logging credentials.
+func dsnHost(dsn string) string {
+	p, err := dumper.ParseDSN(dsn)
+	if err != nil {
+		return "(unknown)"
+	}
+	return fmt.Sprintf("%s:%d", p.Host, p.Port)
 }

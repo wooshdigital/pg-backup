@@ -1,9 +1,7 @@
-// Package dumper provides PostgreSQL dump functionality.
 package dumper
 
 import (
 	"fmt"
-	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -12,58 +10,63 @@ import (
 // ConnParams holds individual connection parameters extracted from a DSN.
 type ConnParams struct {
 	Host     string
-	Port     string
+	Port     int
 	User     string
 	Password string
 	DBName   string
 	SSLMode  string
-	Extra    map[string]string
+	// Extra key=value options not explicitly mapped above
+	Extra map[string]string
 }
 
-// ParseDSN parses a PostgreSQL DSN (connection string) and returns individual
-// connection parameters. It supports both URL format (postgres://...) and
-// key=value format (host=... port=... ...).
-func ParseDSN(dsn string) (*ConnParams, error) {
+// DefaultPort is the default PostgreSQL port.
+const DefaultPort = 5432
+
+// ParseDSN parses a PostgreSQL connection string (URL or key=value format)
+// and returns a ConnParams struct.
+//
+// Supported formats:
+//
+//	postgres://user:pass@host:port/dbname?sslmode=disable
+//	postgresql://user:pass@host:port/dbname?sslmode=disable
+//	host=localhost port=5432 user=postgres password=secret dbname=mydb sslmode=disable
+func ParseDSN(dsn string) (ConnParams, error) {
 	dsn = strings.TrimSpace(dsn)
 	if dsn == "" {
-		return nil, fmt.Errorf("empty DSN")
+		return ConnParams{}, fmt.Errorf("dsn is empty")
 	}
 
 	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
 		return parseURLDSN(dsn)
 	}
-
-	return parseKeyValueDSN(dsn)
+	return parseKVDSN(dsn)
 }
 
-// parseURLDSN parses a postgres:// or postgresql:// URL.
-func parseURLDSN(dsn string) (*ConnParams, error) {
+func parseURLDSN(dsn string) (ConnParams, error) {
 	u, err := url.Parse(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("invalid DSN URL: %w", err)
+		return ConnParams{}, fmt.Errorf("parsing DSN URL: %w", err)
 	}
 
-	params := &ConnParams{
+	params := ConnParams{
+		Host:  u.Hostname(),
 		Extra: make(map[string]string),
 	}
 
-	// Host and port
-	host := u.Hostname()
-	port := u.Port()
-
-	if host == "" {
-		host = "localhost"
-	}
-	if port == "" {
-		port = "5432"
+	if params.Host == "" {
+		params.Host = "localhost"
 	}
 
-	params.Host = host
-	params.Port = port
-
-	// Validate port is numeric
-	if _, err := strconv.Atoi(port); err != nil {
-		return nil, fmt.Errorf("invalid port %q in DSN: %w", port, err)
+	// Port
+	portStr := u.Port()
+	if portStr == "" {
+		params.Port = DefaultPort
+	} else {
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return ConnParams{}, fmt.Errorf("invalid port %q: %w", portStr, err)
+		}
+		params.Port = port
 	}
 
 	// User info
@@ -72,198 +75,136 @@ func parseURLDSN(dsn string) (*ConnParams, error) {
 		params.Password, _ = u.User.Password()
 	}
 
-	// Database name (path starts with /)
-	if u.Path != "" {
-		params.DBName = strings.TrimPrefix(u.Path, "/")
-	}
+	// Database name: strip leading "/"
+	params.DBName = strings.TrimPrefix(u.Path, "/")
 
-	// Query parameters
-	q := u.Query()
-	if sslmode := q.Get("sslmode"); sslmode != "" {
-		params.SSLMode = sslmode
-		q.Del("sslmode")
-	}
-
-	for k, vals := range q {
-		if len(vals) > 0 {
-			params.Extra[k] = vals[0]
+	// Query params
+	for key, vals := range u.Query() {
+		if len(vals) == 0 {
+			continue
+		}
+		val := vals[0]
+		switch strings.ToLower(key) {
+		case "sslmode":
+			params.SSLMode = val
+		default:
+			params.Extra[key] = val
 		}
 	}
 
 	return params, nil
 }
 
-// parseKeyValueDSN parses a key=value style DSN string.
-// Values can be quoted with single quotes; a literal single quote is escaped as \'.
-func parseKeyValueDSN(dsn string) (*ConnParams, error) {
-	params := &ConnParams{
+func parseKVDSN(dsn string) (ConnParams, error) {
+	params := ConnParams{
+		Host:  "localhost",
+		Port:  DefaultPort,
 		Extra: make(map[string]string),
 	}
 
-	kv, err := tokenizeKeyValue(dsn)
+	// Tokenise respecting single-quoted values
+	tokens, err := tokenizeKV(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("invalid key=value DSN: %w", err)
+		return ConnParams{}, fmt.Errorf("tokenizing DSN: %w", err)
 	}
 
-	for k, v := range kv {
-		switch k {
-		case "host":
-			params.Host = v
-		case "port":
-			params.Port = v
-		case "user":
-			params.User = v
-		case "password":
-			params.Password = v
-		case "dbname":
-			params.DBName = v
-		case "sslmode":
-			params.SSLMode = v
-		default:
-			params.Extra[k] = v
+	for _, token := range tokens {
+		idx := strings.IndexByte(token, '=')
+		if idx < 0 {
+			return ConnParams{}, fmt.Errorf("invalid key=value token %q", token)
 		}
-	}
+		key := strings.TrimSpace(token[:idx])
+		val := strings.TrimSpace(token[idx+1:])
+		// Strip surrounding single quotes
+		if len(val) >= 2 && val[0] == '\'' && val[len(val)-1] == '\'' {
+			val = val[1 : len(val)-1]
+			val = strings.ReplaceAll(val, `\'`, `'`)
+			val = strings.ReplaceAll(val, `\\`, `\`)
+		}
 
-	// Apply defaults
-	if params.Host == "" {
-		params.Host = "localhost"
-	}
-	if params.Port == "" {
-		params.Port = "5432"
-	}
-
-	if params.Port != "" {
-		if _, err := strconv.Atoi(params.Port); err != nil {
-			return nil, fmt.Errorf("invalid port %q in DSN: %w", params.Port, err)
+		switch key {
+		case "host":
+			params.Host = val
+		case "port":
+			port, err := strconv.Atoi(val)
+			if err != nil {
+				return ConnParams{}, fmt.Errorf("invalid port %q: %w", val, err)
+			}
+			params.Port = port
+		case "user":
+			params.User = val
+		case "password":
+			params.Password = val
+		case "dbname":
+			params.DBName = val
+		case "sslmode":
+			params.SSLMode = val
+		default:
+			params.Extra[key] = val
 		}
 	}
 
 	return params, nil
 }
 
-// tokenizeKeyValue parses a libpq-style key=value connection string.
-// It handles single-quoted values and backslash escaping within quotes.
-func tokenizeKeyValue(s string) (map[string]string, error) {
-	result := make(map[string]string)
+// tokenizeKV splits a libpq key=value connection string into individual
+// key=value tokens, respecting single-quoted values that may contain spaces.
+func tokenizeKV(s string) ([]string, error) {
+	var tokens []string
+	var cur strings.Builder
+	inQuote := false
 	i := 0
-	n := len(s)
-
-	for i < n {
-		// Skip whitespace
-		for i < n && isSpace(s[i]) {
+	for i < len(s) {
+		ch := s[i]
+		switch {
+		case ch == '\'' && !inQuote:
+			inQuote = true
+			cur.WriteByte(ch)
 			i++
-		}
-		if i >= n {
-			break
-		}
-
-		// Read key
-		keyStart := i
-		for i < n && s[i] != '=' && !isSpace(s[i]) {
-			i++
-		}
-		key := s[keyStart:i]
-		if key == "" {
-			return nil, fmt.Errorf("expected key at position %d", keyStart)
-		}
-
-		// Skip whitespace before '='
-		for i < n && isSpace(s[i]) {
-			i++
-		}
-		if i >= n || s[i] != '=' {
-			return nil, fmt.Errorf("expected '=' after key %q at position %d", key, i)
-		}
-		i++ // consume '='
-
-		// Skip whitespace before value
-		for i < n && isSpace(s[i]) {
-			i++
-		}
-
-		// Read value
-		var value string
-		if i < n && s[i] == '\'' {
-			// Quoted value
-			i++ // skip opening quote
-			var sb strings.Builder
-			for i < n {
-				if s[i] == '\'' {
-					i++ // skip closing quote
-					break
-				}
-				if s[i] == '\\' && i+1 < n {
-					i++
-					sb.WriteByte(s[i])
-					i++
-					continue
-				}
-				sb.WriteByte(s[i])
+		case ch == '\'' && inQuote:
+			// Check for escaped quote
+			if i+1 < len(s) && s[i+1] == '\'' {
+				cur.WriteString(`\'`)
+				i += 2
+			} else {
+				inQuote = false
+				cur.WriteByte(ch)
 				i++
 			}
-			value = sb.String()
-		} else {
-			// Unquoted value — read until whitespace
-			valueStart := i
-			for i < n && !isSpace(s[i]) {
-				i++
+		case (ch == ' ' || ch == '\t' || ch == '\n') && !inQuote:
+			if cur.Len() > 0 {
+				tokens = append(tokens, cur.String())
+				cur.Reset()
 			}
-			value = s[valueStart:i]
-		}
-
-		result[key] = value
-	}
-
-	return result, nil
-}
-
-func isSpace(c byte) bool {
-	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
-}
-
-// BuildPgDumpArgs converts ConnParams into pg_dump command-line flags.
-// The password is intentionally omitted (should be passed via PGPASSWORD env var).
-func (p *ConnParams) BuildPgDumpArgs(dbname string) []string {
-	var args []string
-
-	if p.Host != "" {
-		// If host looks like a socket directory path, use -h for that too.
-		if strings.HasPrefix(p.Host, "/") || !isHostname(p.Host) {
-			args = append(args, "-h", p.Host)
-		} else {
-			args = append(args, "-h", p.Host)
+			i++
+		default:
+			cur.WriteByte(ch)
+			i++
 		}
 	}
-
-	if p.Port != "" && p.Port != "5432" {
-		args = append(args, "-p", p.Port)
-	} else if p.Port == "5432" {
-		// Still pass it explicitly for clarity
-		args = append(args, "-p", p.Port)
+	if inQuote {
+		return nil, fmt.Errorf("unterminated single quote in DSN")
 	}
+	if cur.Len() > 0 {
+		tokens = append(tokens, cur.String())
+	}
+	return tokens, nil
+}
 
+// ToPgDumpArgs converts ConnParams into command-line flags suitable for pg_dump.
+// The password is intentionally excluded (should be passed via PGPASSWORD env var).
+func (p ConnParams) ToPgDumpArgs(extraArgs ...string) []string {
+	args := []string{
+		"--host", p.Host,
+		"--port", strconv.Itoa(p.Port),
+	}
 	if p.User != "" {
-		args = append(args, "-U", p.User)
+		args = append(args, "--username", p.User)
 	}
-
-	// Use the provided dbname override if non-empty, otherwise fall back to parsed dbname
-	target := dbname
-	if target == "" {
-		target = p.DBName
+	if p.DBName != "" {
+		args = append(args, "--dbname", p.DBName)
 	}
-	if target != "" {
-		args = append(args, "-d", target)
-	}
-
+	// No --password flag; pg_dump reads PGPASSWORD from environment.
+	args = append(args, extraArgs...)
 	return args
-}
-
-// isHostname returns true if the string looks like a hostname or IP rather than a path.
-func isHostname(s string) bool {
-	// If it parses as an IP, it's a host
-	if net.ParseIP(s) != nil {
-		return true
-	}
-	// If it contains dots or letters mixed with digits, treat as hostname
-	return !strings.HasPrefix(s, "/")
 }

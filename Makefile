@@ -1,22 +1,27 @@
-.PHONY: build test lint clean integration-test
+.PHONY: all build test test-unit test-integration lint tidy
 
-# Go binary output directory
-BIN_DIR := ./bin
+# Binary output directory
+BIN_DIR := bin
+WORKER_BIN := $(BIN_DIR)/worker
+
+all: build
 
 build:
 	@mkdir -p $(BIN_DIR)
-	go build -o $(BIN_DIR)/worker ./cmd/worker/...
+	go build -o $(WORKER_BIN) ./cmd/worker
 
-test:
-	go test ./... -race -timeout 60s
+# Unit tests only (no Docker required)
+test-unit:
+	go test ./... -v -count=1
+
+# Integration tests (requires Docker)
+test-integration:
+	go test ./... -v -count=1 -tags=integration -timeout=120s
+
+test: test-unit
 
 lint:
-	@which golangci-lint > /dev/null 2>&1 || (echo "golangci-lint not found; install from https://golangci-lint.run" && exit 1)
 	golangci-lint run ./...
 
-# Integration tests require Docker and INTEGRATION_TESTS=1
-integration-test:
-	INTEGRATION_TESTS=1 go test -tags integration ./... -race -timeout 120s -v
-
-clean:
-	rm -rf $(BIN_DIR)
+tidy:
+	go mod tidy

@@ -1,109 +1,137 @@
-package tempfile
+package tempfile_test
 
 import (
+	"bytes"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yourorg/pgdumper/internal/tempfile"
 )
 
 func TestNew(t *testing.T) {
-	tf, err := New("", "test")
+	tf, err := tempfile.New("test-*.tmp")
 	if err != nil {
-		t.Fatalf("New() error: %v", err)
+		t.Fatalf("New: unexpected error: %v", err)
 	}
-	defer tf.Discard()
+	defer tf.Cleanup()
 
-	if tf.Path() == "" {
-		t.Error("Path() should not be empty")
+	if tf.Name() == "" {
+		t.Error("Name() should not be empty")
 	}
-	if !strings.Contains(filepath.Base(tf.Path()), "test") {
-		t.Errorf("Path() = %q, want it to contain 'test'", tf.Path())
+	if !strings.HasSuffix(tf.Name(), ".tmp") {
+		t.Errorf("expected .tmp suffix, got %q", tf.Name())
 	}
 
-	// File should exist
-	if _, err := os.Stat(tf.Path()); err != nil {
-		t.Errorf("temp file should exist: %v", err)
+	// Verify the file exists on disk.
+	if _, err := os.Stat(tf.Name()); err != nil {
+		t.Errorf("file should exist: %v", err)
 	}
 }
 
-func TestTempFile_Write(t *testing.T) {
-	tf, err := New("", "test")
+func TestNewInDir(t *testing.T) {
+	dir := t.TempDir()
+	tf, err := tempfile.NewInDir(dir, "sub-*.bin")
 	if err != nil {
-		t.Fatalf("New() error: %v", err)
+		t.Fatalf("NewInDir: unexpected error: %v", err)
 	}
-	defer tf.Discard()
+	defer tf.Cleanup()
 
-	data := []byte("hello, world")
-	n, err := tf.Write(data)
-	if err != nil {
-		t.Fatalf("Write() error: %v", err)
-	}
-	if n != len(data) {
-		t.Errorf("Write() = %d, want %d", n, len(data))
-	}
-
-	size, err := tf.Size()
-	if err != nil {
-		t.Fatalf("Size() error: %v", err)
-	}
-	if size != int64(len(data)) {
-		t.Errorf("Size() = %d, want %d", size, len(data))
+	if !strings.HasPrefix(tf.Name(), dir) {
+		t.Errorf("expected file in %q, got %q", dir, tf.Name())
 	}
 }
 
-func TestTempFile_Commit(t *testing.T) {
-	tf, err := New("", "test")
+func TestWriteAndReadAll(t *testing.T) {
+	tf, err := tempfile.New("rw-*.bin")
 	if err != nil {
-		t.Fatalf("New() error: %v", err)
+		t.Fatalf("New: %v", err)
+	}
+	defer tf.Cleanup()
+
+	data := []byte("hello, temp file world!")
+	if _, err := tf.File().Write(data); err != nil {
+		t.Fatalf("Write: %v", err)
 	}
 
-	data := []byte("committed content")
-	if _, err := tf.Write(data); err != nil {
-		t.Fatalf("Write() error: %v", err)
-	}
-
-	dest := filepath.Join(t.TempDir(), "subdir", "final.txt")
-	if err := tf.Commit(dest); err != nil {
-		t.Fatalf("Commit() error: %v", err)
-	}
-
-	// Dest should exist
-	got, err := os.ReadFile(dest)
+	got, err := tf.ReadAll()
 	if err != nil {
-		t.Fatalf("ReadFile(dest) error: %v", err)
+		t.Fatalf("ReadAll: %v", err)
 	}
-	if string(got) != string(data) {
-		t.Errorf("committed file content = %q, want %q", got, data)
-	}
-
-	// Temp file should be gone (either renamed or removed after copy)
-	if _, err := os.Stat(tf.Path()); !os.IsNotExist(err) {
-		// On some systems rename works, on others a copy+remove is done.
-		// It's also possible the temp and dest are the same file if rename succeeded.
-		if tf.Path() != dest {
-			t.Errorf("temp file should be gone after Commit, but Stat returned: %v", err)
-		}
+	if !bytes.Equal(got, data) {
+		t.Errorf("ReadAll: got %q, want %q", got, data)
 	}
 }
 
-func TestTempFile_Discard(t *testing.T) {
-	tf, err := New("", "test")
+func TestRemove(t *testing.T) {
+	tf, err := tempfile.New("remove-*.tmp")
 	if err != nil {
-		t.Fatalf("New() error: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 
-	path := tf.Path()
-	if err := tf.Discard(); err != nil {
-		t.Fatalf("Discard() error: %v", err)
+	name := tf.Name()
+	if err := tf.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := tf.Remove(); err != nil {
+		t.Fatalf("Remove: %v", err)
 	}
 
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Error("file should not exist after Discard")
+	// File should no longer exist.
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		t.Errorf("file should have been removed, stat error: %v", err)
 	}
 
-	// Double-discard should not error
-	if err := tf.Discard(); err != nil {
-		t.Errorf("second Discard() error: %v", err)
+	// Second Remove should be a no-op (idempotent).
+	if err := tf.Remove(); err != nil {
+		t.Errorf("second Remove: unexpected error: %v", err)
+	}
+}
+
+func TestCleanup(t *testing.T) {
+	tf, err := tempfile.New("cleanup-*.tmp")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	name := tf.Name()
+	tf.Cleanup()
+
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		t.Errorf("file should be gone after Cleanup, stat: %v", err)
+	}
+}
+
+func TestCleanupWithLog(t *testing.T) {
+	tf, err := tempfile.New("log-cleanup-*.tmp")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	name := tf.Name()
+
+	var logs []string
+	tf.CleanupWithLog(func(msg string) { logs = append(logs, msg) })
+
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		t.Errorf("file should be gone after CleanupWithLog")
+	}
+	// Expect no log messages on clean teardown.
+	if len(logs) > 0 {
+		t.Errorf("unexpected log messages: %v", logs)
+	}
+}
+
+func TestFile_ReturnsUnderlyingFile(t *testing.T) {
+	tf, err := tempfile.New("file-*.tmp")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer tf.Cleanup()
+
+	f := tf.File()
+	if f == nil {
+		t.Fatal("File() returned nil")
+	}
+	if f.Name() != tf.Name() {
+		t.Errorf("File().Name() = %q, want %q", f.Name(), tf.Name())
 	}
 }

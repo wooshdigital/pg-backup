@@ -1,37 +1,36 @@
-# pg-s3-backup configuration file
-# Copy to config.yaml and fill in your values.
-# Environment variables (BACKUP_*) override values set here.
+# pgdumper configuration example
+# Copy to config.yaml and adjust to your environment.
 
-# ── PostgreSQL ────────────────────────────────────────────────────────────────
-# Full DSN for the source database.
-# Format: postgres://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=disable
-database_dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
-
-# ── S3 / Object Storage ───────────────────────────────────────────────────────
-# Name of the S3 bucket where backups will be stored.
-s3_bucket: "my-backup-bucket"
-
-# AWS region that hosts the bucket.
-s3_region: "us-east-1"
-
-# Optional key prefix (acts as a folder path) inside the bucket.
-# Trailing slash is recommended.
-s3_prefix: "backups/"
-
-# ── Backup Schedule ───────────────────────────────────────────────────────────
-# Standard 5-field cron expression (UTC).
+# PostgreSQL connection string (URL or key=value format).
 # Examples:
-#   "0 2 * * *"    → daily at 02:00 UTC
-#   "0 */6 * * *"  → every 6 hours
-#   "0 2 * * 0"    → weekly on Sunday at 02:00 UTC
+#   postgres://user:password@host:5432/dbname?sslmode=require
+#   host=localhost port=5432 user=postgres dbname=mydb sslmode=disable
+dsn: "postgres://user:password@localhost:5432/mydb?sslmode=require"
+
+# Directory where dump files are written.
+output_dir: "/var/backups/pgdumper"
+
+# Cron schedule for automatic dumps (optional; leave empty to run once and exit).
+# Example: every day at 02:00 UTC
 schedule: "0 2 * * *"
 
-# ── Retention ─────────────────────────────────────────────────────────────────
-# Number of days to keep backup files in S3.
-# Backups older than this will be deleted automatically.
-retention_days: 30
+pg_dump:
+  # Absolute path to pg_dump binary. Leave empty to use the one on PATH.
+  binary_path: ""
 
-# ── Logging ───────────────────────────────────────────────────────────────────
-# Zerolog log level.
-# Valid values: trace, debug, info, warn, error, fatal, panic
-log_level: "info"
+  # Output format: plain | custom | directory | tar
+  # "custom" is recommended: it supports parallel restore and compression.
+  format: "custom"
+
+  # Additional arguments passed verbatim to pg_dump.
+  extra_args:
+    - "--compress=9"
+    - "--no-owner"
+    - "--no-acl"
+
+retention:
+  # Delete dump files older than this duration (e.g. 168h = 7 days).
+  max_age: 168h
+
+  # Keep at most this many dump files (0 = no limit).
+  max_count: 7

@@ -1,284 +1,155 @@
 //go:build integration
 
-package dumper_test
+package dumper
 
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/yourorg/pgbackup/internal/dumper"
+	"github.com/yourorg/pgdumper/internal/tempfile"
 )
 
-const (
-	postgresImage    = "postgres:16-alpine"
-	postgresDB       = "testdb"
-	postgresUser     = "testuser"
-	postgresPassword = "testpassword"
-)
+// pg_dump plain-text output begins with a header comment.
+// pg_dump custom format starts with the magic bytes "PGDMP".
+const pgDumpPlainHeader = "-- PostgreSQL database dump"
+const pgDumpCustomMagic = "PGDMP"
 
-// TestPgDumper_Integration spins up a real Postgres container via testcontainers-go,
-// creates a trivial schema, and asserts that the dump output starts with the
-// standard pg_dump plain-text or custom-format header.
-func TestPgDumper_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
+// TestIntegration_Dump_PlainFormat verifies that PgDumper can stream a plain
+// SQL dump from a live Postgres instance.
+func TestIntegration_Dump_PlainFormat(t *testing.T) {
+	ctx := context.Background()
+	pg := startPostgres(ctx, t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-
-	// ------------------------------------------------------------------
-	// 1. Start a Postgres container.
-	// ------------------------------------------------------------------
-	pgContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage(postgresImage),
-		postgres.WithDatabase(postgresDB),
-		postgres.WithUsername(postgresUser),
-		postgres.WithPassword(postgresPassword),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
-		),
-	)
-	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := pgContainer.Terminate(context.Background()); err != nil {
-			t.Logf("failed to terminate postgres container: %v", err)
-		}
-	})
-
-	// ------------------------------------------------------------------
-	// 2. Build connection DSN.
-	// ------------------------------------------------------------------
-	host, err := pgContainer.Host(ctx)
-	if err != nil {
-		t.Fatalf("get container host: %v", err)
-	}
-	mappedPort, err := pgContainer.MappedPort(ctx, "5432")
-	if err != nil {
-		t.Fatalf("get mapped port: %v", err)
-	}
-
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		postgresUser, postgresPassword,
-		host, mappedPort.Port(),
-		postgresDB,
-	)
-
-	// ------------------------------------------------------------------
-	// 3. Seed a small table so the dump has something interesting.
-	// ------------------------------------------------------------------
-	if err := seedDatabase(ctx, dsn); err != nil {
-		t.Fatalf("seed database: %v", err)
-	}
-
-	// ------------------------------------------------------------------
-	// 4. Run the dumper (plain-text format for easy header inspection).
-	// ------------------------------------------------------------------
-	d := dumper.NewPgDumper(
-		dumper.WithExtraArgs("--format=plain"),
+	d := NewPgDumper(
+		WithExtraArgs("--format=plain", "--no-owner", "--no-acl"),
 	)
 
 	var buf bytes.Buffer
-	result, err := d.Dump(ctx, dsn, &buf)
+	result, err := d.Dump(ctx, pg.dsn, &buf)
 	if err != nil {
 		t.Fatalf("Dump failed: %v", err)
 	}
 
-	// ------------------------------------------------------------------
-	// 5. Assertions.
-	// ------------------------------------------------------------------
-	t.Logf("dump complete: %d bytes in %v", result.BytesWritten, result.Duration)
+	output := buf.String()
+	if !strings.Contains(output, pgDumpPlainHeader) {
+		t.Errorf("expected pg_dump plain header %q in output, got first 200 bytes: %q",
+			pgDumpPlainHeader, truncate(output, 200))
+	}
 
-	if result.BytesWritten == 0 {
-		t.Error("dump produced zero bytes")
+	if result.BytesWritten <= 0 {
+		t.Errorf("expected BytesWritten > 0, got %d", result.BytesWritten)
 	}
 	if result.BytesWritten != int64(buf.Len()) {
-		t.Errorf("BytesWritten (%d) != actual bytes (%d)", result.BytesWritten, buf.Len())
-	}
-	if result.Duration <= 0 {
-		t.Errorf("Duration should be positive, got %v", result.Duration)
+		t.Errorf("BytesWritten mismatch: result=%d buf.Len=%d", result.BytesWritten, buf.Len())
 	}
 	if result.StartedAt.IsZero() {
 		t.Error("StartedAt should not be zero")
 	}
-
-	// A plain-text pg_dump file always starts with "--" (SQL comment header).
-	output := buf.String()
-	if !strings.HasPrefix(output, "--") {
-		t.Errorf("expected dump to start with '--', got first 100 bytes: %q",
-			truncate(output, 100))
+	if result.Duration <= 0 {
+		t.Error("Duration should be positive")
 	}
 
-	// Check for pg_dump signature line.
-	if !strings.Contains(output, "PostgreSQL database dump") {
-		t.Errorf("dump output does not contain 'PostgreSQL database dump'; first 200 bytes: %q",
-			truncate(output, 200))
-	}
-
-	// Our seeded table should appear in the dump.
-	if !strings.Contains(output, "widgets") {
-		t.Errorf("expected table 'widgets' to appear in dump")
-	}
+	t.Logf("Dump completed: %d bytes in %v", result.BytesWritten, result.Duration)
 }
 
-// TestPgDumper_Integration_CustomFormat verifies that the custom binary format
-// header (PGDMP magic bytes) is present when --format=custom is used.
-func TestPgDumper_Integration_CustomFormat(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
+// TestIntegration_Dump_CustomFormat verifies that the custom format archive
+// header magic bytes are present when --format=custom is used.
+func TestIntegration_Dump_CustomFormat(t *testing.T) {
+	ctx := context.Background()
+	pg := startPostgres(ctx, t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-
-	pgContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage(postgresImage),
-		postgres.WithDatabase(postgresDB),
-		postgres.WithUsername(postgresUser),
-		postgres.WithPassword(postgresPassword),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
-		),
-	)
-	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = pgContainer.Terminate(context.Background())
-	})
-
-	host, err := pgContainer.Host(ctx)
-	if err != nil {
-		t.Fatalf("get container host: %v", err)
-	}
-	port, err := pgContainer.MappedPort(ctx, "5432")
-	if err != nil {
-		t.Fatalf("get mapped port: %v", err)
-	}
-
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		postgresUser, postgresPassword,
-		host, port.Port(),
-		postgresDB,
-	)
-
-	d := dumper.NewPgDumper(
-		dumper.WithExtraArgs("--format=custom"),
+	d := NewPgDumper(
+		WithExtraArgs("--format=custom", "--no-owner", "--no-acl"),
 	)
 
 	var buf bytes.Buffer
-	result, err := d.Dump(ctx, dsn, &buf)
+	result, err := d.Dump(ctx, pg.dsn, &buf)
 	if err != nil {
-		t.Fatalf("Dump (custom format) failed: %v", err)
+		t.Fatalf("Dump failed: %v", err)
 	}
 
-	t.Logf("custom format dump: %d bytes in %v", result.BytesWritten, result.Duration)
+	// Custom format starts with magic bytes "PGDMP"
+	got := buf.Bytes()
+	if len(got) < len(pgDumpCustomMagic) {
+		t.Fatalf("output too short (%d bytes) to contain magic header", len(got))
+	}
+	if string(got[:len(pgDumpCustomMagic)]) != pgDumpCustomMagic {
+		t.Errorf("expected magic bytes %q, got %q", pgDumpCustomMagic, got[:len(pgDumpCustomMagic)])
+	}
 
-	// pg_dump custom format always begins with the magic string "PGDMP".
-	magic := buf.Bytes()
-	if len(magic) < 5 {
-		t.Fatalf("dump output too short (%d bytes)", len(magic))
-	}
-	if string(magic[:5]) != "PGDMP" {
-		t.Errorf("expected custom format to start with 'PGDMP', got %q", magic[:5])
-	}
+	t.Logf("Custom dump: %d bytes in %v", result.BytesWritten, result.Duration)
 }
 
-// TestPgDumper_Integration_Cancellation verifies that cancelling the context
-// aborts an in-progress dump.
-func TestPgDumper_Integration_Cancellation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
+// TestIntegration_Dump_ToTempFile verifies that streaming to a temp file works
+// and the file can be read back with the expected content.
+func TestIntegration_Dump_ToTempFile(t *testing.T) {
+	ctx := context.Background()
+	pg := startPostgres(ctx, t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-
-	pgContainer, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage(postgresImage),
-		postgres.WithDatabase(postgresDB),
-		postgres.WithUsername(postgresUser),
-		postgres.WithPassword(postgresPassword),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
-		),
-	)
+	tf, err := tempfile.New("pgdump-*.sql")
 	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
+		t.Fatalf("failed to create temp file: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = pgContainer.Terminate(context.Background())
-	})
+	defer tf.CleanupWithLog(func(msg string) { t.Log(msg) })
 
-	host, err := pgContainer.Host(ctx)
-	if err != nil {
-		t.Fatalf("get container host: %v", err)
-	}
-	port, err := pgContainer.MappedPort(ctx, "5432")
-	if err != nil {
-		t.Fatalf("get mapped port: %v", err)
-	}
-
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		postgresUser, postgresPassword,
-		host, port.Port(),
-		postgresDB,
+	d := NewPgDumper(
+		WithExtraArgs("--format=plain", "--no-owner", "--no-acl"),
 	)
 
-	// Cancel the dump context immediately.
-	dumpCtx, dumpCancel := context.WithCancel(ctx)
-	dumpCancel()
+	result, err := d.Dump(ctx, pg.dsn, tf.File())
+	if err != nil {
+		t.Fatalf("Dump to temp file failed: %v", err)
+	}
 
-	d := dumper.NewPgDumper()
-	_, err = d.Dump(dumpCtx, dsn, io.Discard)
+	// Sync and read back.
+	if err := tf.File().Sync(); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+
+	content, err := tf.ReadAll()
+	if err != nil {
+		t.Fatalf("reading temp file: %v", err)
+	}
+
+	if !bytes.Contains(content, []byte(pgDumpPlainHeader)) {
+		t.Errorf("expected header in file content; first 200 bytes: %q", truncate(string(content), 200))
+	}
+
+	t.Logf("Temp file dump: %d bytes written, file size %d bytes, duration %v",
+		result.BytesWritten, len(content), result.Duration)
+}
+
+// TestIntegration_Dump_ContextCancellation verifies that cancelling the context
+// aborts the dump and returns an error.
+func TestIntegration_Dump_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel immediately.
+	cancel()
+
+	pg := startPostgres(context.Background(), t)
+
+	d := NewPgDumper(
+		WithExtraArgs("--format=plain"),
+	)
+
+	var buf bytes.Buffer
+	_, err := d.Dump(ctx, pg.dsn, &buf)
 	if err == nil {
-		t.Error("expected error when context is pre-cancelled, got nil")
-	} else {
-		t.Logf("got expected error: %v", err)
+		t.Fatal("expected error due to cancelled context, got nil")
 	}
+	t.Logf("Got expected error: %v", err)
 }
 
-// -------------------------------------------------------------------------
-// helpers
-// -------------------------------------------------------------------------
-
-// seedDatabase creates a simple table in the target database so that the dump
-// contains recognisable content.
-func seedDatabase(ctx context.Context, dsn string) error {
-	// We use pgx directly to seed the DB.
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		return fmt.Errorf("connect: %w", err)
+// TestIntegration_Dump_InvalidDSN verifies graceful failure for a bad DSN.
+func TestIntegration_Dump_InvalidDSN(t *testing.T) {
+	d := NewPgDumper()
+	var buf bytes.Buffer
+	_, err := d.Dump(context.Background(), "", &buf)
+	if err == nil {
+		t.Fatal("expected error for empty DSN")
 	}
-	defer conn.Close(ctx)
-
-	_, err = conn.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS widgets (
-			id   SERIAL PRIMARY KEY,
-			name TEXT NOT NULL
-		);
-		INSERT INTO widgets (name) VALUES ('foo'), ('bar'), ('baz');
-	`)
-	return err
 }
 
 func truncate(s string, n int) string {

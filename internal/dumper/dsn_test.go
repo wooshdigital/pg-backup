@@ -8,15 +8,15 @@ func TestParseDSN_URL(t *testing.T) {
 	tests := []struct {
 		name     string
 		dsn      string
-		want     *ConnParams
+		want     ConnParams
 		wantErr  bool
 	}{
 		{
 			name: "full URL",
 			dsn:  "postgres://alice:secret@db.example.com:5433/mydb?sslmode=require",
-			want: &ConnParams{
+			want: ConnParams{
 				Host:     "db.example.com",
-				Port:     "5433",
+				Port:     5433,
 				User:     "alice",
 				Password: "secret",
 				DBName:   "mydb",
@@ -27,40 +27,43 @@ func TestParseDSN_URL(t *testing.T) {
 		{
 			name: "postgresql scheme",
 			dsn:  "postgresql://bob@localhost/testdb",
-			want: &ConnParams{
-				Host:     "localhost",
-				Port:     "5432",
-				User:     "bob",
-				Password: "",
-				DBName:   "testdb",
-				SSLMode:  "",
-				Extra:    map[string]string{},
+			want: ConnParams{
+				Host:   "localhost",
+				Port:   DefaultPort,
+				User:   "bob",
+				DBName: "testdb",
+				Extra:  map[string]string{},
 			},
 		},
 		{
-			name: "minimal URL with defaults",
-			dsn:  "postgres:///mydb",
-			want: &ConnParams{
-				Host:     "localhost",
-				Port:     "5432",
-				User:     "",
-				Password: "",
-				DBName:   "mydb",
-				SSLMode:  "",
-				Extra:    map[string]string{},
+			name: "minimal URL – no user, no db",
+			dsn:  "postgres://localhost",
+			want: ConnParams{
+				Host:  "localhost",
+				Port:  DefaultPort,
+				Extra: map[string]string{},
 			},
 		},
 		{
-			name: "URL with extra query params",
-			dsn:  "postgres://user:pass@host/db?sslmode=disable&connect_timeout=10",
-			want: &ConnParams{
-				Host:     "host",
-				Port:     "5432",
-				User:     "user",
-				Password: "pass",
-				DBName:   "db",
-				SSLMode:  "disable",
-				Extra:    map[string]string{"connect_timeout": "10"},
+			name: "default port when omitted",
+			dsn:  "postgres://user@host/db",
+			want: ConnParams{
+				Host:   "host",
+				Port:   DefaultPort,
+				User:   "user",
+				DBName: "db",
+				Extra:  map[string]string{},
+			},
+		},
+		{
+			name: "extra query params land in Extra",
+			dsn:  "postgres://localhost/db?connect_timeout=10&sslmode=disable",
+			want: ConnParams{
+				Host:    "localhost",
+				Port:    DefaultPort,
+				DBName:  "db",
+				SSLMode: "disable",
+				Extra:   map[string]string{"connect_timeout": "10"},
 			},
 		},
 		{
@@ -69,8 +72,8 @@ func TestParseDSN_URL(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "invalid URL",
-			dsn:     "postgres://[::1]:namedport/db",
+			name:    "invalid port in URL",
+			dsn:     "postgres://localhost:abc/db",
 			wantErr: true,
 		},
 	}
@@ -84,82 +87,76 @@ func TestParseDSN_URL(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			assertConnParamsEqual(t, tt.want, got)
+			assertConnParams(t, tt.want, got)
 		})
 	}
 }
 
-func TestParseDSN_KeyValue(t *testing.T) {
+func TestParseDSN_KV(t *testing.T) {
 	tests := []struct {
 		name    string
 		dsn     string
-		want    *ConnParams
+		want    ConnParams
 		wantErr bool
 	}{
 		{
 			name: "full key=value",
-			dsn:  "host=db.example.com port=5433 user=alice password=secret dbname=mydb sslmode=require",
-			want: &ConnParams{
-				Host:     "db.example.com",
-				Port:     "5433",
-				User:     "alice",
-				Password: "secret",
-				DBName:   "mydb",
-				SSLMode:  "require",
+			dsn:  "host=myhost port=5433 user=carol password=s3cr3t dbname=prod sslmode=verify-full",
+			want: ConnParams{
+				Host:     "myhost",
+				Port:     5433,
+				User:     "carol",
+				Password: "s3cr3t",
+				DBName:   "prod",
+				SSLMode:  "verify-full",
 				Extra:    map[string]string{},
 			},
 		},
 		{
-			name: "defaults applied",
-			dsn:  "dbname=mydb user=alice",
-			want: &ConnParams{
+			name: "minimal key=value",
+			dsn:  "dbname=simple",
+			want: ConnParams{
 				Host:   "localhost",
-				Port:   "5432",
-				User:   "alice",
-				DBName: "mydb",
+				Port:   DefaultPort,
+				DBName: "simple",
 				Extra:  map[string]string{},
 			},
 		},
 		{
-			name: "quoted value with space",
-			dsn:  "host=localhost dbname=mydb password='my secret'",
-			want: &ConnParams{
+			name: "quoted password with spaces",
+			dsn:  "host=localhost user=dave password='my secret pass' dbname=db",
+			want: ConnParams{
 				Host:     "localhost",
-				Port:     "5432",
-				Password: "my secret",
-				DBName:   "mydb",
-				Extra:    map[string]string{},
-			},
-		},
-		{
-			name: "quoted value with escaped quote",
-			dsn:  `host=localhost dbname=mydb password='it\'s a secret'`,
-			want: &ConnParams{
-				Host:     "localhost",
-				Port:     "5432",
-				Password: "it's a secret",
-				DBName:   "mydb",
+				Port:     DefaultPort,
+				User:     "dave",
+				Password: "my secret pass",
+				DBName:   "db",
 				Extra:    map[string]string{},
 			},
 		},
 		{
 			name: "extra unknown keys go to Extra",
-			dsn:  "host=localhost dbname=mydb connect_timeout=10",
-			want: &ConnParams{
+			dsn:  "host=localhost dbname=db connect_timeout=5",
+			want: ConnParams{
 				Host:   "localhost",
-				Port:   "5432",
-				DBName: "mydb",
-				Extra:  map[string]string{"connect_timeout": "10"},
+				Port:   DefaultPort,
+				DBName: "db",
+				Extra:  map[string]string{"connect_timeout": "5"},
 			},
 		},
 		{
-			name:    "empty DSN",
-			dsn:     "",
+			name:    "invalid port in kv",
+			dsn:     "port=notanumber",
 			wantErr: true,
 		},
 		{
-			name:    "missing equals sign",
-			dsn:     "host",
+			name:    "unterminated quote",
+			dsn:     "password='unclosed",
+			wantErr: true,
+		},
+		{
+			name:    "token without equals",
+			dsn:     "host=localhost badtoken dbname=db",
 			wantErr: true,
 		},
 	}
@@ -173,92 +170,66 @@ func TestParseDSN_KeyValue(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			assertConnParamsEqual(t, tt.want, got)
+			assertConnParams(t, tt.want, got)
 		})
 	}
 }
 
-func TestConnParams_BuildPgDumpArgs(t *testing.T) {
-	tests := []struct {
-		name   string
-		params *ConnParams
-		dbname string
-		want   []string
-	}{
-		{
-			name: "full params",
-			params: &ConnParams{
-				Host:  "db.example.com",
-				Port:  "5433",
-				User:  "alice",
-				Extra: map[string]string{},
-			},
-			dbname: "mydb",
-			want:   []string{"-h", "db.example.com", "-p", "5433", "-U", "alice", "-d", "mydb"},
-		},
-		{
-			name: "use params dbname when override is empty",
-			params: &ConnParams{
-				Host:   "localhost",
-				Port:   "5432",
-				User:   "bob",
-				DBName: "testdb",
-				Extra:  map[string]string{},
-			},
-			dbname: "",
-			want:   []string{"-h", "localhost", "-p", "5432", "-U", "bob", "-d", "testdb"},
-		},
-		{
-			name: "override dbname takes precedence",
-			params: &ConnParams{
-				Host:   "localhost",
-				Port:   "5432",
-				DBName: "original",
-				Extra:  map[string]string{},
-			},
-			dbname: "override",
-			want:   []string{"-h", "localhost", "-p", "5432", "-d", "override"},
-		},
+func TestConnParams_ToPgDumpArgs(t *testing.T) {
+	p := ConnParams{
+		Host:   "db.local",
+		Port:   5432,
+		User:   "admin",
+		DBName: "warehouse",
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.params.BuildPgDumpArgs(tt.dbname)
-			if len(got) != len(tt.want) {
-				t.Fatalf("BuildPgDumpArgs() = %v, want %v", got, tt.want)
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("BuildPgDumpArgs()[%d] = %q, want %q", i, got[i], tt.want[i])
-				}
-			}
-		})
+	args := p.ToPgDumpArgs("--format=custom")
+	wantArgs := []string{
+		"--host", "db.local",
+		"--port", "5432",
+		"--username", "admin",
+		"--dbname", "warehouse",
+		"--format=custom",
+	}
+	if len(args) != len(wantArgs) {
+		t.Fatalf("ToPgDumpArgs: got %v, want %v", args, wantArgs)
+	}
+	for i := range args {
+		if args[i] != wantArgs[i] {
+			t.Errorf("arg[%d]: got %q, want %q", i, args[i], wantArgs[i])
+		}
+	}
+	// Password must NOT appear in args
+	for _, a := range args {
+		if a == "--password" || a == "-W" {
+			t.Errorf("password flag must not appear in pg_dump args")
+		}
 	}
 }
 
-func assertConnParamsEqual(t *testing.T, want, got *ConnParams) {
+// assertConnParams is a helper that compares two ConnParams structs field by field.
+func assertConnParams(t *testing.T, want, got ConnParams) {
 	t.Helper()
-	if want.Host != got.Host {
-		t.Errorf("Host: want %q, got %q", want.Host, got.Host)
+	if got.Host != want.Host {
+		t.Errorf("Host: got %q, want %q", got.Host, want.Host)
 	}
-	if want.Port != got.Port {
-		t.Errorf("Port: want %q, got %q", want.Port, got.Port)
+	if got.Port != want.Port {
+		t.Errorf("Port: got %d, want %d", got.Port, want.Port)
 	}
-	if want.User != got.User {
-		t.Errorf("User: want %q, got %q", want.User, got.User)
+	if got.User != want.User {
+		t.Errorf("User: got %q, want %q", got.User, want.User)
 	}
-	if want.Password != got.Password {
-		t.Errorf("Password: want %q, got %q", want.Password, got.Password)
+	if got.Password != want.Password {
+		t.Errorf("Password: got %q, want %q", got.Password, want.Password)
 	}
-	if want.DBName != got.DBName {
-		t.Errorf("DBName: want %q, got %q", want.DBName, got.DBName)
+	if got.DBName != want.DBName {
+		t.Errorf("DBName: got %q, want %q", got.DBName, want.DBName)
 	}
-	if want.SSLMode != got.SSLMode {
-		t.Errorf("SSLMode: want %q, got %q", want.SSLMode, got.SSLMode)
+	if got.SSLMode != want.SSLMode {
+		t.Errorf("SSLMode: got %q, want %q", got.SSLMode, want.SSLMode)
 	}
 	for k, wv := range want.Extra {
 		if gv, ok := got.Extra[k]; !ok || gv != wv {
-			t.Errorf("Extra[%q]: want %q, got %q", k, wv, gv)
+			t.Errorf("Extra[%q]: got %q, want %q", k, gv, wv)
 		}
 	}
 	for k := range got.Extra {

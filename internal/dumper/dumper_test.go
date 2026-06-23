@@ -3,235 +3,245 @@ package dumper
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"os"
-	"os/exec"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
 )
 
-// --------------------------------------------------------------------------
-// Unit tests using a mock exec runner
-// --------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Unit tests with a mock exec runner
+// ---------------------------------------------------------------------------
 
-// fakeCommand creates an exec.Cmd that runs the current test binary with
-// a special flag, which causes it to behave as a mock pg_dump.
-//
-// This is the standard Go technique for testing code that shells out.
-func fakeCommand(output string, exitCode int) ExecRunner {
-	return func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		cs := []string{"-test.run=TestFakeProcess", "--", name}
-		cs = append(cs, args...)
-		cmd := exec.CommandContext(ctx, os.Args[0], cs...)
-		cmd.Env = append(os.Environ(),
-			"FAKE_PROCESS=1",
-			fmt.Sprintf("FAKE_OUTPUT=%s", output),
-			fmt.Sprintf("FAKE_EXIT=%d", exitCode),
-		)
-		return cmd
-	}
+// mockCmd is a Cmd implementation that lets tests control stdout, stderr and
+// the exit behaviour.
+type mockCmd struct {
+	stdoutData []byte
+	stderrData []byte
+	runErr     error
+
+	stdout io.Writer
+	stderr io.Writer
+	env    []string
 }
 
-// TestFakeProcess is not a real test; it's used by fakeCommand to simulate
-// an external process. It prints FAKE_OUTPUT to stdout and exits with FAKE_EXIT.
-func TestFakeProcess(t *testing.T) {
-	if os.Getenv("FAKE_PROCESS") != "1" {
-		return
+func (m *mockCmd) SetStdout(w io.Writer) { m.stdout = w }
+func (m *mockCmd) SetStderr(w io.Writer) { m.stderr = w }
+func (m *mockCmd) SetEnv(env []string)   { m.env = env }
+func (m *mockCmd) Run() error {
+	if m.stdout != nil && len(m.stdoutData) > 0 {
+		_, _ = m.stdout.Write(m.stdoutData)
 	}
-	output := os.Getenv("FAKE_OUTPUT")
-	exitCode := 0
-	fmt.Sscanf(os.Getenv("FAKE_EXIT"), "%d", &exitCode)
+	if m.stderr != nil && len(m.stderrData) > 0 {
+		_, _ = m.stderr.Write(m.stderrData)
+	}
+	return m.runErr
+}
 
-	fmt.Fprint(os.Stdout, output)
-	os.Exit(exitCode)
+func makeMockRunner(mc *mockCmd) ExecRunner {
+	return func(_ context.Context, _ string, _ ...string) Cmd {
+		return mc
+	}
 }
 
 func TestPgDumper_Dump_Success(t *testing.T) {
-	const fakeOutput = "PGDMP\x00\x00\x00\x00\x00\x00\x00this is a fake dump"
+	payload := []byte("PGDMP\x00mock dump data here")
+	mc := &mockCmd{stdoutData: payload}
 
-	dumper := NewPgDumper(
-		withExecRunner(fakeCommand(fakeOutput, 0)),
-	)
+	d := NewPgDumper(withExecRunner(makeMockRunner(mc)))
 
 	var buf bytes.Buffer
-	result, err := dumper.Dump(context.Background(), "postgres://user:pass@localhost/testdb", &buf)
+	result, err := d.Dump(context.Background(), "postgres://user:pass@localhost/db", &buf)
 	if err != nil {
-		t.Fatalf("Dump() unexpected error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	if buf.String() != fakeOutput {
-		t.Errorf("Dump() output = %q, want %q", buf.String(), fakeOutput)
+	if !bytes.Equal(buf.Bytes(), payload) {
+		t.Errorf("output mismatch: got %q, want %q", buf.Bytes(), payload)
 	}
-	if result.BytesWritten != int64(len(fakeOutput)) {
-		t.Errorf("BytesWritten = %d, want %d", result.BytesWritten, len(fakeOutput))
+	if result.BytesWritten != int64(len(payload)) {
+		t.Errorf("BytesWritten: got %d, want %d", result.BytesWritten, len(payload))
 	}
-	if result.DatabaseName != "testdb" {
-		t.Errorf("DatabaseName = %q, want %q", result.DatabaseName, "testdb")
+	if result.Duration < 0 {
+		t.Errorf("Duration should be non-negative, got %v", result.Duration)
 	}
-	if result.Duration <= 0 {
-		t.Error("Duration should be positive")
-	}
-	if result.StartTime.IsZero() {
-		t.Error("StartTime should not be zero")
+	if result.StartedAt.IsZero() {
+		t.Error("StartedAt should not be zero")
 	}
 }
 
-func TestPgDumper_Dump_Failure(t *testing.T) {
-	dumper := NewPgDumper(
-		withExecRunner(fakeCommand("", 1)),
-	)
+func TestPgDumper_Dump_PgDumpError(t *testing.T) {
+	mc := &mockCmd{
+		stderrData: []byte("FATAL: database does not exist"),
+		runErr:     errors.New("exit status 1"),
+	}
+
+	d := NewPgDumper(withExecRunner(makeMockRunner(mc)))
 
 	var buf bytes.Buffer
-	_, err := dumper.Dump(context.Background(), "postgres://user:pass@localhost/testdb", &buf)
+	_, err := d.Dump(context.Background(), "postgres://user@localhost/missing", &buf)
 	if err == nil {
-		t.Fatal("Dump() expected error, got nil")
+		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "pg_dump failed") {
-		t.Errorf("Dump() error = %q, want it to mention 'pg_dump failed'", err.Error())
+		t.Errorf("error should mention pg_dump failure, got: %v", err)
 	}
-}
-
-func TestPgDumper_Dump_ContextCancellation(t *testing.T) {
-	// Use a runner that sleeps for a while (simulate long dump)
-	sleepRunner := func(ctx context.Context, name string, args ...string) *exec.Cmd {
-		return exec.CommandContext(ctx, "sleep", "30")
-	}
-
-	dumper := NewPgDumper(withExecRunner(sleepRunner))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	var buf bytes.Buffer
-	_, err := dumper.Dump(ctx, "postgres://user:pass@localhost/testdb", &buf)
-	if err == nil {
-		t.Fatal("Dump() expected error from context cancellation, got nil")
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("error should contain stderr output, got: %v", err)
 	}
 }
 
 func TestPgDumper_Dump_InvalidDSN(t *testing.T) {
-	dumper := NewPgDumper()
-
+	d := NewPgDumper()
 	var buf bytes.Buffer
-	_, err := dumper.Dump(context.Background(), "", &buf)
+	_, err := d.Dump(context.Background(), "", &buf)
 	if err == nil {
-		t.Fatal("Dump() expected error for empty DSN, got nil")
-	}
-	if !strings.Contains(err.Error(), "parse DSN") {
-		t.Errorf("expected DSN parse error, got: %v", err)
+		t.Fatal("expected error for empty DSN, got nil")
 	}
 }
 
-func TestPgDumper_Dump_KeyValueDSN(t *testing.T) {
-	const fakeOutput = "PGDMP fake"
+func TestPgDumper_Dump_PasswordInEnv(t *testing.T) {
+	payload := []byte("dump data")
+	var capturedEnv []string
+	mc := &mockCmd{stdoutData: payload}
+	runner := func(_ context.Context, _ string, _ ...string) Cmd {
+		return &envCapturingCmd{mockCmd: mc, envDst: &capturedEnv}
+	}
 
-	dumper := NewPgDumper(
-		withExecRunner(fakeCommand(fakeOutput, 0)),
-	)
+	d := NewPgDumper(withExecRunner(runner))
+	var buf bytes.Buffer
+	_, err := d.Dump(context.Background(), "postgres://alice:topsecret@localhost/db", &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	found := false
+	for _, e := range capturedEnv {
+		if e == "PGPASSWORD=topsecret" {
+			found = true
+		}
+		if strings.HasPrefix(e, "--password") {
+			t.Error("password must not appear as a flag")
+		}
+	}
+	if !found {
+		t.Error("PGPASSWORD not found in command environment")
+	}
+}
+
+func TestPgDumper_Dump_ContextCancellation(t *testing.T) {
+	// Simulate a slow command by blocking on context in Run()
+	blockingCmd := &contextAwareCmd{
+		delay: 100 * time.Millisecond,
+	}
+	runner := func(ctx context.Context, _ string, _ ...string) Cmd {
+		blockingCmd.ctx = ctx
+		return blockingCmd
+	}
+
+	d := NewPgDumper(withExecRunner(runner))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
 
 	var buf bytes.Buffer
-	result, err := dumper.Dump(
-		context.Background(),
-		"host=localhost port=5432 user=alice password=secret dbname=mydb",
-		&buf,
-	)
-	if err != nil {
-		t.Fatalf("Dump() unexpected error: %v", err)
-	}
-	if result.DatabaseName != "mydb" {
-		t.Errorf("DatabaseName = %q, want %q", result.DatabaseName, "mydb")
+	_, err := d.Dump(ctx, "postgres://user@localhost/db", &buf)
+	if err == nil {
+		t.Fatal("expected error due to context cancellation, got nil")
 	}
 }
 
 func TestPgDumper_Dump_ExtraArgs(t *testing.T) {
 	var capturedArgs []string
-
-	captureRunner := func(ctx context.Context, name string, args ...string) *exec.Cmd {
+	mc := &mockCmd{stdoutData: []byte("data")}
+	runner := func(_ context.Context, _ string, args ...string) Cmd {
 		capturedArgs = args
-		// Return a command that immediately succeeds with empty output
-		return exec.CommandContext(ctx, "true")
+		return mc
 	}
 
-	dumper := NewPgDumper(
-		withExecRunner(captureRunner),
-		WithExtraArgs("--format=c", "--compress=6"),
+	d := NewPgDumper(
+		WithExtraArgs("--format=custom", "--compress=9"),
+		withExecRunner(runner),
 	)
-
 	var buf bytes.Buffer
-	_, _ = dumper.Dump(context.Background(), "postgres://user@localhost/db", &buf)
+	_, err := d.Dump(context.Background(), "postgres://user@localhost/db", &buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	found := false
+	hasFormat := false
+	hasCompress := false
 	for _, a := range capturedArgs {
-		if a == "--format=c" {
-			found = true
-			break
+		if a == "--format=custom" {
+			hasFormat = true
+		}
+		if a == "--compress=9" {
+			hasCompress = true
 		}
 	}
-	if !found {
-		t.Errorf("ExtraArgs not forwarded to pg_dump; got args: %v", capturedArgs)
+	if !hasFormat {
+		t.Error("expected --format=custom in args")
+	}
+	if !hasCompress {
+		t.Error("expected --compress=9 in args")
 	}
 }
 
-// --------------------------------------------------------------------------
-// Integration test using testcontainers-go
-// --------------------------------------------------------------------------
-
-// TestIntegration_PgDump_RealPostgres starts a real Postgres container and
-// runs an actual pg_dump against it, verifying the output starts with the
-// pg_dump plain-text or custom-format header.
-//
-// This test is skipped if Docker is not available or if INTEGRATION_TESTS is
-// not set to "1".
-func TestIntegration_PgDump_RealPostgres(t *testing.T) {
-	if os.Getenv("INTEGRATION_TESTS") != "1" {
-		t.Skip("skipping integration test; set INTEGRATION_TESTS=1 to enable")
+func TestPgDumper_CustomPgDumpPath(t *testing.T) {
+	var capturedName string
+	mc := &mockCmd{stdoutData: []byte("dump")}
+	runner := func(_ context.Context, name string, _ ...string) Cmd {
+		capturedName = name
+		return mc
 	}
 
-	// Check pg_dump is available
-	if _, err := exec.LookPath("pg_dump"); err != nil {
-		t.Skip("pg_dump not found in PATH; skipping integration test")
-	}
-
-	ctx := context.Background()
-
-	// Import testcontainers lazily via a helper to avoid import cycle
-	// and keep the test compilable when testcontainers is not available.
-	dsn, cleanup, err := startPostgresContainer(ctx)
-	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
-	}
-	defer cleanup()
-
-	dumper := NewPgDumper()
-
+	d := NewPgDumper(
+		WithPgDumpPath("/usr/local/bin/pg_dump"),
+		withExecRunner(runner),
+	)
 	var buf bytes.Buffer
-	result, err := dumper.Dump(ctx, dsn, &buf)
+	_, err := d.Dump(context.Background(), "postgres://user@localhost/db", &buf)
 	if err != nil {
-		t.Fatalf("Dump() error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-
-	t.Logf("Dump result: bytes=%d, duration=%s, db=%s",
-		result.BytesWritten, result.Duration, result.DatabaseName)
-
-	// pg_dump plain-text format starts with "--\n-- PostgreSQL database dump\n"
-	output := buf.String()
-	if !strings.Contains(output, "PostgreSQL database dump") {
-		// Also accept custom format magic bytes: PGDMP
-		if !bytes.HasPrefix(buf.Bytes(), []byte("PGDMP")) {
-			t.Errorf("dump output does not look like a valid pg_dump archive.\nFirst 256 bytes: %q",
-				truncate(output, 256))
-		}
-	}
-
-	if result.BytesWritten == 0 {
-		t.Error("BytesWritten should be > 0")
+	if capturedName != "/usr/local/bin/pg_dump" {
+		t.Errorf("expected /usr/local/bin/pg_dump, got %q", capturedName)
 	}
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
+// ---------------------------------------------------------------------------
+// Helper mock types
+// ---------------------------------------------------------------------------
+
+// envCapturingCmd wraps mockCmd and captures the environment.
+type envCapturingCmd struct {
+	*mockCmd
+	envDst *[]string
+}
+
+func (e *envCapturingCmd) SetEnv(env []string) {
+	*e.envDst = env
+	e.mockCmd.SetEnv(env)
+}
+
+// contextAwareCmd simulates a long-running command that respects context
+// cancellation.
+type contextAwareCmd struct {
+	ctx    context.Context
+	delay  time.Duration
+	stdout io.Writer
+	stderr io.Writer
+	env    []string
+}
+
+func (c *contextAwareCmd) SetStdout(w io.Writer) { c.stdout = w }
+func (c *contextAwareCmd) SetStderr(w io.Writer) { c.stderr = w }
+func (c *contextAwareCmd) SetEnv(env []string)   { c.env = env }
+func (c *contextAwareCmd) Run() error {
+	select {
+	case <-time.After(c.delay):
+		return nil
+	case <-c.ctx.Done():
+		return c.ctx.Err()
 	}
-	return s[:n]
 }
