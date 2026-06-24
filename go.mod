@@ -1,4 +1,4 @@
-module github.com/nicholasgasior/gsfmt
+module github.com/example/myapp
 
 go 1.22
 
