@@ -1,4 +1,3 @@
-// Package compress provides streaming compression implementations for the dump pipeline.
 package compress
 
 import (
@@ -9,46 +8,50 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// Compressor defines the interface for streaming compression.
+// Compressor defines the interface for compressing data from a reader to a writer.
 type Compressor interface {
-	// Compress reads from src and writes compressed data to dst.
 	Compress(src io.Reader, dst io.Writer) error
-	// Extension returns the file extension for the compressed format (e.g. ".gz", ".zst", "").
-	Extension() string
+	// FileExtension returns the file extension associated with this compression format.
+	FileExtension() string
 }
 
 // GzipCompressor compresses data using gzip.
 type GzipCompressor struct {
-	Level int // compress/gzip level constant (e.g. gzip.BestSpeed, gzip.BestCompression, gzip.DefaultCompression)
+	Level int
 }
 
-// NewGzipCompressor creates a GzipCompressor with the given level.
-// If level is 0, gzip.DefaultCompression is used.
-func NewGzipCompressor(level int) *GzipCompressor {
-	if level == 0 {
-		level = gzip.DefaultCompression
+// NewGzipCompressor creates a new GzipCompressor with the given compression level.
+// Level should be between gzip.BestSpeed (1) and gzip.BestCompression (9),
+// or gzip.DefaultCompression (-1).
+func NewGzipCompressor(level int) (*GzipCompressor, error) {
+	if level != gzip.DefaultCompression && level != gzip.NoCompression &&
+		(level < gzip.BestSpeed || level > gzip.BestCompression) {
+		return nil, fmt.Errorf("invalid gzip compression level: %d", level)
 	}
-	return &GzipCompressor{Level: level}
+	return &GzipCompressor{Level: level}, nil
 }
 
-// Compress reads from src, compresses with gzip, and writes to dst.
+// Compress reads from src, compresses using gzip, and writes to dst.
 func (g *GzipCompressor) Compress(src io.Reader, dst io.Writer) error {
 	w, err := gzip.NewWriterLevel(dst, g.Level)
 	if err != nil {
-		return fmt.Errorf("compress/gzip: create writer: %w", err)
+		return fmt.Errorf("creating gzip writer: %w", err)
 	}
+
 	if _, err := io.Copy(w, src); err != nil {
 		_ = w.Close()
-		return fmt.Errorf("compress/gzip: copy: %w", err)
+		return fmt.Errorf("compressing data: %w", err)
 	}
+
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("compress/gzip: close writer: %w", err)
+		return fmt.Errorf("closing gzip writer: %w", err)
 	}
+
 	return nil
 }
 
-// Extension returns the gzip file extension.
-func (g *GzipCompressor) Extension() string {
+// FileExtension returns ".gz".
+func (g *GzipCompressor) FileExtension() string {
 	return ".gz"
 }
 
@@ -57,49 +60,65 @@ type ZstdCompressor struct {
 	Level zstd.EncoderLevel
 }
 
-// NewZstdCompressor creates a ZstdCompressor with the given encoder level.
-func NewZstdCompressor(level zstd.EncoderLevel) *ZstdCompressor {
-	return &ZstdCompressor{Level: level}
+// NewZstdCompressor creates a new ZstdCompressor with the given compression level.
+func NewZstdCompressor(level int) (*ZstdCompressor, error) {
+	var encoderLevel zstd.EncoderLevel
+	switch level {
+	case 1:
+		encoderLevel = zstd.SpeedFastest
+	case 2:
+		encoderLevel = zstd.SpeedDefault
+	case 3:
+		encoderLevel = zstd.SpeedBetterCompression
+	case 4:
+		encoderLevel = zstd.SpeedBestCompression
+	default:
+		encoderLevel = zstd.SpeedDefault
+	}
+	return &ZstdCompressor{Level: encoderLevel}, nil
 }
 
-// Compress reads from src, compresses with zstd, and writes to dst.
+// Compress reads from src, compresses using zstd, and writes to dst.
 func (z *ZstdCompressor) Compress(src io.Reader, dst io.Writer) error {
 	w, err := zstd.NewWriter(dst, zstd.WithEncoderLevel(z.Level))
 	if err != nil {
-		return fmt.Errorf("compress/zstd: create writer: %w", err)
+		return fmt.Errorf("creating zstd writer: %w", err)
 	}
+
 	if _, err := io.Copy(w, src); err != nil {
 		_ = w.Close()
-		return fmt.Errorf("compress/zstd: copy: %w", err)
+		return fmt.Errorf("compressing data: %w", err)
 	}
+
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("compress/zstd: close writer: %w", err)
+		return fmt.Errorf("closing zstd writer: %w", err)
 	}
+
 	return nil
 }
 
-// Extension returns the zstd file extension.
-func (z *ZstdCompressor) Extension() string {
+// FileExtension returns ".zst".
+func (z *ZstdCompressor) FileExtension() string {
 	return ".zst"
 }
 
-// NopCompressor passes data through without compression.
-type NopCompressor struct{}
+// NoOpCompressor passes data through without any compression.
+type NoOpCompressor struct{}
 
-// Compress copies src to dst without any compression.
-func (n *NopCompressor) Compress(src io.Reader, dst io.Writer) error {
+// Compress copies src to dst without compression.
+func (n *NoOpCompressor) Compress(src io.Reader, dst io.Writer) error {
 	if _, err := io.Copy(dst, src); err != nil {
-		return fmt.Errorf("compress/nop: copy: %w", err)
+		return fmt.Errorf("copying data: %w", err)
 	}
 	return nil
 }
 
-// Extension returns an empty string (no additional extension).
-func (n *NopCompressor) Extension() string {
+// FileExtension returns "" (no additional extension).
+func (n *NoOpCompressor) FileExtension() string {
 	return ""
 }
 
-// Format represents the compression format selection.
+// Format represents a compression format.
 type Format string
 
 const (
@@ -108,33 +127,19 @@ const (
 	FormatNone Format = "none"
 )
 
-// NewCompressor creates a Compressor from a format string and compression level.
-// For gzip, level maps to compress/gzip levels (1–9, -1 for default).
-// For zstd, level maps to zstd encoder levels (1–4).
-// For none, a NopCompressor is returned regardless of level.
+// NewCompressor creates a Compressor based on the format and level.
 func NewCompressor(format Format, level int) (Compressor, error) {
 	switch format {
 	case FormatGzip:
 		if level == 0 {
 			level = gzip.DefaultCompression
 		}
-		if level != gzip.DefaultCompression && (level < gzip.BestSpeed || level > gzip.BestCompression) {
-			return nil, fmt.Errorf("compress: invalid gzip level %d (valid: %d–%d or %d for default)",
-				level, gzip.BestSpeed, gzip.BestCompression, gzip.DefaultCompression)
-		}
-		return NewGzipCompressor(level), nil
-
+		return NewGzipCompressor(level)
 	case FormatZstd:
-		if level == 0 {
-			level = int(zstd.SpeedDefault)
-		}
-		encoderLevel := zstd.EncoderLevelFromZstd(level)
-		return NewZstdCompressor(encoderLevel), nil
-
+		return NewZstdCompressor(level)
 	case FormatNone, "":
-		return &NopCompressor{}, nil
-
+		return &NoOpCompressor{}, nil
 	default:
-		return nil, fmt.Errorf("compress: unknown format %q (valid: gzip, zstd, none)", format)
+		return nil, fmt.Errorf("unknown compression format: %q", format)
 	}
 }
