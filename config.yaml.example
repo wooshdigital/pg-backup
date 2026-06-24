@@ -1,36 +1,26 @@
-# pgdumper configuration example
-# Copy to config.yaml and adjust to your environment.
+database:
+  # Provide a full DSN or individual fields
+  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+  # Alternatively, use individual fields:
+  # host: localhost
+  # port: 5432
+  # user: postgres
+  # password: secret
+  # name: mydb
+  # ssl_mode: disable
 
-# PostgreSQL connection string (URL or key=value format).
-# Examples:
-#   postgres://user:password@host:5432/dbname?sslmode=require
-#   host=localhost port=5432 user=postgres dbname=mydb sslmode=disable
-dsn: "postgres://user:password@localhost:5432/mydb?sslmode=require"
+output_dir: "/var/backups/postgres"
 
-# Directory where dump files are written.
-output_dir: "/var/backups/pgdumper"
+# compression_format controls how the pg_dump output is compressed.
+# Supported values: gzip (default), zstd, none
+compression_format: "gzip"
 
-# Cron schedule for automatic dumps (optional; leave empty to run once and exit).
-# Example: every day at 02:00 UTC
-schedule: "0 2 * * *"
+# compression_level controls the compression level.
+# For gzip: -2 (HuffmanOnly) to 9 (BestCompression), or 0 for default (-1 internally).
+# For zstd: ignored (use zstd encoder level constants).
+# Leave as 0 to use the format's default level.
+compression_level: 0
 
-pg_dump:
-  # Absolute path to pg_dump binary. Leave empty to use the one on PATH.
-  binary_path: ""
-
-  # Output format: plain | custom | directory | tar
-  # "custom" is recommended: it supports parallel restore and compression.
-  format: "custom"
-
-  # Additional arguments passed verbatim to pg_dump.
-  extra_args:
-    - "--compress=9"
-    - "--no-owner"
-    - "--no-acl"
-
-retention:
-  # Delete dump files older than this duration (e.g. 168h = 7 days).
-  max_age: 168h
-
-  # Keep at most this many dump files (0 = no limit).
-  max_count: 7
+# dump_timeout is the maximum time allowed for a single dump operation.
+# Uses Go duration syntax: 30m, 1h, etc.
+dump_timeout: "30m"

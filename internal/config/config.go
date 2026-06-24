@@ -1,89 +1,91 @@
-// Package config loads and validates application configuration.
 package config
 
 import (
+	"compress/gzip"
 	"fmt"
 	"os"
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/your-org/your-repo/internal/compress"
 )
 
-// Config is the top-level application configuration.
+// Config holds the application configuration.
 type Config struct {
-	// DSN is the PostgreSQL connection string for the database to dump.
-	DSN string `yaml:"dsn"`
-
-	// OutputDir is the directory where dump files will be written.
-	OutputDir string `yaml:"output_dir"`
-
-	// Schedule is a cron expression controlling when dumps run (optional).
-	Schedule string `yaml:"schedule"`
-
-	// PgDump contains pg_dump-specific configuration.
-	PgDump PgDumpConfig `yaml:"pg_dump"`
-
-	// Retention controls how long dump files are kept.
-	Retention RetentionConfig `yaml:"retention"`
+	Database           DatabaseConfig    `yaml:"database"`
+	OutputDir          string            `yaml:"output_dir"`
+	CompressionFormat  compress.Format   `yaml:"compression_format"`
+	CompressionLevel   int               `yaml:"compression_level"`
+	DumpTimeout        time.Duration     `yaml:"dump_timeout"`
 }
 
-// PgDumpConfig holds configuration forwarded to the pg_dump invocation.
-type PgDumpConfig struct {
-	// BinaryPath is the path to the pg_dump binary.
-	// Defaults to "pg_dump" (resolved via PATH) if empty.
-	BinaryPath string `yaml:"binary_path"`
-
-	// Format is the pg_dump output format: plain, custom, directory, or tar.
-	Format string `yaml:"format"`
-
-	// ExtraArgs are appended verbatim to the pg_dump command line.
-	ExtraArgs []string `yaml:"extra_args"`
+// DatabaseConfig holds database connection details.
+type DatabaseConfig struct {
+	DSN      string `yaml:"dsn"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Name     string `yaml:"name"`
+	SSLMode  string `yaml:"ssl_mode"`
 }
 
-// RetentionConfig controls automatic cleanup of old dump files.
-type RetentionConfig struct {
-	// MaxAge is the maximum age of a dump file before it is deleted.
-	MaxAge time.Duration `yaml:"max_age"`
-
-	// MaxCount is the maximum number of dump files to keep (0 = unlimited).
-	MaxCount int `yaml:"max_count"`
-}
-
-// Load reads a YAML config file from path and returns a validated Config.
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("config: reading %q: %w", path, err)
-	}
-	return parse(data)
-}
-
-func parse(data []byte) (*Config, error) {
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("config: parsing YAML: %w", err)
-	}
-	if err := validate(&cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-func validate(cfg *Config) error {
-	if cfg.DSN == "" {
-		return fmt.Errorf("config: dsn is required")
-	}
-	if cfg.OutputDir == "" {
+// Validate checks that the configuration is valid.
+func (c *Config) Validate() error {
+	if c.OutputDir == "" {
 		return fmt.Errorf("config: output_dir is required")
 	}
-	if cfg.PgDump.Format != "" {
-		switch cfg.PgDump.Format {
-		case "plain", "custom", "directory", "tar":
-			// valid
-		default:
-			return fmt.Errorf("config: pg_dump.format %q is not one of plain/custom/directory/tar",
-				cfg.PgDump.Format)
+
+	switch c.CompressionFormat {
+	case compress.FormatGzip, compress.FormatZstd, compress.FormatNone, "":
+		// valid
+	default:
+		return fmt.Errorf("config: unknown compression_format %q (must be gzip, zstd, or none)", c.CompressionFormat)
+	}
+
+	if c.CompressionFormat == compress.FormatGzip || c.CompressionFormat == "" {
+		if c.CompressionLevel != 0 {
+			if c.CompressionLevel < gzip.HuffmanOnly || c.CompressionLevel > gzip.BestCompression {
+				return fmt.Errorf("config: compression_level %d out of range for gzip (must be %d–%d or 0 for default)",
+					c.CompressionLevel, gzip.HuffmanOnly, gzip.BestCompression)
+			}
 		}
 	}
+
 	return nil
+}
+
+// CompressorConfig returns the compress.Config derived from this Config.
+func (c *Config) CompressorConfig() compress.Config {
+	format := c.CompressionFormat
+	if format == "" {
+		format = compress.FormatGzip
+	}
+	return compress.Config{
+		Format:    format,
+		GzipLevel: c.CompressionLevel,
+	}
+}
+
+// Load reads a Config from the given YAML file path.
+func Load(path string) (*Config, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("config: open %q: %w", path, err)
+	}
+	defer f.Close()
+
+	var cfg Config
+	dec := yaml.NewDecoder(f)
+	dec.KnownFields(true)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("config: decode %q: %w", path, err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
 }

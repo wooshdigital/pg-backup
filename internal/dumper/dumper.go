@@ -1,159 +1,165 @@
-// Package dumper provides utilities for invoking pg_dump and streaming
-// its output to an arbitrary io.Writer.
 package dumper
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
+
+	"github.com/your-org/your-repo/internal/compress"
 )
 
-// DumpResult contains metadata about a completed dump operation.
-type DumpResult struct {
-	// StartedAt is when the dump began.
-	StartedAt time.Time
-	// Duration is how long the dump took.
-	Duration time.Duration
-	// BytesWritten is the number of bytes written to the destination writer.
-	BytesWritten int64
+// Dumper orchestrates a pg_dump run and compresses the output.
+type Dumper struct {
+	pgDumpPath string
+	outputDir  string
+	compressor compress.Compressor
+	env        []string
 }
 
-// Dumper is the interface for running a database dump.
-type Dumper interface {
-	// Dump executes a pg_dump of the database described by dsn, writing the
-	// output to w. It respects ctx for cancellation.
-	Dump(ctx context.Context, dsn string, w io.Writer) (*DumpResult, error)
-}
-
-// ExecRunner abstracts os/exec so it can be replaced in tests.
-type ExecRunner func(ctx context.Context, name string, args []string, env []string, stdout io.Writer, stderr io.Writer) error
-
-// DefaultExecRunner is the production ExecRunner that uses os/exec.
-func DefaultExecRunner(ctx context.Context, name string, args []string, env []string, stdout io.Writer, stderr io.Writer) error {
-	cmd := exec.CommandContext(ctx, name, args...)
-	// Inherit the current process environment, then append our overrides.
-	cmd.Env = append(os.Environ(), env...)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	return cmd.Run()
-}
-
-// PgDumper implements Dumper using the pg_dump binary.
-type PgDumper struct {
-	// PgDumpPath is the path to the pg_dump executable.
-	// If empty, "pg_dump" is looked up on PATH.
+// Options configures the Dumper.
+type Options struct {
+	// PgDumpPath is the path to the pg_dump binary. Defaults to "pg_dump".
 	PgDumpPath string
-
-	// ExtraArgs are additional flags passed to pg_dump before the database name.
-	// For example: []string{"--format=custom", "--compress=9"}
-	ExtraArgs []string
-
-	// Runner is the function used to invoke pg_dump. Defaults to
-	// DefaultExecRunner when nil.
-	Runner ExecRunner
+	// OutputDir is the directory where dump files are written.
+	OutputDir string
+	// Compressor is used to compress pg_dump output. If nil, NoopCompressor is used.
+	Compressor compress.Compressor
+	// Env is the environment variables to pass to pg_dump (e.g. PGPASSWORD).
+	Env []string
 }
 
-// NewPgDumper returns a PgDumper with sensible defaults.
-func NewPgDumper() *PgDumper {
-	return &PgDumper{
-		PgDumpPath: "pg_dump",
-		Runner:     DefaultExecRunner,
-	}
-}
-
-// Dump runs pg_dump for the given DSN and streams the output to w.
-// It returns a DumpResult containing timing and byte-count metadata.
-//
-// The dump is cancelled if ctx is cancelled. If pg_dump exits with a
-// non-zero status, Dump returns a DumpError containing the captured stderr.
-func (d *PgDumper) Dump(ctx context.Context, dsn string, w io.Writer) (*DumpResult, error) {
-	if ctx == nil {
-		return nil, fmt.Errorf("context must not be nil")
-	}
-	if w == nil {
-		return nil, fmt.Errorf("writer must not be nil")
-	}
-
-	params, err := ParseDSN(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("invalid DSN: %w", err)
-	}
-
-	pgDumpPath := d.PgDumpPath
+// New creates a new Dumper with the given options.
+func New(opts Options) *Dumper {
+	pgDumpPath := opts.PgDumpPath
 	if pgDumpPath == "" {
 		pgDumpPath = "pg_dump"
 	}
+	c := opts.Compressor
+	if c == nil {
+		c = &compress.NoopCompressor{}
+	}
+	return &Dumper{
+		pgDumpPath: pgDumpPath,
+		outputDir:  opts.OutputDir,
+		compressor: c,
+		env:        opts.Env,
+	}
+}
 
-	runner := d.Runner
-	if runner == nil {
-		runner = DefaultExecRunner
+// DumpResult holds information about a completed dump.
+type DumpResult struct {
+	FilePath string
+	Duration time.Duration
+	Bytes    int64
+}
+
+// Dump runs pg_dump with the given DSN, compresses the output, and writes it
+// to a timestamped file in the configured output directory.
+//
+// The pipeline is: pg_dump stdout → compressor → temp file → atomic rename.
+func (d *Dumper) Dump(ctx context.Context, dsn string) (*DumpResult, error) {
+	if err := os.MkdirAll(d.outputDir, 0o750); err != nil {
+		return nil, fmt.Errorf("dumper: create output dir: %w", err)
 	}
 
-	args := params.PgDumpArgs(d.ExtraArgs...)
-	env := params.Env()
+	timestamp := time.Now().UTC().Format("20060102T150405Z")
+	ext := ".sql" + d.compressor.FileExtension()
+	filename := fmt.Sprintf("dump-%s%s", timestamp, ext)
+	finalPath := filepath.Join(d.outputDir, filename)
 
-	// Capture stderr separately so we can include it in error messages.
-	var stderrBuf bytes.Buffer
+	// Write to a temp file in the same directory so we can do an atomic rename.
+	tmpFile, err := os.CreateTemp(d.outputDir, ".dump-tmp-*")
+	if err != nil {
+		return nil, fmt.Errorf("dumper: create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
 
-	// Wrap w to count bytes written.
-	cw := &countingWriter{w: w}
-
-	startedAt := time.Now()
-
-	if err := runner(ctx, pgDumpPath, args, env, cw, &stderrBuf); err != nil {
-		// Check if the context was cancelled.
-		if ctx.Err() != nil {
-			return nil, &DumpError{
-				Cause:  ctx.Err(),
-				Stderr: stderrBuf.String(),
-			}
+	// Clean up temp file on failure.
+	success := false
+	defer func() {
+		if !success {
+			_ = os.Remove(tmpPath)
 		}
-		return nil, &DumpError{
-			Cause:  err,
-			Stderr: stderrBuf.String(),
-		}
+	}()
+
+	start := time.Now()
+
+	// pg_dump stdout → pipe reader
+	pr, pw := io.Pipe()
+
+	cmd := exec.CommandContext(ctx, d.pgDumpPath, dsn) //nolint:gosec
+	cmd.Stdout = pw
+	cmd.Stderr = os.Stderr
+	if len(d.env) > 0 {
+		cmd.Env = append(os.Environ(), d.env...)
 	}
 
-	duration := time.Since(startedAt)
+	if err := cmd.Start(); err != nil {
+		_ = pw.Close()
+		_ = pr.Close()
+		_ = tmpFile.Close()
+		return nil, fmt.Errorf("dumper: start pg_dump: %w", err)
+	}
+
+	// Run compression in the current goroutine while pg_dump writes to the pipe.
+	compressErrCh := make(chan error, 1)
+	go func() {
+		// Close the write end of the pipe when pg_dump exits.
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			_ = pw.CloseWithError(fmt.Errorf("dumper: pg_dump: %w", waitErr))
+		} else {
+			_ = pw.Close()
+		}
+		compressErrCh <- waitErr
+	}()
+
+	// Compress from pipe reader → temp file.
+	if err := d.compressor.Compress(pr, tmpFile); err != nil {
+		_ = pr.Close()
+		_ = tmpFile.Close()
+		<-compressErrCh
+		return nil, fmt.Errorf("dumper: compress: %w", err)
+	}
+	_ = pr.Close()
+
+	// Wait for pg_dump to finish.
+	if waitErr := <-compressErrCh; waitErr != nil {
+		_ = tmpFile.Close()
+		return nil, fmt.Errorf("dumper: pg_dump wait: %w", waitErr)
+	}
+
+	elapsed := time.Since(start)
+
+	// Sync and close the temp file before rename.
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return nil, fmt.Errorf("dumper: sync temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return nil, fmt.Errorf("dumper: close temp file: %w", err)
+	}
+
+	// Stat to get the written size.
+	fi, err := os.Stat(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("dumper: stat temp file: %w", err)
+	}
+	writtenBytes := fi.Size()
+
+	// Atomic rename.
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		return nil, fmt.Errorf("dumper: rename to final path: %w", err)
+	}
+	success = true
+
 	return &DumpResult{
-		StartedAt:    startedAt,
-		Duration:     duration,
-		BytesWritten: cw.n,
+		FilePath: finalPath,
+		Duration: elapsed,
+		Bytes:    writtenBytes,
 	}, nil
-}
-
-// DumpError is returned when pg_dump exits with a non-zero status or the
-// context is cancelled.
-type DumpError struct {
-	// Cause is the underlying error (exec error or context error).
-	Cause error
-	// Stderr contains the captured stderr output from pg_dump.
-	Stderr string
-}
-
-func (e *DumpError) Error() string {
-	if e.Stderr != "" {
-		return fmt.Sprintf("pg_dump failed: %v\nstderr: %s", e.Cause, e.Stderr)
-	}
-	return fmt.Sprintf("pg_dump failed: %v", e.Cause)
-}
-
-func (e *DumpError) Unwrap() error {
-	return e.Cause
-}
-
-// countingWriter wraps an io.Writer and counts the total bytes written.
-type countingWriter struct {
-	w io.Writer
-	n int64
-}
-
-func (cw *countingWriter) Write(p []byte) (int, error) {
-	n, err := cw.w.Write(p)
-	cw.n += int64(n)
-	return n, err
 }
