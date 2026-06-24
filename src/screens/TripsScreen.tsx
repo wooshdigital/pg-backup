@@ -1,244 +1,223 @@
 import React from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
   View,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { Heading, Body, Caption } from '../components/common/Typography';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
-import {
-  H2,
-  H3,
-  Body,
-  BodySmall,
-  Caption,
-  Overline,
-} from '../components/common/Typography';
-import { spacing, borderRadius } from '../constants/theme';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+const TripStatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const { theme } = useTheme();
 
-const MOCK_TRIPS = [
-  {
-    id: '1',
-    name: 'Tokyo 2024',
-    destination: 'Tokyo, Japan',
-    emoji: '🇯🇵',
-    participants: 4,
-    totalExpenses: 2840.5,
-    currency: 'USD',
-    status: 'active',
-    daysAgo: 2,
-  },
-  {
-    id: '2',
-    name: 'Barcelona Summer',
-    destination: 'Barcelona, Spain',
-    emoji: '🇪🇸',
-    participants: 6,
-    totalExpenses: 1250.0,
-    currency: 'EUR',
-    status: 'planning',
-    daysAgo: 7,
-  },
-  {
-    id: '3',
-    name: 'NYC Weekend',
-    destination: 'New York, USA',
-    emoji: '🗽',
-    participants: 3,
-    totalExpenses: 980.75,
-    currency: 'USD',
-    status: 'completed',
-    daysAgo: 30,
-  },
-] as const;
+  const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
+    planning: {
+      color: theme.colors.status.info,
+      bg: theme.colors.brand.secondary,
+      label: '📋 Planning',
+    },
+    active: {
+      color: theme.colors.status.success,
+      bg: '#EDFBF3',
+      label: '🟢 Active',
+    },
+    completed: {
+      color: theme.colors.text.secondary,
+      bg: theme.colors.surface.secondary,
+      label: '✅ Completed',
+    },
+    archived: {
+      color: theme.colors.text.tertiary,
+      bg: theme.colors.surface.secondary,
+      label: '📦 Archived',
+    },
+  };
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+  const config = statusConfig[status] ?? statusConfig.planning;
 
-const STATUS_CONFIG = {
-  active: { label: 'Active', emoji: '🟢' },
-  planning: { label: 'Planning', emoji: '🟡' },
-  completed: { label: 'Completed', emoji: '⚪' },
-  archived: { label: 'Archived', emoji: '🗂️' },
-} as const;
+  return (
+    <View style={[styles.badge, { backgroundColor: config.bg }]}>
+      <Caption style={{ color: config.color, fontWeight: '600' }}>{config.label}</Caption>
+    </View>
+  );
+};
 
-type TripStatus = keyof typeof STATUS_CONFIG;
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export function TripsScreen() {
+export const TripsScreen: React.FC = () => {
   const { theme } = useTheme();
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background.primary }]}
+    >
+      {/* Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.colors.surface.primary,
+            borderBottomColor: theme.colors.border.subtle,
+          },
+        ]}
+      >
+        <Heading level={2} style={{ color: theme.colors.text.primary }}>
+          My Trips
+        </Heading>
+        <TouchableOpacity
+          style={[
+            styles.addButton,
+            { backgroundColor: theme.colors.brand.primary },
+          ]}
+          onPress={() => {}}
+          accessibilityLabel="Add new trip"
+          accessibilityRole="button"
+        >
+          <Body style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 22 }}>+</Body>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <H2>My Trips</H2>
-          <BodySmall color={theme.textSecondary}>
-            {MOCK_TRIPS.length} trip{MOCK_TRIPS.length !== 1 ? 's' : ''}
-          </BodySmall>
-        </View>
+        {/* Filter Tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterContent}
+        >
+          {['All', 'Active', 'Planning', 'Completed'].map(filter => (
+            <TouchableOpacity
+              key={filter}
+              style={[
+                styles.filterTab,
+                filter === 'All' && {
+                  backgroundColor: theme.colors.brand.primary,
+                },
+                filter !== 'All' && {
+                  backgroundColor: theme.colors.surface.secondary,
+                },
+              ]}
+            >
+              <Caption
+                style={{
+                  color: filter === 'All' ? '#FFFFFF' : theme.colors.text.secondary,
+                  fontWeight: '600',
+                }}
+              >
+                {filter}
+              </Caption>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-        {/* New Trip Button */}
-        <Button
-          label="+ New Trip"
-          variant="primary"
-          size="base"
-          fullWidth
-          style={styles.newTripButton}
-        />
+        {/* Empty State */}
+        <Card elevation="md" style={styles.emptyCard}>
+          <View style={styles.emptyState}>
+            <Body style={styles.emptyEmoji}>✈️</Body>
+            <Heading
+              level={3}
+              style={{ color: theme.colors.text.primary, textAlign: 'center' }}
+            >
+              No trips yet
+            </Heading>
+            <Body
+              style={{ color: theme.colors.text.secondary, textAlign: 'center', lineHeight: 22 }}
+            >
+              Create your first trip to start tracking shared expenses with friends and family.
+            </Body>
+            <Button
+              label="✈️  Create a Trip"
+              onPress={() => {}}
+              variant="primary"
+              style={styles.createButton}
+            />
+          </View>
+        </Card>
 
-        {/* Trips List */}
-        <View style={styles.tripsList}>
-          {MOCK_TRIPS.map((trip) => {
-            const statusInfo = STATUS_CONFIG[trip.status as TripStatus];
-            return (
-              <TouchableOpacity key={trip.id} activeOpacity={0.85}>
-                <Card elevation="base" style={styles.tripCard}>
-                  {/* Trip Header */}
-                  <View style={styles.tripHeader}>
-                    <View
-                      style={[
-                        styles.tripEmojiContainer,
-                        { backgroundColor: theme.surfaceSubtle },
-                      ]}
-                    >
-                      <Body style={styles.tripEmoji}>{trip.emoji}</Body>
-                    </View>
-                    <View style={styles.tripInfo}>
-                      <H3 numberOfLines={1}>{trip.name}</H3>
-                      <Caption color={theme.textSecondary}>{trip.destination}</Caption>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: theme.surfaceSubtle },
-                      ]}
-                    >
-                      <Caption color={theme.textSecondary}>
-                        {statusInfo.emoji} {statusInfo.label}
-                      </Caption>
-                    </View>
-                  </View>
-
-                  {/* Divider */}
-                  <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-
-                  {/* Trip Stats */}
-                  <View style={styles.tripStats}>
-                    <View style={styles.statItem}>
-                      <Overline color={theme.textTertiary}>Participants</Overline>
-                      <Body style={styles.statValue}>{trip.participants} people</Body>
-                    </View>
-                    <View style={styles.statItem}>
-                      <Overline color={theme.textTertiary}>Total Spent</Overline>
-                      <Body style={[styles.statValue, { color: theme.primary }]}>
-                        {trip.currency} {trip.totalExpenses.toLocaleString()}
-                      </Body>
-                    </View>
-                  </View>
-                </Card>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Empty State (hidden when trips exist) */}
-        {MOCK_TRIPS.length === 0 && (
-          <Card elevation="none" style={[styles.emptyState, { borderStyle: 'dashed' }]}>
-            <Body style={styles.emptyEmoji}>🧳</Body>
-            <H3 align="center">No trips yet</H3>
-            <BodySmall align="center" color={theme.textSecondary}>
-              Create your first trip and start splitting expenses with your crew.
-            </BodySmall>
-          </Card>
-        )}
+        {/* Tip Card */}
+        <Card
+          elevation="sm"
+          style={[styles.tipCard, { borderLeftColor: theme.colors.brand.primary }]}
+        >
+          <Caption style={{ color: theme.colors.text.secondary, marginBottom: 4 }}>
+            💡 Pro Tip
+          </Caption>
+          <Body style={{ color: theme.colors.text.primary }}>
+            Invite participants to a trip so everyone can track expenses together in real time.
+          </Body>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
+};
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[10],
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: spacing[6],
-    marginBottom: spacing[4],
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
   },
-  newTripButton: {
-    marginBottom: spacing[5],
-  },
-  tripsList: {
-    gap: spacing[3],
-  },
-  tripCard: {
-    gap: spacing[3],
-  },
-  tripHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  tripEmojiContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  tripEmoji: {
-    fontSize: 24,
-  },
-  tripInfo: {
+  scrollView: {
     flex: 1,
-    gap: spacing[0.5],
   },
-  statusBadge: {
-    paddingHorizontal: spacing[2],
-    paddingVertical: spacing[1],
-    borderRadius: borderRadius.full,
-    flexShrink: 0,
+  content: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  divider: {
-    height: 1,
-    marginHorizontal: -spacing[4],
+  filterScroll: {
+    marginBottom: 20,
+    marginHorizontal: -20,
   },
-  tripStats: {
-    flexDirection: 'row',
-    gap: spacing[6],
+  filterContent: {
+    paddingHorizontal: 20,
+    gap: 8,
   },
-  statItem: {
-    gap: spacing[0.5],
+  filterTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  statValue: {
-    fontWeight: '600',
+  emptyCard: {
+    marginBottom: 16,
   },
   emptyState: {
     alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[10],
-    marginTop: spacing[4],
+    paddingVertical: 32,
+    gap: 12,
   },
   emptyEmoji: {
-    fontSize: 48,
+    fontSize: 56,
+  },
+  createButton: {
+    marginTop: 8,
+    minWidth: 160,
+  },
+  tipCard: {
+    borderLeftWidth: 3,
+  },
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
   },
 });

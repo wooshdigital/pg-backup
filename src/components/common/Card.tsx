@@ -1,57 +1,64 @@
 import React from 'react';
 import {
-  StyleSheet,
   View,
-  type ViewProps,
-  type ViewStyle,
+  StyleSheet,
+  ViewStyle,
+  StyleProp,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import { borderRadius, shadows, spacing } from '../../constants/theme';
+import { Shadows } from '../../constants/theme';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-export type CardElevation = 'none' | 'sm' | 'base' | 'md' | 'lg';
+export type CardElevation = 'none' | 'sm' | 'md' | 'lg' | 'xl';
 
-export interface CardProps extends ViewProps {
+export interface CardProps {
   children: React.ReactNode;
   elevation?: CardElevation;
-  padding?: keyof typeof spacing;
-  style?: ViewStyle;
-  radius?: keyof typeof borderRadius;
+  style?: StyleProp<ViewStyle>;
+  /** Override background color */
+  backgroundColor?: string;
+  /** Remove default padding */
+  noPadding?: boolean;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Component ─────────────────────────────────────────────────────────────────
 
-export function Card({
+export const Card: React.FC<CardProps> = ({
   children,
-  elevation = 'base',
-  padding = 4,
+  elevation = 'md',
   style,
-  radius = 'lg',
-  ...rest
-}: CardProps) {
+  backgroundColor,
+  noPadding = false,
+}) => {
   const { theme } = useTheme();
 
-  const cardStyle: ViewStyle = {
-    backgroundColor: theme.surface,
-    borderRadius: borderRadius[radius],
-    padding: spacing[padding],
-    borderWidth: 1,
-    borderColor: theme.border,
-    ...shadows[elevation],
-  };
+  const shadowStyle = elevation !== 'none' ? Shadows[elevation] : {};
 
   return (
-    <View style={[styles.card, cardStyle, style]} {...rest}>
+    <View
+      style={[
+        styles.card,
+        shadowStyle,
+        {
+          backgroundColor: backgroundColor ?? theme.colors.surface.primary,
+          borderColor: theme.colors.border.subtle,
+          borderRadius: theme.borderRadius.lg,
+          padding: noPadding ? 0 : theme.spacing.lg,
+        },
+        style,
+      ]}
+    >
       {children}
     </View>
   );
-}
+};
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   card: {
+    borderWidth: 1,
     overflow: 'hidden',
   },
 });

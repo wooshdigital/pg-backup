@@ -1,39 +1,64 @@
-// ─── Root Tab Routes ─────────────────────────────────────────────────────────
+// ─── Root Tab Routes ───────────────────────────────────────────────────────────
 
-export enum RootRoute {
+export enum RootTab {
   Home = 'Home',
   Trips = 'Trips',
   Settings = 'Settings',
 }
 
-// ─── Trip Stack Routes ────────────────────────────────────────────────────────
+// ─── Trip Stack Routes ─────────────────────────────────────────────────────────
 
-export enum TripRoute {
+export enum TripStack {
   TripsList = 'TripsList',
   TripDetail = 'TripDetail',
-  AddExpense = 'AddExpense',
+  TripCreate = 'TripCreate',
+  TripEdit = 'TripEdit',
   ExpenseDetail = 'ExpenseDetail',
-  AddParticipant = 'AddParticipant',
+  ExpenseCreate = 'ExpenseCreate',
+  ExpenseEdit = 'ExpenseEdit',
+  ParticipantDetail = 'ParticipantDetail',
   Settlements = 'Settlements',
-  EditTrip = 'EditTrip',
-  CreateTrip = 'CreateTrip',
 }
 
-// ─── Settings Stack Routes ────────────────────────────────────────────────────
+// ─── Settings Stack Routes ─────────────────────────────────────────────────────
 
-export enum SettingsRoute {
+export enum SettingsStack {
   SettingsMain = 'SettingsMain',
   CurrencyPicker = 'CurrencyPicker',
-  ThemeSettings = 'ThemeSettings',
-  ProfileSettings = 'ProfileSettings',
+  ThemePicker = 'ThemePicker',
   About = 'About',
 }
 
-// ─── Modal Routes ─────────────────────────────────────────────────────────────
+// ─── Modal Routes ──────────────────────────────────────────────────────────────
 
 export enum ModalRoute {
-  ConfirmDialog = 'ConfirmDialog',
-  ImagePicker = 'ImagePicker',
-  DatePicker = 'DatePicker',
-  ParticipantPicker = 'ParticipantPicker',
+  AddParticipant = 'AddParticipant',
+  SplitDetail = 'SplitDetail',
 }
+
+// ─── Navigation Param Lists ────────────────────────────────────────────────────
+
+export type RootTabParamList = {
+  [RootTab.Home]: undefined;
+  [RootTab.Trips]: undefined;
+  [RootTab.Settings]: undefined;
+};
+
+export type TripStackParamList = {
+  [TripStack.TripsList]: undefined;
+  [TripStack.TripDetail]: { tripId: string };
+  [TripStack.TripCreate]: undefined;
+  [TripStack.TripEdit]: { tripId: string };
+  [TripStack.ExpenseDetail]: { tripId: string; expenseId: string };
+  [TripStack.ExpenseCreate]: { tripId: string };
+  [TripStack.ExpenseEdit]: { tripId: string; expenseId: string };
+  [TripStack.ParticipantDetail]: { tripId: string; participantId: string };
+  [TripStack.Settlements]: { tripId: string };
+};
+
+export type SettingsStackParamList = {
+  [SettingsStack.SettingsMain]: undefined;
+  [SettingsStack.CurrencyPicker]: undefined;
+  [SettingsStack.ThemePicker]: undefined;
+  [SettingsStack.About]: undefined;
+};

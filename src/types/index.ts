@@ -1,4 +1,4 @@
-// ─── Currency ────────────────────────────────────────────────────────────────
+// ─── Currency ──────────────────────────────────────────────────────────────────
 
 export type CurrencyCode =
   | 'USD'
@@ -14,43 +14,42 @@ export type CurrencyCode =
   | 'BRL'
   | 'KRW'
   | 'SGD'
-  | 'HKD'
-  | 'NOK'
   | 'SEK'
-  | 'DKK'
-  | 'NZD'
-  | 'ZAR'
-  | 'THB';
+  | 'NOK'
+  | 'DKK';
 
 export interface Currency {
   code: CurrencyCode;
   symbol: string;
   name: string;
-  decimals: number;
+  decimalPlaces: number;
 }
 
-// ─── Participant ──────────────────────────────────────────────────────────────
+// ─── Participant ───────────────────────────────────────────────────────────────
+
+export type ParticipantId = string;
 
 export interface Participant {
-  id: string;
+  id: ParticipantId;
   name: string;
   email?: string;
   avatarUrl?: string;
-  /** Whether this participant is the local device user */
-  isCurrentUser: boolean;
-  createdAt: string; // ISO 8601
+  /** ISO 8601 */
+  createdAt: string;
 }
 
-// ─── Split ────────────────────────────────────────────────────────────────────
+// ─── Split ─────────────────────────────────────────────────────────────────────
 
 export type SplitMethod = 'equal' | 'exact' | 'percentage' | 'shares';
 
 export interface SplitShare {
-  participantId: string;
-  /** Raw value: amount (exact), percentage (percentage), or share count (shares) */
-  value: number;
-  /** Resolved amount in the trip's base currency */
-  resolvedAmount: number;
+  participantId: ParticipantId;
+  /** Resolved amount in the expense's currency (minor units, e.g. cents) */
+  amount: number;
+  /** Used when method is 'percentage' */
+  percentage?: number;
+  /** Used when method is 'shares' */
+  shares?: number;
 }
 
 export interface Split {
@@ -60,7 +59,9 @@ export interface Split {
   shares: SplitShare[];
 }
 
-// ─── Expense ──────────────────────────────────────────────────────────────────
+// ─── Expense ───────────────────────────────────────────────────────────────────
+
+export type ExpenseId = string;
 
 export type ExpenseCategory =
   | 'accommodation'
@@ -69,95 +70,93 @@ export type ExpenseCategory =
   | 'activities'
   | 'shopping'
   | 'health'
-  | 'utilities'
-  | 'entertainment'
+  | 'communication'
   | 'other';
 
 export interface Expense {
-  id: string;
+  id: ExpenseId;
   tripId: string;
   title: string;
-  description?: string;
+  /** Amount in minor units (e.g. cents) */
   amount: number;
   currency: CurrencyCode;
-  /** Amount converted to the trip's base currency */
-  amountInBaseCurrency: number;
   category: ExpenseCategory;
-  /** Participant ID of the person who paid */
-  paidById: string;
-  /** All participants who owe for this expense */
-  participantIds: string[];
+  /** Participant who paid */
+  paidBy: ParticipantId;
+  /** Participants involved in the expense */
+  participants: ParticipantId[];
   split: Split;
+  note?: string;
   receiptUrl?: string;
-  date: string; // ISO 8601
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
+  /** ISO 8601 */
+  date: string;
+  /** ISO 8601 */
+  createdAt: string;
+  /** ISO 8601 */
+  updatedAt: string;
 }
 
-// ─── Balance ──────────────────────────────────────────────────────────────────
+// ─── Trip ──────────────────────────────────────────────────────────────────────
 
-export interface Balance {
-  participantId: string;
-  amount: number; // positive = owed money, negative = owes money
-  currency: CurrencyCode;
-}
-
-export interface Settlement {
-  fromParticipantId: string;
-  toParticipantId: string;
-  amount: number;
-  currency: CurrencyCode;
-}
-
-// ─── Trip ─────────────────────────────────────────────────────────────────────
+export type TripId = string;
 
 export type TripStatus = 'planning' | 'active' | 'completed' | 'archived';
 
 export interface Trip {
-  id: string;
+  id: TripId;
   name: string;
   description?: string;
   destination?: string;
   coverImageUrl?: string;
-  baseCurrency: CurrencyCode;
-  status: TripStatus;
+  currency: CurrencyCode;
   participants: Participant[];
   expenses: Expense[];
-  balances: Balance[];
-  suggestedSettlements: Settlement[];
-  startDate?: string; // ISO 8601
-  endDate?: string; // ISO 8601
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
+  status: TripStatus;
+  /** ISO 8601 */
+  startDate?: string;
+  /** ISO 8601 */
+  endDate?: string;
+  /** ISO 8601 */
+  createdAt: string;
+  /** ISO 8601 */
+  updatedAt: string;
 }
 
-// ─── Navigation ───────────────────────────────────────────────────────────────
+// ─── Settlement ────────────────────────────────────────────────────────────────
 
-export type RootTabParamList = {
-  Home: undefined;
-  Trips: undefined;
-  Settings: undefined;
-};
+export interface Settlement {
+  id: string;
+  tripId: TripId;
+  from: ParticipantId;
+  to: ParticipantId;
+  /** Amount in minor units */
+  amount: number;
+  currency: CurrencyCode;
+  settled: boolean;
+  /** ISO 8601 */
+  settledAt?: string;
+  /** ISO 8601 */
+  createdAt: string;
+}
 
-export type TripStackParamList = {
-  TripsList: undefined;
-  TripDetail: { tripId: string };
-  AddExpense: { tripId: string };
-  ExpenseDetail: { tripId: string; expenseId: string };
-  AddParticipant: { tripId: string };
-  Settlements: { tripId: string };
-};
+// ─── Balance ───────────────────────────────────────────────────────────────────
 
-// ─── Storage ──────────────────────────────────────────────────────────────────
+export interface Balance {
+  participantId: ParticipantId;
+  /** Positive = owed money, Negative = owes money */
+  net: number;
+  currency: CurrencyCode;
+}
+
+// ─── App State ─────────────────────────────────────────────────────────────────
+
+export interface AppSettings {
+  theme: 'light' | 'dark' | 'system';
+  defaultCurrency: CurrencyCode;
+  hapticFeedback: boolean;
+}
 
 export interface AppState {
   trips: Trip[];
-  currentUserId: string | null;
   settings: AppSettings;
-}
-
-export interface AppSettings {
-  defaultCurrency: CurrencyCode;
-  theme: 'light' | 'dark' | 'system';
-  notificationsEnabled: boolean;
 }

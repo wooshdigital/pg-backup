@@ -8,109 +8,106 @@ import React, {
 } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { darkTheme, lightTheme, type Theme } from '../constants/theme';
+import { createTheme, Theme } from '../constants/theme';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-export type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemePreference = 'light' | 'dark' | 'system';
 
 export interface ThemeContextValue {
   theme: Theme;
-  mode: ThemeMode;
+  preference: ThemePreference;
   isDark: boolean;
-  setMode: (mode: ThemeMode) => void;
+  setPreference: (preference: ThemePreference) => void;
   toggleTheme: () => void;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ─────────────────────────────────────────────────────────────────
 
-const THEME_STORAGE_KEY = '@splitease/theme_mode';
+const THEME_STORAGE_KEY = '@tripsplit/theme_preference';
 
-// ─── Context ──────────────────────────────────────────────────────────────────
+const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-// ─── Provider ─────────────────────────────────────────────────────────────────
+// ─── Provider ──────────────────────────────────────────────────────────────────
 
 interface ThemeProviderProps {
   children: React.ReactNode;
 }
 
-export function ThemeProvider({ children }: ThemeProviderProps) {
+export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const systemColorScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  const [preference, setPreferenceState] = useState<ThemePreference>('system');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load persisted theme on mount
+  // Load saved preference on mount
   useEffect(() => {
-    const loadTheme = async () => {
+    const loadPreference = async () => {
       try {
-        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-        if (stored === 'light' || stored === 'dark' || stored === 'system') {
-          setModeState(stored);
+        const saved = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (saved === 'light' || saved === 'dark' || saved === 'system') {
+          setPreferenceState(saved);
         }
       } catch (error) {
-        console.error('Failed to load theme preference:', error);
+        console.warn('Failed to load theme preference:', error);
       } finally {
         setIsLoaded(true);
       }
     };
 
-    void loadTheme();
+    loadPreference();
   }, []);
 
-  const setMode = useCallback(async (newMode: ThemeMode) => {
-    setModeState(newMode);
+  const setPreference = useCallback(async (newPreference: ThemePreference) => {
     try {
-      await AsyncStorage.setItem(THEME_STORAGE_KEY, newMode);
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, newPreference);
+      setPreferenceState(newPreference);
     } catch (error) {
-      console.error('Failed to persist theme preference:', error);
+      console.warn('Failed to save theme preference:', error);
+      setPreferenceState(newPreference);
     }
   }, []);
 
   const toggleTheme = useCallback(() => {
-    const next = mode === 'light' ? 'dark' : 'light';
-    void setMode(next);
-  }, [mode, setMode]);
+    const next = preference === 'dark' ? 'light' : 'dark';
+    setPreference(next);
+  }, [preference, setPreference]);
 
   const isDark = useMemo(() => {
-    if (mode === 'system') {
+    if (preference === 'system') {
       return systemColorScheme === 'dark';
     }
-    return mode === 'dark';
-  }, [mode, systemColorScheme]);
+    return preference === 'dark';
+  }, [preference, systemColorScheme]);
 
-  const theme = useMemo<Theme>(() => {
-    return isDark ? darkTheme : lightTheme;
-  }, [isDark]);
+  const theme = useMemo(() => createTheme(isDark), [isDark]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
-      mode,
+      preference,
       isDark,
-      setMode: (newMode: ThemeMode) => {
-        void setMode(newMode);
-      },
+      setPreference,
       toggleTheme,
     }),
-    [theme, mode, isDark, setMode, toggleTheme],
+    [theme, preference, isDark, setPreference, toggleTheme],
   );
 
-  // Prevent flash of wrong theme
+  // Don't render until preference is loaded to avoid flash
   if (!isLoaded) {
     return null;
   }
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
+};
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useTheme(): ThemeContextValue {
+export const useTheme = (): ThemeContextValue => {
   const context = useContext(ThemeContext);
   if (!context) {
     throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
-}
+};
+
+export { ThemeContext };

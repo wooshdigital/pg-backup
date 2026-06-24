@@ -1,295 +1,281 @@
 import React from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
   View,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+  TouchableOpacity,
+  Switch,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { Heading, Body, Caption } from '../components/common/Typography';
 import { Card } from '../components/common/Card';
-import {
-  H2,
-  Body,
-  BodySmall,
-  Caption,
-  Overline,
-} from '../components/common/Typography';
-import { spacing, borderRadius } from '../constants/theme';
-import type { ThemeMode } from '../context/ThemeContext';
 
-// ─── Settings Item ────────────────────────────────────────────────────────────
-
-interface SettingsItemProps {
+interface SettingsRowProps {
   emoji: string;
   label: string;
   value?: string;
   onPress?: () => void;
-  showChevron?: boolean;
+  rightElement?: React.ReactNode;
+  isLast?: boolean;
 }
 
-function SettingsItem({ emoji, label, value, onPress, showChevron = true }: SettingsItemProps) {
+const SettingsRow: React.FC<SettingsRowProps> = ({
+  emoji,
+  label,
+  value,
+  onPress,
+  rightElement,
+  isLast = false,
+}) => {
   const { theme } = useTheme();
 
   return (
     <TouchableOpacity
-      activeOpacity={onPress ? 0.7 : 1}
       onPress={onPress}
       disabled={!onPress}
-      style={styles.settingsItem}
+      style={[
+        styles.settingsRow,
+        !isLast && { borderBottomWidth: 1, borderBottomColor: theme.colors.border.subtle },
+      ]}
       accessibilityRole={onPress ? 'button' : 'none'}
     >
-      <View style={[styles.itemIcon, { backgroundColor: theme.surfaceSubtle }]}>
-        <Body style={styles.itemEmoji}>{emoji}</Body>
+      <View style={styles.settingsRowLeft}>
+        <View
+          style={[
+            styles.settingsRowIcon,
+            { backgroundColor: theme.colors.surface.secondary },
+          ]}
+        >
+          <Body style={{ fontSize: 18 }}>{emoji}</Body>
+        </View>
+        <View>
+          <Body style={{ color: theme.colors.text.primary }}>{label}</Body>
+          {value !== undefined && (
+            <Caption style={{ color: theme.colors.text.secondary }}>{value}</Caption>
+          )}
+        </View>
       </View>
-      <Body style={styles.itemLabel}>{label}</Body>
-      <View style={styles.itemRight}>
-        {value ? (
-          <Caption color={theme.textSecondary}>{value}</Caption>
-        ) : null}
-        {showChevron && onPress ? (
-          <Caption color={theme.textTertiary}> ›</Caption>
-        ) : null}
+      <View style={styles.settingsRowRight}>
+        {rightElement ?? (
+          onPress && (
+            <Caption style={{ color: theme.colors.text.tertiary }}>›</Caption>
+          )
+        )}
       </View>
     </TouchableOpacity>
   );
-}
+};
 
-// ─── Theme Toggle ─────────────────────────────────────────────────────────────
-
-const THEME_OPTIONS: { label: string; value: ThemeMode; emoji: string }[] = [
-  { label: 'Light', value: 'light', emoji: '☀️' },
-  { label: 'Dark', value: 'dark', emoji: '🌙' },
-  { label: 'System', value: 'system', emoji: '⚙️' },
-];
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export function SettingsScreen() {
-  const { theme, mode, setMode } = useTheme();
+export const SettingsScreen: React.FC = () => {
+  const { theme, isDark, toggleTheme, preference, setPreference } = useTheme();
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background.primary }]}
+    >
+      {/* Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.colors.surface.primary,
+            borderBottomColor: theme.colors.border.subtle,
+          },
+        ]}
+      >
+        <Heading level={2} style={{ color: theme.colors.text.primary }}>
+          Settings
+        </Heading>
+      </View>
+
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <H2>Settings</H2>
-          <BodySmall color={theme.textSecondary}>Customize your experience</BodySmall>
-        </View>
-
-        {/* Appearance */}
-        <View style={styles.section}>
-          <Overline color={theme.textTertiary} style={styles.sectionLabel}>
-            Appearance
-          </Overline>
-          <Card elevation="sm" style={styles.themeCard}>
-            <BodySmall color={theme.textSecondary} style={styles.themeLabel}>
-              Choose your preferred theme
-            </BodySmall>
-            <View style={styles.themeOptions}>
-              {THEME_OPTIONS.map((option) => {
-                const isSelected = mode === option.value;
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    onPress={() => setMode(option.value)}
-                    style={[
-                      styles.themeOption,
-                      {
-                        backgroundColor: isSelected
-                          ? theme.primary
-                          : theme.surfaceSubtle,
-                        borderColor: isSelected ? theme.primary : theme.border,
-                      },
-                    ]}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: isSelected }}
-                    accessibilityLabel={`${option.label} theme`}
-                  >
-                    <Body style={styles.themeEmoji}>{option.emoji}</Body>
-                    <Caption
-                      style={{ color: isSelected ? theme.primaryForeground : theme.textSecondary }}
-                    >
-                      {option.label}
-                    </Caption>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </Card>
-        </View>
-
-        {/* Preferences */}
-        <View style={styles.section}>
-          <Overline color={theme.textTertiary} style={styles.sectionLabel}>
-            Preferences
-          </Overline>
-          <Card elevation="sm" style={styles.settingsCard}>
-            <SettingsItem
-              emoji="💱"
-              label="Default Currency"
-              value="USD"
-              onPress={() => undefined}
-            />
-            <View style={[styles.separator, { backgroundColor: theme.divider }]} />
-            <SettingsItem
-              emoji="🔔"
-              label="Notifications"
-              value="Enabled"
-              onPress={() => undefined}
-            />
-            <View style={[styles.separator, { backgroundColor: theme.divider }]} />
-            <SettingsItem
-              emoji="🌐"
-              label="Language"
-              value="English"
-              onPress={() => undefined}
-            />
-          </Card>
-        </View>
-
-        {/* Account */}
-        <View style={styles.section}>
-          <Overline color={theme.textTertiary} style={styles.sectionLabel}>
-            Account
-          </Overline>
-          <Card elevation="sm" style={styles.settingsCard}>
-            <SettingsItem
-              emoji="👤"
-              label="Profile"
-              onPress={() => undefined}
-            />
-            <View style={[styles.separator, { backgroundColor: theme.divider }]} />
-            <SettingsItem
-              emoji="🔒"
-              label="Privacy & Security"
-              onPress={() => undefined}
-            />
-            <View style={[styles.separator, { backgroundColor: theme.divider }]} />
-            <SettingsItem
-              emoji="💾"
-              label="Export Data"
-              onPress={() => undefined}
-            />
-          </Card>
-        </View>
-
-        {/* About */}
-        <View style={styles.section}>
-          <Overline color={theme.textTertiary} style={styles.sectionLabel}>
-            About
-          </Overline>
-          <Card elevation="sm" style={styles.settingsCard}>
-            <SettingsItem
-              emoji="ℹ️"
-              label="About SplitEase"
-              onPress={() => undefined}
-            />
-            <View style={[styles.separator, { backgroundColor: theme.divider }]} />
-            <SettingsItem
-              emoji="⭐"
-              label="Rate the App"
-              onPress={() => undefined}
-            />
-            <View style={[styles.separator, { backgroundColor: theme.divider }]} />
-            <SettingsItem
-              emoji="🐛"
-              label="Report a Bug"
-              onPress={() => undefined}
-            />
-          </Card>
-        </View>
-
-        {/* Version */}
-        <Caption align="center" color={theme.textTertiary} style={styles.version}>
-          SplitEase v1.0.0 (Build 1)
+        {/* Appearance Section */}
+        <Caption style={[styles.sectionLabel, { color: theme.colors.text.tertiary }]}>
+          APPEARANCE
         </Caption>
+        <Card elevation="sm" style={styles.settingsCard}>
+          <SettingsRow
+            emoji="🌙"
+            label="Dark Mode"
+            value={preference === 'system' ? 'Following system' : undefined}
+            rightElement={
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{
+                  false: theme.colors.border.default,
+                  true: theme.colors.brand.primary,
+                }}
+                thumbColor="#FFFFFF"
+              />
+            }
+          />
+          <SettingsRow
+            emoji="📱"
+            label="Follow System Theme"
+            isLast
+            rightElement={
+              <Switch
+                value={preference === 'system'}
+                onValueChange={val => setPreference(val ? 'system' : isDark ? 'dark' : 'light')}
+                trackColor={{
+                  false: theme.colors.border.default,
+                  true: theme.colors.brand.primary,
+                }}
+                thumbColor="#FFFFFF"
+              />
+            }
+          />
+        </Card>
+
+        {/* Preferences Section */}
+        <Caption style={[styles.sectionLabel, { color: theme.colors.text.tertiary }]}>
+          PREFERENCES
+        </Caption>
+        <Card elevation="sm" style={styles.settingsCard}>
+          <SettingsRow
+            emoji="💱"
+            label="Default Currency"
+            value="USD ($)"
+            onPress={() => {}}
+          />
+          <SettingsRow
+            emoji="🌍"
+            label="Language"
+            value="English"
+            onPress={() => {}}
+          />
+          <SettingsRow
+            emoji="📳"
+            label="Haptic Feedback"
+            isLast
+            rightElement={
+              <Switch
+                value={true}
+                onValueChange={() => {}}
+                trackColor={{
+                  false: theme.colors.border.default,
+                  true: theme.colors.brand.primary,
+                }}
+                thumbColor="#FFFFFF"
+              />
+            }
+          />
+        </Card>
+
+        {/* Data & Privacy Section */}
+        <Caption style={[styles.sectionLabel, { color: theme.colors.text.tertiary }]}>
+          DATA & PRIVACY
+        </Caption>
+        <Card elevation="sm" style={styles.settingsCard}>
+          <SettingsRow
+            emoji="📤"
+            label="Export Data"
+            value="Download your trips as CSV"
+            onPress={() => {}}
+          />
+          <SettingsRow
+            emoji="🗑️"
+            label="Clear All Data"
+            value="Remove all trips and expenses"
+            onPress={() => {}}
+            isLast
+          />
+        </Card>
+
+        {/* About Section */}
+        <Caption style={[styles.sectionLabel, { color: theme.colors.text.tertiary }]}>
+          ABOUT
+        </Caption>
+        <Card elevation="sm" style={styles.settingsCard}>
+          <SettingsRow
+            emoji="ℹ️"
+            label="About TripSplit"
+            onPress={() => {}}
+          />
+          <SettingsRow
+            emoji="⭐"
+            label="Rate the App"
+            onPress={() => {}}
+          />
+          <SettingsRow
+            emoji="🐛"
+            label="Report a Bug"
+            onPress={() => {}}
+            isLast
+          />
+        </Card>
+
+        {/* Version Info */}
+        <View style={styles.versionContainer}>
+          <Caption style={{ color: theme.colors.text.tertiary, textAlign: 'center' }}>
+            TripSplit v1.0.0
+          </Caption>
+          <Caption style={{ color: theme.colors.text.tertiary, textAlign: 'center' }}>
+            Built with ❤️ using Expo & React Native
+          </Caption>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
+};
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[10],
-  },
   header: {
-    paddingTop: spacing[6],
-    marginBottom: spacing[6],
-    gap: spacing[1],
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
   },
-  section: {
-    marginBottom: spacing[5],
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 40,
   },
   sectionLabel: {
-    marginBottom: spacing[2],
-    marginLeft: spacing[1],
-  },
-  themeCard: {
-    gap: spacing[3],
-  },
-  themeLabel: {
-    marginBottom: spacing[1],
-  },
-  themeOptions: {
-    flexDirection: 'row',
-    gap: spacing[2],
-  },
-  themeOption: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing[2.5],
-    borderRadius: borderRadius.md,
-    borderWidth: 1.5,
-    gap: spacing[1],
-  },
-  themeEmoji: {
-    fontSize: 20,
+    marginBottom: 8,
+    marginTop: 8,
+    letterSpacing: 1,
+    fontWeight: '600',
   },
   settingsCard: {
+    marginBottom: 24,
     padding: 0,
     overflow: 'hidden',
   },
-  settingsItem: {
+  settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    gap: spacing[3],
+    justifyContent: 'space-between',
+    padding: 16,
   },
-  itemIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.base,
+  settingsRowLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  itemEmoji: {
-    fontSize: 18,
-  },
-  itemLabel: {
+    gap: 12,
     flex: 1,
   },
-  itemRight: {
-    flexDirection: 'row',
+  settingsRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  separator: {
-    height: 1,
-    marginLeft: spacing[4] + 36 + spacing[3],
+  settingsRowRight: {
+    marginLeft: 12,
   },
-  version: {
-    marginTop: spacing[4],
+  versionContainer: {
+    gap: 4,
+    marginTop: 8,
   },
 });

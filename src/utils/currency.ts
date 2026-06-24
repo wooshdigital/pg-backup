@@ -1,59 +1,66 @@
-import type { CurrencyCode } from '../types';
+import { CurrencyCode, Currency } from '../types';
 
-// ─── Currency Registry ────────────────────────────────────────────────────────
-
-export const CURRENCIES: Record<CurrencyCode, { symbol: string; name: string; decimals: number }> = {
-  USD: { symbol: '$', name: 'US Dollar', decimals: 2 },
-  EUR: { symbol: '€', name: 'Euro', decimals: 2 },
-  GBP: { symbol: '£', name: 'British Pound', decimals: 2 },
-  JPY: { symbol: '¥', name: 'Japanese Yen', decimals: 0 },
-  CAD: { symbol: 'CA$', name: 'Canadian Dollar', decimals: 2 },
-  AUD: { symbol: 'A$', name: 'Australian Dollar', decimals: 2 },
-  CHF: { symbol: 'CHF', name: 'Swiss Franc', decimals: 2 },
-  CNY: { symbol: '¥', name: 'Chinese Yuan', decimals: 2 },
-  INR: { symbol: '₹', name: 'Indian Rupee', decimals: 2 },
-  MXN: { symbol: 'MX$', name: 'Mexican Peso', decimals: 2 },
-  BRL: { symbol: 'R$', name: 'Brazilian Real', decimals: 2 },
-  KRW: { symbol: '₩', name: 'South Korean Won', decimals: 0 },
-  SGD: { symbol: 'S$', name: 'Singapore Dollar', decimals: 2 },
-  HKD: { symbol: 'HK$', name: 'Hong Kong Dollar', decimals: 2 },
-  NOK: { symbol: 'kr', name: 'Norwegian Krone', decimals: 2 },
-  SEK: { symbol: 'kr', name: 'Swedish Krona', decimals: 2 },
-  DKK: { symbol: 'kr', name: 'Danish Krone', decimals: 2 },
-  NZD: { symbol: 'NZ$', name: 'New Zealand Dollar', decimals: 2 },
-  ZAR: { symbol: 'R', name: 'South African Rand', decimals: 2 },
-  THB: { symbol: '฿', name: 'Thai Baht', decimals: 2 },
+export const CURRENCIES: Record<CurrencyCode, Currency> = {
+  USD: { code: 'USD', symbol: '$', name: 'US Dollar', decimalPlaces: 2 },
+  EUR: { code: 'EUR', symbol: '€', name: 'Euro', decimalPlaces: 2 },
+  GBP: { code: 'GBP', symbol: '£', name: 'British Pound', decimalPlaces: 2 },
+  JPY: { code: 'JPY', symbol: '¥', name: 'Japanese Yen', decimalPlaces: 0 },
+  CAD: { code: 'CAD', symbol: 'CA$', name: 'Canadian Dollar', decimalPlaces: 2 },
+  AUD: { code: 'AUD', symbol: 'A$', name: 'Australian Dollar', decimalPlaces: 2 },
+  CHF: { code: 'CHF', symbol: 'Fr', name: 'Swiss Franc', decimalPlaces: 2 },
+  CNY: { code: 'CNY', symbol: '¥', name: 'Chinese Yuan', decimalPlaces: 2 },
+  INR: { code: 'INR', symbol: '₹', name: 'Indian Rupee', decimalPlaces: 2 },
+  MXN: { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso', decimalPlaces: 2 },
+  BRL: { code: 'BRL', symbol: 'R$', name: 'Brazilian Real', decimalPlaces: 2 },
+  KRW: { code: 'KRW', symbol: '₩', name: 'South Korean Won', decimalPlaces: 0 },
+  SGD: { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar', decimalPlaces: 2 },
+  SEK: { code: 'SEK', symbol: 'kr', name: 'Swedish Krona', decimalPlaces: 2 },
+  NOK: { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone', decimalPlaces: 2 },
+  DKK: { code: 'DKK', symbol: 'kr', name: 'Danish Krone', decimalPlaces: 2 },
 };
 
-// ─── Formatting ───────────────────────────────────────────────────────────────
-
+/**
+ * Format a minor-unit amount (e.g. cents) to a display string.
+ * @param minorAmount - Amount in minor units (e.g. 1050 = $10.50)
+ * @param currencyCode - ISO 4217 currency code
+ * @param locale - BCP 47 locale string (default: 'en-US')
+ */
 export function formatCurrency(
-  amount: number,
-  currency: CurrencyCode,
-  options: { showSymbol?: boolean; showCode?: boolean } = {},
+  minorAmount: number,
+  currencyCode: CurrencyCode,
+  locale = 'en-US',
 ): string {
-  const { showSymbol = true, showCode = false } = options;
-  const { symbol, decimals } = CURRENCIES[currency];
+  const currency = CURRENCIES[currencyCode];
+  const divisor = Math.pow(10, currency.decimalPlaces);
+  const majorAmount = minorAmount / divisor;
 
-  const formatted = amount.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-
-  const parts: string[] = [];
-  if (showSymbol) parts.push(symbol);
-  parts.push(formatted);
-  if (showCode) parts.push(currency);
-
-  return parts.join(showSymbol ? '' : ' ');
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: currency.decimalPlaces,
+      maximumFractionDigits: currency.decimalPlaces,
+    }).format(majorAmount);
+  } catch {
+    // Fallback for environments without Intl support
+    return `${currency.symbol}${majorAmount.toFixed(currency.decimalPlaces)}`;
+  }
 }
 
-export function parseCurrencyInput(input: string): number {
-  // Remove any non-numeric characters except decimal point
-  const cleaned = input.replace(/[^0-9.]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
+/**
+ * Convert a display amount (e.g. 10.50) to minor units (e.g. 1050).
+ */
+export function toMinorUnits(majorAmount: number, currencyCode: CurrencyCode): number {
+  const currency = CURRENCIES[currencyCode];
+  const multiplier = Math.pow(10, currency.decimalPlaces);
+  return Math.round(majorAmount * multiplier);
 }
 
-export function roundToCurrency(amount: number, currency: CurrencyCode): number {
-  const { decimals } = CURRENCIES[currency];
-  const factor = Math.pow(10, decimals);
-  return Math.round(amount * factor) / factor;
+/**
+ * Convert minor units back to major units.
+ */
+export function toMajorUnits(minorAmount: number, currencyCode: CurrencyCode): number {
+  const currency = CURRENCIES[currencyCode];
+  const divisor = Math.pow(10, currency.decimalPlaces);
+  return minorAmount / divisor;
 }

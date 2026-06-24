@@ -1,2 +1,2 @@
-export { ThemeProvider, useTheme } from './ThemeContext';
-export type { ThemeContextValue, ThemeMode } from './ThemeContext';
+export { ThemeProvider, useTheme, ThemeContext } from './ThemeContext';
+export type { ThemeContextValue, ThemePreference } from './ThemeContext';

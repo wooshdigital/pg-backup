@@ -1,177 +1,209 @@
 import React from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
   View,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+  TouchableOpacity,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { Heading, Body, Caption } from '../components/common/Typography';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
-import {
-  H1,
-  H3,
-  Body,
-  BodySmall,
-  Caption,
-  Overline,
-} from '../components/common/Typography';
-import { spacing } from '../constants/theme';
 
-// ─── Feature Highlights ───────────────────────────────────────────────────────
+interface QuickStatProps {
+  emoji: string;
+  value: string;
+  label: string;
+}
 
-const FEATURES = [
-  {
-    emoji: '✈️',
-    title: 'Trip Management',
-    description: 'Create trips, invite friends, and keep everything organised in one place.',
-  },
-  {
-    emoji: '💸',
-    title: 'Smart Splitting',
-    description: 'Split equally, by exact amounts, percentages, or custom shares.',
-  },
-  {
-    emoji: '📊',
-    title: 'Live Balances',
-    description: 'See who owes what in real-time, with suggested settlements.',
-  },
-  {
-    emoji: '💱',
-    title: 'Multi-Currency',
-    description: 'Add expenses in any currency — we handle the conversions.',
-  },
-] as const;
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export function HomeScreen() {
+const QuickStat: React.FC<QuickStatProps> = ({ emoji, value, label }) => {
   const { theme } = useTheme();
+  return (
+    <View style={[styles.quickStat, { backgroundColor: theme.colors.surface.secondary }]}>
+      <Body style={styles.quickStatEmoji}>{emoji}</Body>
+      <Heading level={3} style={{ color: theme.colors.text.primary }}>
+        {value}
+      </Heading>
+      <Caption style={{ color: theme.colors.text.secondary }}>{label}</Caption>
+    </View>
+  );
+};
+
+export const HomeScreen: React.FC = () => {
+  const { theme, isDark, toggleTheme } = useTheme();
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background.primary }]}
+    >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Section */}
-        <View style={styles.hero}>
-          <View style={[styles.logoContainer, { backgroundColor: theme.primary }]}>
-            <Caption style={styles.logoEmoji}>✈️</Caption>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Caption style={{ color: theme.colors.text.secondary }}>Welcome back 👋</Caption>
+            <Heading level={1} style={{ color: theme.colors.text.primary }}>
+              TripSplit
+            </Heading>
           </View>
-          <H1 align="center" style={styles.heroTitle}>
-            SplitEase
-          </H1>
-          <Body align="center" color={theme.textSecondary} style={styles.heroTagline}>
-            Travel together, settle smarter.{'\n'}
-            Split group expenses without the drama.
-          </Body>
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={[
+              styles.themeToggle,
+              { backgroundColor: theme.colors.surface.secondary },
+            ]}
+            accessibilityLabel="Toggle theme"
+            accessibilityRole="button"
+          >
+            <Body>{isDark ? '☀️' : '🌙'}</Body>
+          </TouchableOpacity>
         </View>
 
-        {/* CTA Buttons */}
-        <View style={styles.ctaContainer}>
-          <Button label="Create a Trip" variant="primary" size="lg" fullWidth />
-          <Button
-            label="Join a Trip"
-            variant="outline"
-            size="lg"
-            fullWidth
-            style={styles.secondaryCta}
-          />
-        </View>
-
-        {/* Features */}
-        <View style={styles.featuresSection}>
-          <Overline color={theme.primary} align="center" style={styles.sectionLabel}>
-            Why SplitEase
-          </Overline>
-          <H3 align="center" style={styles.sectionTitle}>
-            Everything you need for group travel
-          </H3>
-
-          <View style={styles.featuresGrid}>
-            {FEATURES.map((feature) => (
-              <Card key={feature.title} elevation="sm" style={styles.featureCard}>
-                <Caption style={styles.featureEmoji}>{feature.emoji}</Caption>
-                <Body style={styles.featureTitle}>{feature.title}</Body>
-                <BodySmall color={theme.textSecondary}>{feature.description}</BodySmall>
-              </Card>
-            ))}
+        {/* Hero Card */}
+        <Card style={styles.heroCard} elevation="lg">
+          <View
+            style={[
+              styles.heroGradient,
+              { backgroundColor: theme.colors.brand.primary },
+            ]}
+          >
+            <Body style={styles.heroEmoji}>✈️</Body>
+            <Heading
+              level={2}
+              style={[styles.heroTitle, { color: '#FFFFFF' }]}
+            >
+              Split expenses,{'\n'}not friendships.
+            </Heading>
+            <Body style={[styles.heroSubtitle, { color: 'rgba(255,255,255,0.85)' }]}>
+              Track shared costs on trips, settle up easily, and keep everyone in the loop.
+            </Body>
+            <Button
+              label="Create your first trip"
+              onPress={() => {}}
+              variant="secondary"
+              style={styles.heroButton}
+            />
           </View>
+        </Card>
+
+        {/* Quick Stats */}
+        <Heading
+          level={3}
+          style={[styles.sectionTitle, { color: theme.colors.text.primary }]}
+        >
+          Overview
+        </Heading>
+        <View style={styles.quickStats}>
+          <QuickStat emoji="🗺️" value="0" label="Trips" />
+          <QuickStat emoji="💸" value="$0" label="Spent" />
+          <QuickStat emoji="🤝" value="$0" label="Settled" />
         </View>
 
-        {/* Footer */}
-        <Caption align="center" color={theme.textTertiary} style={styles.footer}>
-          SplitEase v1.0.0 · Built with ❤️
-        </Caption>
+        {/* Recent Activity Placeholder */}
+        <Heading
+          level={3}
+          style={[styles.sectionTitle, { color: theme.colors.text.primary }]}
+        >
+          Recent Activity
+        </Heading>
+        <Card elevation="sm">
+          <View style={styles.emptyState}>
+            <Body style={styles.emptyEmoji}>🌍</Body>
+            <Body style={{ color: theme.colors.text.secondary, textAlign: 'center' }}>
+              No trips yet. Start planning your first adventure!
+            </Body>
+            <Button
+              label="Plan a trip"
+              onPress={() => {}}
+              variant="primary"
+              size="sm"
+              style={styles.emptyButton}
+            />
+          </View>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
+};
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: spacing[5],
-    paddingBottom: spacing[10],
+  scrollView: {
+    flex: 1,
   },
-  hero: {
+  content: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: spacing[10],
-    paddingBottom: spacing[8],
+    marginBottom: 24,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+  themeToggle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing[4],
   },
-  logoEmoji: {
-    fontSize: 36,
+  heroCard: {
+    marginBottom: 28,
+    padding: 0,
+    overflow: 'hidden',
+  },
+  heroGradient: {
+    padding: 28,
+    borderRadius: 16,
+  },
+  heroEmoji: {
+    fontSize: 40,
+    marginBottom: 12,
   },
   heroTitle: {
-    marginBottom: spacing[3],
+    marginBottom: 8,
   },
-  heroTagline: {
-    lineHeight: 24,
+  heroSubtitle: {
+    marginBottom: 20,
+    lineHeight: 22,
   },
-  ctaContainer: {
-    gap: spacing[3],
-    marginBottom: spacing[10],
-  },
-  secondaryCta: {
-    marginTop: spacing[1],
-  },
-  featuresSection: {
-    marginBottom: spacing[8],
-  },
-  sectionLabel: {
-    marginBottom: spacing[2],
+  heroButton: {
+    alignSelf: 'flex-start',
   },
   sectionTitle: {
-    marginBottom: spacing[6],
+    marginBottom: 12,
   },
-  featuresGrid: {
-    gap: spacing[3],
+  quickStats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 28,
   },
-  featureCard: {
-    gap: spacing[1.5],
+  quickStat: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 4,
   },
-  featureEmoji: {
-    fontSize: 28,
-    lineHeight: 36,
-    marginBottom: spacing[1],
+  quickStatEmoji: {
+    fontSize: 24,
   },
-  featureTitle: {
-    fontWeight: '600',
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 12,
   },
-  footer: {
-    marginTop: spacing[4],
+  emptyEmoji: {
+    fontSize: 48,
+  },
+  emptyButton: {
+    marginTop: 8,
   },
 });
