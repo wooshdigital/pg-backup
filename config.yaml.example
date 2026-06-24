@@ -1,26 +1,30 @@
+# Example configuration for the dump worker.
+# Copy to config.yaml and fill in the values.
+
 database:
-  # Provide a full DSN or individual fields
-  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
-  # Alternatively, use individual fields:
-  # host: localhost
-  # port: 5432
-  # user: postgres
-  # password: secret
-  # name: mydb
-  # ssl_mode: disable
+  # PostgreSQL connection string (DSN).
+  # Supports all libpq connection string formats.
+  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=require"
 
-output_dir: "/var/backups/postgres"
+storage:
+  # Directory where dump files are written.
+  # The directory will be created if it does not exist.
+  directory: "/var/dumps"
 
-# compression_format controls how the pg_dump output is compressed.
-# Supported values: gzip (default), zstd, none
-compression_format: "gzip"
+compression:
+  # Compression format: gzip, zstd, or none.
+  # Default: gzip
+  format: "gzip"
 
-# compression_level controls the compression level.
-# For gzip: -2 (HuffmanOnly) to 9 (BestCompression), or 0 for default (-1 internally).
-# For zstd: ignored (use zstd encoder level constants).
-# Leave as 0 to use the format's default level.
-compression_level: 0
+  # Compression level (format-specific):
+  #   gzip:  1 (fastest) to 9 (best), -1 for default (≈6)
+  #   zstd:  1 (fastest) to 4 (best),  0 for default
+  #   none:  ignored
+  level: -1
 
-# dump_timeout is the maximum time allowed for a single dump operation.
-# Uses Go duration syntax: 30m, 1h, etc.
-dump_timeout: "30m"
+schedule:
+  # Standard cron expression for when dumps run.
+  cron: "0 2 * * *"   # daily at 02:00 UTC
+
+  # Maximum time allowed for a single dump run.
+  timeout: "30m"

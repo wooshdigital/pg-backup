@@ -1,74 +1,65 @@
+// Package config handles loading and validation of worker configuration.
 package config
 
 import (
-	"compress/gzip"
 	"fmt"
 	"os"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/your-org/your-repo/internal/compress"
+	"github.com/your-org/your-project/internal/compress"
 )
 
-// Config holds the application configuration.
+// Config holds all configuration for the dump worker.
 type Config struct {
-	Database           DatabaseConfig    `yaml:"database"`
-	OutputDir          string            `yaml:"output_dir"`
-	CompressionFormat  compress.Format   `yaml:"compression_format"`
-	CompressionLevel   int               `yaml:"compression_level"`
-	DumpTimeout        time.Duration     `yaml:"dump_timeout"`
+	// Database connection settings.
+	Database DatabaseConfig `yaml:"database"`
+
+	// Storage settings for where dumps are written.
+	Storage StorageConfig `yaml:"storage"`
+
+	// Compression settings.
+	Compression CompressionConfig `yaml:"compression"`
+
+	// Schedule settings.
+	Schedule ScheduleConfig `yaml:"schedule"`
 }
 
-// DatabaseConfig holds database connection details.
+// DatabaseConfig holds PostgreSQL connection details.
 type DatabaseConfig struct {
-	DSN      string `yaml:"dsn"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Name     string `yaml:"name"`
-	SSLMode  string `yaml:"ssl_mode"`
+	DSN string `yaml:"dsn"`
 }
 
-// Validate checks that the configuration is valid.
-func (c *Config) Validate() error {
-	if c.OutputDir == "" {
-		return fmt.Errorf("config: output_dir is required")
-	}
-
-	switch c.CompressionFormat {
-	case compress.FormatGzip, compress.FormatZstd, compress.FormatNone, "":
-		// valid
-	default:
-		return fmt.Errorf("config: unknown compression_format %q (must be gzip, zstd, or none)", c.CompressionFormat)
-	}
-
-	if c.CompressionFormat == compress.FormatGzip || c.CompressionFormat == "" {
-		if c.CompressionLevel != 0 {
-			if c.CompressionLevel < gzip.HuffmanOnly || c.CompressionLevel > gzip.BestCompression {
-				return fmt.Errorf("config: compression_level %d out of range for gzip (must be %d–%d or 0 for default)",
-					c.CompressionLevel, gzip.HuffmanOnly, gzip.BestCompression)
-			}
-		}
-	}
-
-	return nil
+// StorageConfig holds output storage settings.
+type StorageConfig struct {
+	// Directory is the local directory where dump files are written.
+	Directory string `yaml:"directory"`
 }
 
-// CompressorConfig returns the compress.Config derived from this Config.
-func (c *Config) CompressorConfig() compress.Config {
-	format := c.CompressionFormat
-	if format == "" {
-		format = compress.FormatGzip
-	}
-	return compress.Config{
-		Format:    format,
-		GzipLevel: c.CompressionLevel,
-	}
+// CompressionConfig holds compression pipeline settings.
+type CompressionConfig struct {
+	// Format selects the compression algorithm: "gzip", "zstd", or "none".
+	// Defaults to "gzip" if unset.
+	Format compress.Format `yaml:"format"`
+
+	// Level is the compression level.
+	// For gzip: 1 (BestSpeed) – 9 (BestCompression), -1 for default.
+	// For zstd: 1 (Fastest) – 4 (BestCompression), 0 for default.
+	// For none: ignored.
+	Level int `yaml:"level"`
 }
 
-// Load reads a Config from the given YAML file path.
+// ScheduleConfig holds scheduling settings.
+type ScheduleConfig struct {
+	// Cron is a standard cron expression for when dumps run.
+	Cron string `yaml:"cron"`
+
+	// Timeout is the maximum duration for a single dump run.
+	Timeout time.Duration `yaml:"timeout"`
+}
+
+// Load reads a YAML config file from path and validates it.
 func Load(path string) (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -83,9 +74,49 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("config: decode %q: %w", path, err)
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return nil, err
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("config: validate: %w", err)
 	}
 
+	cfg.applyDefaults()
+
 	return &cfg, nil
+}
+
+// applyDefaults sets sensible defaults for unset fields.
+func (c *Config) applyDefaults() {
+	if c.Compression.Format == "" {
+		c.Compression.Format = compress.FormatGzip
+	}
+	if c.Storage.Directory == "" {
+		c.Storage.Directory = "/tmp/dumps"
+	}
+	if c.Schedule.Timeout == 0 {
+		c.Schedule.Timeout = 30 * time.Minute
+	}
+}
+
+// validate returns an error if required fields are missing or invalid.
+func (c *Config) validate() error {
+	if c.Database.DSN == "" {
+		return fmt.Errorf("database.dsn is required")
+	}
+
+	switch c.Compression.Format {
+	case compress.FormatGzip, compress.FormatZstd, compress.FormatNone, "":
+		// valid
+	default:
+		return fmt.Errorf("compression.format %q is invalid (valid: gzip, zstd, none)", c.Compression.Format)
+	}
+
+	return nil
+}
+
+// NewCompressor creates a Compressor from the compression configuration.
+func (c *Config) NewCompressor() (compress.Compressor, error) {
+	format := c.Compression.Format
+	if format == "" {
+		format = compress.FormatGzip
+	}
+	return compress.NewCompressor(format, c.Compression.Level)
 }

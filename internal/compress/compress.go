@@ -1,3 +1,4 @@
+// Package compress provides streaming compression implementations for the dump pipeline.
 package compress
 
 import (
@@ -8,28 +9,20 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// Compressor defines the interface for compressing data from a reader to a writer.
+// Compressor defines the interface for streaming compression.
 type Compressor interface {
+	// Compress reads from src and writes compressed data to dst.
 	Compress(src io.Reader, dst io.Writer) error
-	// FileExtension returns the file extension for the compressed output (e.g. ".gz", ".zst", "").
-	FileExtension() string
+	// Extension returns the file extension for the compressed format (e.g. ".gz", ".zst", "").
+	Extension() string
 }
-
-// Format represents the compression format.
-type Format string
-
-const (
-	FormatGzip Format = "gzip"
-	FormatZstd Format = "zstd"
-	FormatNone Format = "none"
-)
 
 // GzipCompressor compresses data using gzip.
 type GzipCompressor struct {
-	Level int // compress/gzip level constants, e.g. gzip.BestSpeed, gzip.BestCompression, gzip.DefaultCompression
+	Level int // compress/gzip level constant (e.g. gzip.BestSpeed, gzip.BestCompression, gzip.DefaultCompression)
 }
 
-// NewGzipCompressor creates a new GzipCompressor with the given compression level.
+// NewGzipCompressor creates a GzipCompressor with the given level.
 // If level is 0, gzip.DefaultCompression is used.
 func NewGzipCompressor(level int) *GzipCompressor {
 	if level == 0 {
@@ -54,8 +47,8 @@ func (g *GzipCompressor) Compress(src io.Reader, dst io.Writer) error {
 	return nil
 }
 
-// FileExtension returns ".gz".
-func (g *GzipCompressor) FileExtension() string {
+// Extension returns the gzip file extension.
+func (g *GzipCompressor) Extension() string {
 	return ".gz"
 }
 
@@ -64,7 +57,7 @@ type ZstdCompressor struct {
 	Level zstd.EncoderLevel
 }
 
-// NewZstdCompressor creates a new ZstdCompressor with the given encoder level.
+// NewZstdCompressor creates a ZstdCompressor with the given encoder level.
 func NewZstdCompressor(level zstd.EncoderLevel) *ZstdCompressor {
 	return &ZstdCompressor{Level: level}
 }
@@ -85,52 +78,63 @@ func (z *ZstdCompressor) Compress(src io.Reader, dst io.Writer) error {
 	return nil
 }
 
-// FileExtension returns ".zst".
-func (z *ZstdCompressor) FileExtension() string {
+// Extension returns the zstd file extension.
+func (z *ZstdCompressor) Extension() string {
 	return ".zst"
 }
 
-// NoopCompressor passes data through without any compression.
-type NoopCompressor struct{}
+// NopCompressor passes data through without compression.
+type NopCompressor struct{}
 
-// Compress copies src to dst without compression.
-func (n *NoopCompressor) Compress(src io.Reader, dst io.Writer) error {
+// Compress copies src to dst without any compression.
+func (n *NopCompressor) Compress(src io.Reader, dst io.Writer) error {
 	if _, err := io.Copy(dst, src); err != nil {
-		return fmt.Errorf("compress/none: copy: %w", err)
+		return fmt.Errorf("compress/nop: copy: %w", err)
 	}
 	return nil
 }
 
-// FileExtension returns "" (no additional extension).
-func (n *NoopCompressor) FileExtension() string {
+// Extension returns an empty string (no additional extension).
+func (n *NopCompressor) Extension() string {
 	return ""
 }
 
-// Config holds configuration for creating a Compressor.
-type Config struct {
-	Format           Format
-	GzipLevel        int             // used when Format == FormatGzip
-	ZstdEncoderLevel zstd.EncoderLevel // used when Format == FormatZstd
-}
+// Format represents the compression format selection.
+type Format string
 
-// NewCompressor creates a Compressor based on the provided Config.
-func NewCompressor(cfg Config) (Compressor, error) {
-	switch cfg.Format {
-	case FormatGzip, "":
-		level := cfg.GzipLevel
+const (
+	FormatGzip Format = "gzip"
+	FormatZstd Format = "zstd"
+	FormatNone Format = "none"
+)
+
+// NewCompressor creates a Compressor from a format string and compression level.
+// For gzip, level maps to compress/gzip levels (1–9, -1 for default).
+// For zstd, level maps to zstd encoder levels (1–4).
+// For none, a NopCompressor is returned regardless of level.
+func NewCompressor(format Format, level int) (Compressor, error) {
+	switch format {
+	case FormatGzip:
 		if level == 0 {
 			level = gzip.DefaultCompression
 		}
-		return NewGzipCompressor(level), nil
-	case FormatZstd:
-		level := cfg.ZstdEncoderLevel
-		if level == 0 {
-			level = zstd.SpeedDefault
+		if level != gzip.DefaultCompression && (level < gzip.BestSpeed || level > gzip.BestCompression) {
+			return nil, fmt.Errorf("compress: invalid gzip level %d (valid: %d–%d or %d for default)",
+				level, gzip.BestSpeed, gzip.BestCompression, gzip.DefaultCompression)
 		}
-		return NewZstdCompressor(level), nil
-	case FormatNone:
-		return &NoopCompressor{}, nil
+		return NewGzipCompressor(level), nil
+
+	case FormatZstd:
+		if level == 0 {
+			level = int(zstd.SpeedDefault)
+		}
+		encoderLevel := zstd.EncoderLevelFromZstd(level)
+		return NewZstdCompressor(encoderLevel), nil
+
+	case FormatNone, "":
+		return &NopCompressor{}, nil
+
 	default:
-		return nil, fmt.Errorf("compress: unknown format %q", cfg.Format)
+		return nil, fmt.Errorf("compress: unknown format %q (valid: gzip, zstd, none)", format)
 	}
 }
