@@ -1,30 +1,16 @@
-# Example configuration for the dump worker.
-# Copy to config.yaml and fill in the values.
-
 database:
-  # PostgreSQL connection string (DSN).
-  # Supports all libpq connection string formats.
-  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=require"
+  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
 storage:
-  # Directory where dump files are written.
-  # The directory will be created if it does not exist.
-  directory: "/var/dumps"
+  path: "/var/backups/pgdumps"
 
-compression:
-  # Compression format: gzip, zstd, or none.
-  # Default: gzip
-  format: "gzip"
+worker:
+  schedule: "0 2 * * *"   # daily at 02:00 UTC
 
-  # Compression level (format-specific):
-  #   gzip:  1 (fastest) to 9 (best), -1 for default (≈6)
-  #   zstd:  1 (fastest) to 4 (best),  0 for default
-  #   none:  ignored
-  level: -1
-
-schedule:
-  # Standard cron expression for when dumps run.
-  cron: "0 2 * * *"   # daily at 02:00 UTC
-
-  # Maximum time allowed for a single dump run.
-  timeout: "30m"
+compress:
+  # Compression format: gzip, zstd, or none
+  format: gzip
+  # Compression level:
+  #   gzip: 1 (fastest) to 9 (best), 0 = default
+  #   zstd: 1 (fastest) to 4 (best), 0 = default
+  level: 0
