@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SplitEase",
-    "slug": "splitease",
+    "name": "SplitMate",
+    "slug": "splitmate",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,21 +9,24 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#6366F1"
+      "backgroundColor": "#6C63FF"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.splitease.app"
+      "bundleIdentifier": "com.splitmate.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#6366F1"
+        "backgroundColor": "#6C63FF"
       },
-      "package": "com.splitease.app"
+      "package": "com.splitmate.app"
     },
     "web": {
       "favicon": "./assets/icon.png"

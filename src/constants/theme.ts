@@ -1,258 +1,250 @@
-// ─── Color Palette ────────────────────────────────────────────────────────────
+// ─── Color Palette ───────────────────────────────────────────────────────────
 
 const palette = {
-  // Primary — Indigo
-  indigo50: '#EEF2FF',
-  indigo100: '#E0E7FF',
-  indigo200: '#C7D2FE',
-  indigo300: '#A5B4FC',
-  indigo400: '#818CF8',
-  indigo500: '#6366F1',
-  indigo600: '#4F46E5',
-  indigo700: '#4338CA',
-  indigo800: '#3730A3',
-  indigo900: '#312E81',
+  // Brand
+  purple50: '#F3F0FF',
+  purple100: '#E5DBFF',
+  purple200: '#C9B9FF',
+  purple300: '#AC97FF',
+  purple400: '#9075FF',
+  purple500: '#6C63FF',
+  purple600: '#5A50D6',
+  purple700: '#463DAD',
+  purple800: '#322B85',
+  purple900: '#1F1A5C',
 
-  // Secondary — Emerald
-  emerald50: '#ECFDF5',
-  emerald100: '#D1FAE5',
-  emerald200: '#A7F3D0',
-  emerald300: '#6EE7B7',
-  emerald400: '#34D399',
-  emerald500: '#10B981',
-  emerald600: '#059669',
-  emerald700: '#047857',
-  emerald800: '#065F46',
-  emerald900: '#064E3B',
+  // Accent
+  teal400: '#26C6DA',
+  teal500: '#00BCD4',
+  teal600: '#00ACC1',
 
-  // Accent — Amber
-  amber50: '#FFFBEB',
-  amber100: '#FEF3C7',
-  amber200: '#FDE68A',
-  amber300: '#FCD34D',
-  amber400: '#FBBF24',
-  amber500: '#F59E0B',
-  amber600: '#D97706',
-  amber700: '#B45309',
-  amber800: '#92400E',
-  amber900: '#78350F',
+  // Semantic
+  green400: '#66BB6A',
+  green500: '#4CAF50',
+  green600: '#43A047',
 
-  // Danger — Rose
-  rose50: '#FFF1F2',
-  rose100: '#FFE4E6',
-  rose400: '#FB7185',
-  rose500: '#F43F5E',
-  rose600: '#E11D48',
+  red400: '#EF5350',
+  red500: '#F44336',
+  red600: '#E53935',
+
+  amber400: '#FFCA28',
+  amber500: '#FFC107',
+  amber600: '#FFB300',
 
   // Neutrals
   white: '#FFFFFF',
+  gray50: '#FAFAFA',
+  gray100: '#F5F5F5',
+  gray200: '#EEEEEE',
+  gray300: '#E0E0E0',
+  gray400: '#BDBDBD',
+  gray500: '#9E9E9E',
+  gray600: '#757575',
+  gray700: '#616161',
+  gray800: '#424242',
+  gray900: '#212121',
   black: '#000000',
-  gray50: '#F9FAFB',
-  gray100: '#F3F4F6',
-  gray200: '#E5E7EB',
-  gray300: '#D1D5DB',
-  gray400: '#9CA3AF',
-  gray500: '#6B7280',
-  gray600: '#4B5563',
-  gray700: '#374151',
-  gray800: '#1F2937',
-  gray900: '#111827',
+
+  // Transparent
+  transparent: 'transparent',
 } as const;
 
-// ─── Light Theme ──────────────────────────────────────────────────────────────
+// ─── Light Theme Colors ───────────────────────────────────────────────────────
 
-export const lightTheme = {
-  dark: false,
-  colors: {
-    // Backgrounds
-    background: palette.gray50,
-    surface: palette.white,
-    surfaceSecondary: palette.gray100,
+export const lightColors = {
+  // Brand
+  primary: palette.purple500,
+  primaryLight: palette.purple300,
+  primaryDark: palette.purple700,
+  accent: palette.teal500,
 
-    // Text
-    textPrimary: palette.gray900,
-    textSecondary: palette.gray600,
-    textDisabled: palette.gray400,
-    textInverse: palette.white,
+  // Backgrounds
+  background: palette.gray50,
+  surface: palette.white,
+  surfaceVariant: palette.gray100,
+  card: palette.white,
 
-    // Brand
-    primary: palette.indigo500,
-    primaryLight: palette.indigo100,
-    primaryDark: palette.indigo700,
+  // Text
+  textPrimary: palette.gray900,
+  textSecondary: palette.gray600,
+  textDisabled: palette.gray400,
+  textInverse: palette.white,
+  textOnPrimary: palette.white,
 
-    // Semantic
-    success: palette.emerald500,
-    successLight: palette.emerald50,
-    warning: palette.amber500,
-    warningLight: palette.amber50,
-    danger: palette.rose500,
-    dangerLight: palette.rose50,
+  // Borders
+  border: palette.gray300,
+  borderFocus: palette.purple500,
 
-    // Borders
-    border: palette.gray200,
-    borderStrong: palette.gray300,
+  // Semantic
+  success: palette.green500,
+  warning: palette.amber500,
+  error: palette.red500,
+  info: palette.teal500,
 
-    // Tab bar
-    tabBarBackground: palette.white,
-    tabBarActive: palette.indigo500,
-    tabBarInactive: palette.gray400,
-
-    // Card
-    cardBackground: palette.white,
-    cardShadow: palette.black,
-  },
+  // Misc
+  shadow: palette.black,
+  overlay: 'rgba(0, 0, 0, 0.5)',
+  tabBarBackground: palette.white,
+  tabBarActive: palette.purple500,
+  tabBarInactive: palette.gray500,
+  statusBar: 'dark',
 } as const;
 
-// ─── Dark Theme ───────────────────────────────────────────────────────────────
+export const darkColors = {
+  // Brand
+  primary: palette.purple400,
+  primaryLight: palette.purple300,
+  primaryDark: palette.purple600,
+  accent: palette.teal400,
 
-export const darkTheme = {
-  dark: true,
-  colors: {
-    // Backgrounds
-    background: palette.gray900,
-    surface: palette.gray800,
-    surfaceSecondary: palette.gray700,
+  // Backgrounds
+  background: palette.gray900,
+  surface: palette.gray800,
+  surfaceVariant: palette.gray700,
+  card: palette.gray800,
 
-    // Text
-    textPrimary: palette.gray50,
-    textSecondary: palette.gray400,
-    textDisabled: palette.gray600,
-    textInverse: palette.gray900,
+  // Text
+  textPrimary: palette.gray50,
+  textSecondary: palette.gray400,
+  textDisabled: palette.gray600,
+  textInverse: palette.gray900,
+  textOnPrimary: palette.white,
 
-    // Brand
-    primary: palette.indigo400,
-    primaryLight: palette.indigo900,
-    primaryDark: palette.indigo200,
+  // Borders
+  border: palette.gray700,
+  borderFocus: palette.purple400,
 
-    // Semantic
-    success: palette.emerald400,
-    successLight: palette.emerald900,
-    warning: palette.amber400,
-    warningLight: palette.amber900,
-    danger: palette.rose400,
-    dangerLight: palette.rose100,
+  // Semantic
+  success: palette.green400,
+  warning: palette.amber400,
+  error: palette.red400,
+  info: palette.teal400,
 
-    // Borders
-    border: palette.gray700,
-    borderStrong: palette.gray600,
-
-    // Tab bar
-    tabBarBackground: palette.gray800,
-    tabBarActive: palette.indigo400,
-    tabBarInactive: palette.gray500,
-
-    // Card
-    cardBackground: palette.gray800,
-    cardShadow: palette.black,
-  },
+  // Misc
+  shadow: palette.black,
+  overlay: 'rgba(0, 0, 0, 0.7)',
+  tabBarBackground: palette.gray800,
+  tabBarActive: palette.purple400,
+  tabBarInactive: palette.gray500,
+  statusBar: 'light',
 } as const;
 
-export type Theme = typeof lightTheme;
-export type ThemeColors = typeof lightTheme.colors;
+export type ColorTokens = typeof lightColors;
 
 // ─── Typography ───────────────────────────────────────────────────────────────
 
-export const typography = {
-  fontFamily: {
-    regular: 'System',
-    medium: 'System',
-    bold: 'System',
-    mono: 'Courier',
-  },
-  fontSize: {
-    xs: 11,
-    sm: 13,
-    base: 15,
-    md: 16,
-    lg: 18,
-    xl: 20,
-    '2xl': 24,
-    '3xl': 28,
-    '4xl': 34,
-    '5xl': 40,
-  },
-  fontWeight: {
-    regular: '400' as const,
-    medium: '500' as const,
-    semibold: '600' as const,
-    bold: '700' as const,
-    extrabold: '800' as const,
-  },
-  lineHeight: {
-    tight: 1.2,
-    normal: 1.5,
-    relaxed: 1.75,
-  },
-  letterSpacing: {
-    tight: -0.5,
-    normal: 0,
-    wide: 0.5,
-    wider: 1,
-  },
+export const fontSizes = {
+  xs: 11,
+  sm: 13,
+  md: 15,
+  lg: 17,
+  xl: 20,
+  '2xl': 24,
+  '3xl': 30,
+  '4xl': 36,
+  '5xl': 48,
 } as const;
 
-// ─── Spacing ──────────────────────────────────────────────────────────────────
+export const fontWeights = {
+  regular: '400',
+  medium: '500',
+  semibold: '600',
+  bold: '700',
+  extrabold: '800',
+} as const;
+
+export const lineHeights = {
+  tight: 1.2,
+  normal: 1.5,
+  relaxed: 1.75,
+} as const;
+
+export const letterSpacings = {
+  tight: -0.5,
+  normal: 0,
+  wide: 0.5,
+  wider: 1,
+  widest: 2,
+} as const;
+
+// ─── Spacing ─────────────────────────────────────────────────────────────────
 
 export const spacing = {
+  px: 1,
   0: 0,
+  0.5: 2,
   1: 4,
+  1.5: 6,
   2: 8,
+  2.5: 10,
   3: 12,
+  3.5: 14,
   4: 16,
   5: 20,
   6: 24,
   7: 28,
   8: 32,
+  9: 36,
   10: 40,
   12: 48,
+  14: 56,
   16: 64,
   20: 80,
   24: 96,
+  28: 112,
+  32: 128,
 } as const;
 
-// ─── Border Radius ────────────────────────────────────────────────────────────
+// ─── Border Radii ─────────────────────────────────────────────────────────────
 
-export const borderRadius = {
+export const radii = {
   none: 0,
+  xs: 2,
   sm: 4,
-  base: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  md: 8,
+  lg: 12,
+  xl: 16,
   '2xl': 24,
   full: 9999,
 } as const;
 
-// ─── Shadows ──────────────────────────────────────────────────────────────────
+// ─── Shadows ─────────────────────────────────────────────────────────────────
 
 export const shadows = {
+  none: {
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
   sm: {
-    shadowColor: palette.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
-  base: {
-    shadowColor: palette.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
   md: {
-    shadowColor: palette.black,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 3,
   },
   lg: {
-    shadowColor: palette.black,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  xl: {
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.2,
     shadowRadius: 16,
-    elevation: 8,
+    elevation: 10,
   },
 } as const;
 
@@ -260,7 +252,7 @@ export const shadows = {
 
 export const zIndex = {
   base: 0,
-  raised: 10,
+  raised: 1,
   dropdown: 100,
   sticky: 200,
   overlay: 300,
@@ -268,11 +260,32 @@ export const zIndex = {
   toast: 500,
 } as const;
 
-// ─── Animation Durations ──────────────────────────────────────────────────────
+// ─── Theme Object ─────────────────────────────────────────────────────────────
 
-export const animation = {
-  fast: 150,
-  base: 250,
-  slow: 400,
-  slower: 600,
+export const lightTheme = {
+  colors: lightColors,
+  fontSizes,
+  fontWeights,
+  lineHeights,
+  letterSpacings,
+  spacing,
+  radii,
+  shadows,
+  zIndex,
+  isDark: false,
 } as const;
+
+export const darkTheme = {
+  colors: darkColors,
+  fontSizes,
+  fontWeights,
+  lineHeights,
+  letterSpacings,
+  spacing,
+  radii,
+  shadows,
+  zIndex,
+  isDark: true,
+} as const;
+
+export type Theme = typeof lightTheme;

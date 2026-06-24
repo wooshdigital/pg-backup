@@ -1,62 +1,77 @@
-import type { CurrencyCode } from '@types/index';
+import type { CurrencyCode, Money } from '../types';
 
-const CURRENCY_META: Record<CurrencyCode, { symbol: string; name: string; decimalPlaces: number }> =
-  {
-    USD: { symbol: '$', name: 'US Dollar', decimalPlaces: 2 },
-    EUR: { symbol: '€', name: 'Euro', decimalPlaces: 2 },
-    GBP: { symbol: '£', name: 'British Pound', decimalPlaces: 2 },
-    JPY: { symbol: '¥', name: 'Japanese Yen', decimalPlaces: 0 },
-    CAD: { symbol: 'C$', name: 'Canadian Dollar', decimalPlaces: 2 },
-    AUD: { symbol: 'A$', name: 'Australian Dollar', decimalPlaces: 2 },
-    CHF: { symbol: 'Fr', name: 'Swiss Franc', decimalPlaces: 2 },
-    CNY: { symbol: '¥', name: 'Chinese Yuan', decimalPlaces: 2 },
-    INR: { symbol: '₹', name: 'Indian Rupee', decimalPlaces: 2 },
-    MXN: { symbol: 'MX$', name: 'Mexican Peso', decimalPlaces: 2 },
-    BRL: { symbol: 'R$', name: 'Brazilian Real', decimalPlaces: 2 },
-    KRW: { symbol: '₩', name: 'South Korean Won', decimalPlaces: 0 },
-  };
+// ─── Currency Map ─────────────────────────────────────────────────────────────
 
-/**
- * Formats an amount (in smallest currency unit, e.g. cents) to a display string.
- * e.g. formatCurrency(1234, 'USD') => '$12.34'
- */
-export function formatCurrency(amountInSmallestUnit: number, currencyCode: CurrencyCode): string {
-  const meta = CURRENCY_META[currencyCode];
-  const divisor = Math.pow(10, meta.decimalPlaces);
-  const amount = amountInSmallestUnit / divisor;
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  CAD: 'CA$',
+  AUD: 'A$',
+  CHF: 'Fr',
+  CNY: '¥',
+  INR: '₹',
+  MXN: 'MX$',
+  BRL: 'R$',
+  KRW: '₩',
+  SGD: 'S$',
+  HKD: 'HK$',
+  NOK: 'kr',
+  SEK: 'kr',
+  DKK: 'kr',
+  NZD: 'NZ$',
+  ZAR: 'R',
+  THB: '฿',
+};
 
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: meta.decimalPlaces,
-      maximumFractionDigits: meta.decimalPlaces,
-    }).format(amount);
-  } catch {
-    // Fallback for environments without full Intl support
-    return `${meta.symbol}${amount.toFixed(meta.decimalPlaces)}`;
-  }
+const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'CLP', 'PYG']);
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+export function getCurrencySymbol(code: CurrencyCode): string {
+  return CURRENCY_SYMBOLS[code] ?? code;
+}
+
+export function isZeroDecimal(code: CurrencyCode): boolean {
+  return ZERO_DECIMAL_CURRENCIES.has(code);
 }
 
 /**
- * Converts a decimal amount to smallest currency unit.
- * e.g. toSmallestUnit(12.34, 'USD') => 1234
+ * Convert smallest unit (cents) to display amount
  */
-export function toSmallestUnit(amount: number, currencyCode: CurrencyCode): number {
-  const meta = CURRENCY_META[currencyCode];
-  return Math.round(amount * Math.pow(10, meta.decimalPlaces));
+export function toDisplayAmount(amountInCents: number, currency: CurrencyCode): number {
+  if (isZeroDecimal(currency)) return amountInCents;
+  return amountInCents / 100;
 }
 
 /**
- * Returns the currency symbol for a given currency code.
+ * Convert display amount to smallest unit (cents)
  */
-export function getCurrencySymbol(currencyCode: CurrencyCode): string {
-  return CURRENCY_META[currencyCode].symbol;
+export function toCents(amount: number, currency: CurrencyCode): number {
+  if (isZeroDecimal(currency)) return Math.round(amount);
+  return Math.round(amount * 100);
 }
 
 /**
- * Returns full currency metadata.
+ * Format a Money object to a human-readable string
  */
-export function getCurrencyMeta(currencyCode: CurrencyCode) {
-  return CURRENCY_META[currencyCode];
+export function formatMoney(money: Money, options?: { showCode?: boolean }): string {
+  const displayAmount = toDisplayAmount(money.amount, money.currency);
+  const symbol = getCurrencySymbol(money.currency);
+  const decimals = isZeroDecimal(money.currency) ? 0 : 2;
+
+  const formatted = displayAmount.toFixed(decimals);
+  const result = `${symbol}${formatted}`;
+
+  return options?.showCode ? `${result} ${money.currency}` : result;
+}
+
+/**
+ * Format a raw number as currency
+ */
+export function formatCurrency(amount: number, currency: CurrencyCode): string {
+  const symbol = getCurrencySymbol(currency);
+  const decimals = isZeroDecimal(currency) ? 0 : 2;
+  return `${symbol}${amount.toFixed(decimals)}`;
 }

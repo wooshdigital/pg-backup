@@ -1,28 +1,19 @@
-/**
- * Key codes for keyboard navigation (web / physical keyboard on native).
- */
-export const Keys = {
-  Enter: 'Enter',
-  Space: ' ',
-  Escape: 'Escape',
-  ArrowUp: 'ArrowUp',
-  ArrowDown: 'ArrowDown',
-  ArrowLeft: 'ArrowLeft',
-  ArrowRight: 'ArrowRight',
-  Tab: 'Tab',
-  Backspace: 'Backspace',
-  Delete: 'Delete',
-  Home: 'Home',
-  End: 'End',
-  PageUp: 'PageUp',
-  PageDown: 'PageDown',
+// ─── AsyncStorage Key Utilities ───────────────────────────────────────────────
+
+const PREFIX = '@splitmate';
+
+export const StorageKeys = {
+  TRIPS: `${PREFIX}/trips`,
+  EXPENSES: `${PREFIX}/expenses`,
+  SPLITS: `${PREFIX}/splits`,
+  PARTICIPANTS: `${PREFIX}/participants`,
+  SETTLEMENTS: `${PREFIX}/settlements`,
+  THEME_MODE: `${PREFIX}/theme_mode`,
+  DEFAULT_CURRENCY: `${PREFIX}/default_currency`,
+  ONBOARDING_COMPLETE: `${PREFIX}/onboarding_complete`,
+
+  // Dynamic keys
+  trip: (id: string) => `${PREFIX}/trip/${id}`,
+  expense: (id: string) => `${PREFIX}/expense/${id}`,
+  tripExpenses: (tripId: string) => `${PREFIX}/trip/${tripId}/expenses`,
 } as const;
-
-export type Key = (typeof Keys)[keyof typeof Keys];
-
-/**
- * Returns true if the key event corresponds to an activation key (Enter or Space).
- */
-export function isActivationKey(key: string): boolean {
-  return key === Keys.Enter || key === Keys.Space;
-}

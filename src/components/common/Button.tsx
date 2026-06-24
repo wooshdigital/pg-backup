@@ -1,197 +1,181 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   StyleSheet,
   Text,
-  View,
+  TouchableOpacity,
+  type TextStyle,
+  type TouchableOpacityProps,
+  type ViewStyle,
 } from 'react-native';
-import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
-import { useTheme } from '@context/ThemeContext';
-import { borderRadius, shadows, spacing, typography } from '@constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import type { Theme } from '../../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
-type ButtonSize = 'sm' | 'base' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
+export type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends Omit<PressableProps, 'style'> {
+export interface ButtonProps extends Omit<TouchableOpacityProps, 'style'> {
   label: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
-  disabled?: boolean;
-  fullWidth?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  testID?: string;
+  fullWidth?: boolean;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
 }
-
-// ─── Size Maps ────────────────────────────────────────────────────────────────
-
-const sizeMap = {
-  sm: {
-    paddingVertical: spacing[2],
-    paddingHorizontal: spacing[3],
-    fontSize: typography.fontSize.sm,
-    iconSize: 16,
-    minHeight: 34,
-  },
-  base: {
-    paddingVertical: spacing[3],
-    paddingHorizontal: spacing[4],
-    fontSize: typography.fontSize.base,
-    iconSize: 18,
-    minHeight: 44,
-  },
-  lg: {
-    paddingVertical: spacing[4],
-    paddingHorizontal: spacing[6],
-    fontSize: typography.fontSize.lg,
-    iconSize: 20,
-    minHeight: 52,
-  },
-};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Button({
   label,
   variant = 'primary',
-  size = 'base',
+  size = 'md',
   loading = false,
-  disabled = false,
-  fullWidth = false,
   leftIcon,
   rightIcon,
+  fullWidth = false,
+  disabled = false,
   style,
-  testID,
-  onPress,
+  textStyle,
   ...rest
-}: ButtonProps): JSX.Element {
+}: ButtonProps) {
   const { theme } = useTheme();
-  const sizeTokens = sizeMap[size];
+  const styles = makeStyles(theme);
+
   const isDisabled = disabled || loading;
 
-  const getVariantStyles = () => {
-    switch (variant) {
-      case 'primary':
-        return {
-          container: {
-            backgroundColor: isDisabled ? theme.colors.primaryLight : theme.colors.primary,
-            ...shadows.sm,
-          },
-          text: { color: theme.colors.textInverse },
-        };
-      case 'secondary':
-        return {
-          container: {
-            backgroundColor: isDisabled
-              ? theme.colors.surfaceSecondary
-              : theme.colors.primaryLight,
-          },
-          text: { color: isDisabled ? theme.colors.textDisabled : theme.colors.primary },
-        };
-      case 'outline':
-        return {
-          container: {
-            backgroundColor: 'transparent',
-            borderWidth: 1.5,
-            borderColor: isDisabled ? theme.colors.border : theme.colors.primary,
-          },
-          text: { color: isDisabled ? theme.colors.textDisabled : theme.colors.primary },
-        };
-      case 'ghost':
-        return {
-          container: {
-            backgroundColor: 'transparent',
-          },
-          text: { color: isDisabled ? theme.colors.textDisabled : theme.colors.primary },
-        };
-      case 'danger':
-        return {
-          container: {
-            backgroundColor: isDisabled ? theme.colors.dangerLight : theme.colors.danger,
-            ...shadows.sm,
-          },
-          text: { color: theme.colors.textInverse },
-        };
-    }
-  };
-
-  const variantStyles = getVariantStyles();
-
   return (
-    <Pressable
-      onPress={isDisabled ? undefined : onPress}
-      accessible
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled, busy: loading }}
-      testID={testID}
-      style={({ pressed }) => [
+    <TouchableOpacity
+      style={[
         styles.base,
-        {
-          paddingVertical: sizeTokens.paddingVertical,
-          paddingHorizontal: sizeTokens.paddingHorizontal,
-          minHeight: sizeTokens.minHeight,
-          borderRadius: borderRadius.base,
-          alignSelf: fullWidth ? 'stretch' : 'flex-start',
-          opacity: pressed && !isDisabled ? 0.8 : 1,
-        },
-        variantStyles.container,
+        styles[`size_${size}`],
+        styles[`variant_${variant}`],
+        fullWidth && styles.fullWidth,
+        isDisabled && styles.disabled,
         style,
       ]}
+      disabled={isDisabled}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
       {...rest}
     >
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'primary' || variant === 'danger' ? '#fff' : theme.colors.primary}
+          color={
+            variant === 'outline' || variant === 'ghost'
+              ? theme.colors.primary
+              : theme.colors.textOnPrimary
+          }
         />
       ) : (
-        <View style={styles.content}>
-          {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
+        <>
+          {leftIcon}
           <Text
             style={[
               styles.label,
-              {
-                fontSize: sizeTokens.fontSize,
-                fontWeight: typography.fontWeight.semibold,
-              },
-              variantStyles.text,
+              styles[`labelSize_${size}`],
+              styles[`labelVariant_${variant}`],
+              isDisabled && styles.labelDisabled,
+              textStyle,
             ]}
           >
             {label}
           </Text>
-          {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
-        </View>
+          {rightIcon}
+        </>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  base: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    textAlign: 'center',
-  },
-  leftIcon: {
-    marginRight: spacing[2],
-  },
-  rightIcon: {
-    marginLeft: spacing[2],
-  },
-});
+function makeStyles(theme: Theme) {
+  return StyleSheet.create({
+    base: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing[2],
+      borderRadius: theme.radii.md,
+    },
+    // Sizes
+    size_sm: {
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[1.5],
+      minHeight: 32,
+    },
+    size_md: {
+      paddingHorizontal: theme.spacing[4],
+      paddingVertical: theme.spacing[2.5],
+      minHeight: 44,
+    },
+    size_lg: {
+      paddingHorizontal: theme.spacing[6],
+      paddingVertical: theme.spacing[3],
+      minHeight: 52,
+    },
+    // Variants
+    variant_primary: {
+      backgroundColor: theme.colors.primary,
+    },
+    variant_secondary: {
+      backgroundColor: theme.colors.primaryLight,
+    },
+    variant_outline: {
+      backgroundColor: theme.colors.transparent,
+      borderWidth: 1.5,
+      borderColor: theme.colors.primary,
+    },
+    variant_ghost: {
+      backgroundColor: theme.colors.transparent,
+    },
+    variant_destructive: {
+      backgroundColor: theme.colors.error,
+    },
+    // States
+    fullWidth: {
+      width: '100%',
+    },
+    disabled: {
+      opacity: 0.5,
+    },
+    // Labels
+    label: {
+      fontWeight: theme.fontWeights.semibold,
+    },
+    labelSize_sm: {
+      fontSize: theme.fontSizes.sm,
+    },
+    labelSize_md: {
+      fontSize: theme.fontSizes.md,
+    },
+    labelSize_lg: {
+      fontSize: theme.fontSizes.lg,
+    },
+    labelVariant_primary: {
+      color: theme.colors.textOnPrimary,
+    },
+    labelVariant_secondary: {
+      color: theme.colors.primary,
+    },
+    labelVariant_outline: {
+      color: theme.colors.primary,
+    },
+    labelVariant_ghost: {
+      color: theme.colors.primary,
+    },
+    labelVariant_destructive: {
+      color: theme.colors.textOnPrimary,
+    },
+    labelDisabled: {
+      opacity: 0.7,
+    },
+  });
+}

@@ -1,49 +1,82 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-/**
- * A hook that persists state in AsyncStorage.
- * Returns [storedValue, setValue] similar to useState.
- */
-export function useAsyncStorage<T>(
-  key: string,
-  initialValue: T,
-): [T, (value: T) => Promise<void>] {
-  const [storedValue, setStoredValue] = useState<T>(initialValue);
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-  // Load persisted value on mount
-  useEffect(() => {
-    let cancelled = false;
+export interface UseAsyncStorageResult<T> {
+  value: T | null;
+  loading: boolean;
+  error: Error | null;
+  setValue: (value: T) => Promise<void>;
+  removeValue: () => Promise<void>;
+  refresh: () => Promise<void>;
+}
 
-    const load = async () => {
-      try {
-        const item = await AsyncStorage.getItem(key);
-        if (!cancelled && item !== null) {
-          setStoredValue(JSON.parse(item) as T);
-        }
-      } catch (error) {
-        console.warn(`[useAsyncStorage] Failed to load key "${key}":`, error);
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useAsyncStorage<T>(key: string, initialValue?: T): UseAsyncStorageResult<T> {
+  const [value, setValueState] = useState<T | null>(initialValue ?? null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const stored = await AsyncStorage.getItem(key);
+      if (stored !== null) {
+        setValueState(JSON.parse(stored) as T);
+      } else if (initialValue !== undefined) {
+        setValueState(initialValue);
       }
-    };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      console.warn(`useAsyncStorage: Failed to load key "${key}"`, error);
+    } finally {
+      setLoading(false);
+    }
+  }, [key, initialValue]);
 
+  useEffect(() => {
     void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [key]);
+  }, [load]);
 
   const setValue = useCallback(
-    async (value: T): Promise<void> => {
+    async (newValue: T) => {
       try {
-        setStoredValue(value);
-        await AsyncStorage.setItem(key, JSON.stringify(value));
-      } catch (error) {
-        console.warn(`[useAsyncStorage] Failed to save key "${key}":`, error);
+        setError(null);
+        setValueState(newValue);
+        await AsyncStorage.setItem(key, JSON.stringify(newValue));
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError(error);
+        console.warn(`useAsyncStorage: Failed to set key "${key}"`, error);
+        throw error;
       }
     },
     [key],
   );
 
-  return [storedValue, setValue];
+  const removeValue = useCallback(async () => {
+    try {
+      setError(null);
+      setValueState(null);
+      await AsyncStorage.removeItem(key);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+      console.warn(`useAsyncStorage: Failed to remove key "${key}"`, error);
+      throw error;
+    }
+  }, [key]);
+
+  return {
+    value,
+    loading,
+    error,
+    setValue,
+    removeValue,
+    refresh: load,
+  };
 }

@@ -1,47 +1,46 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
-import { useTheme } from '@context/ThemeContext';
-import { borderRadius, shadows, spacing } from '@constants/theme';
+import { StyleSheet, View, type ViewProps, type ViewStyle } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
+import type { Theme } from '../../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface CardProps {
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  /** Shadow intensity level */
-  elevation?: 'none' | 'sm' | 'base' | 'md' | 'lg';
-  /** Horizontal + vertical padding inside the card */
-  padding?: keyof typeof spacing;
-  /** Whether the card has a visible border */
-  bordered?: boolean;
-  testID?: string;
+export type CardVariant = 'elevated' | 'outlined' | 'filled';
+
+export interface CardProps extends ViewProps {
+  variant?: CardVariant;
+  padding?: keyof Theme['spacing'] | number;
+  style?: ViewStyle;
+  children?: React.ReactNode;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Card({
-  children,
-  style,
-  elevation = 'base',
+  variant = 'elevated',
   padding = 4,
-  bordered = false,
-  testID,
-}: CardProps): JSX.Element {
+  style,
+  children,
+  ...rest
+}: CardProps) {
   const { theme } = useTheme();
+  const styles = makeStyles(theme);
 
-  const shadowStyle = elevation !== 'none' ? shadows[elevation] : {};
-
-  const dynamicStyles = {
-    backgroundColor: theme.colors.cardBackground,
-    borderColor: bordered ? theme.colors.border : 'transparent',
-    borderWidth: bordered ? StyleSheet.hairlineWidth : 0,
-    padding: spacing[padding],
-    borderRadius: borderRadius.md,
-  };
+  const paddingValue =
+    typeof padding === 'number' && padding > 10
+      ? padding
+      : theme.spacing[padding as keyof Theme['spacing']] ?? theme.spacing[4];
 
   return (
-    <View style={[styles.card, shadowStyle, dynamicStyles, style]} testID={testID}>
+    <View
+      style={[
+        styles.base,
+        styles[variant],
+        { padding: paddingValue },
+        style,
+      ]}
+      {...rest}
+    >
       {children}
     </View>
   );
@@ -49,8 +48,23 @@ export function Card({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  card: {
-    overflow: 'hidden',
-  },
-});
+function makeStyles(theme: Theme) {
+  return StyleSheet.create({
+    base: {
+      borderRadius: theme.radii.lg,
+      overflow: 'hidden',
+    },
+    elevated: {
+      backgroundColor: theme.colors.card,
+      ...theme.shadows.md,
+    },
+    outlined: {
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    filled: {
+      backgroundColor: theme.colors.surfaceVariant,
+    },
+  });
+}

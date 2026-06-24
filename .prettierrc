@@ -1,21 +1,13 @@
 {
   "semi": true,
-  "trailingComma": "all",
   "singleQuote": true,
+  "trailingComma": "all",
   "printWidth": 100,
   "tabWidth": 2,
   "useTabs": false,
   "bracketSpacing": true,
-  "bracketSameLine": false,
   "arrowParens": "always",
   "endOfLine": "lf",
-  "importOrder": [
-    "^react$",
-    "^react-native$",
-    "<THIRD_PARTY_MODULES>",
-    "^@(screens|components|context|hooks|utils|constants|navigation|types)/(.*)$",
-    "^[./]"
-  ],
-  "importOrderSeparation": true,
-  "importOrderSortSpecifiers": true
+  "jsxSingleQuote": false,
+  "bracketSameLine": false
 }

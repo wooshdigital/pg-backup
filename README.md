@@ -1,245 +1,182 @@
-# SplitEase 💰
+# SplitMate ✈️
 
-> Split expenses effortlessly. No awkward money conversations.
+> Split travel expenses with friends, stress-free.
 
-A React Native (Expo) app for tracking shared expenses on group trips.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Project Structure](#project-structure)
-- [Development Workflow](#development-workflow)
-- [Phase Roadmap](#phase-roadmap)
+SplitMate is a React Native (Expo) app that helps groups of friends track and settle shared expenses during trips and events. Built with a focus on offline-first UX, multi-currency support, and clean architecture.
 
 ---
 
-## Overview
-
-SplitEase helps groups of friends and travelers track shared expenses, split costs fairly, and settle debts — all without spreadsheets or awkward conversations.
-
-**Core Features (planned):**
-- 📋 Create trips and invite participants
-- 💸 Add expenses with flexible split methods (equal, percentage, exact, shares)
-- 📊 Real-time balance summaries
-- 🌍 Multi-currency support
-- ✅ Settle up with one tap
-
----
-
-## Architecture
+## 📐 Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                        App.tsx                          │
-│              (ThemeProvider + NavigationContainer)      │
-└────────────────────────┬────────────────────────────────┘
-                         │
-              ┌──────────▼──────────┐
-              │    RootNavigator    │
-              │  (Bottom Tab Nav)   │
-              └──┬────────┬────────┘
-                 │        │
-        ┌────────▼──┐  ┌──▼──────────────┐
-        │   Home    │  │ TripStackNav     │
-        │  Screen   │  │                 │
-        └───────────┘  │ ┌─────────────┐ │
-                       │ │ TripsList   │ │
-        ┌──────────┐   │ ├─────────────┤ │
-        │ Settings │   │ │ TripDetail  │ │
-        │  Screen  │   │ ├─────────────┤ │
-        └──────────┘   │ │ AddExpense  │ │
-                       │ ├─────────────┤ │
-                       │ │ ExpDetail   │ │
-                       │ └─────────────┘ │
-                       └─────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│                    Global State                         │
-│                                                         │
-│  ThemeContext ──────► light/dark palette tokens         │
-│  AsyncStorage ──────► color mode persistence           │
-└─────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────┐
-│                  Domain Types (TypeScript)               │
-│                                                         │
-│  Trip ──► Expense ──► Split ──► SplitShare              │
-│      └──► Participant                                   │
-│      └──► Currency                                      │
-└─────────────────────────────────────────────────────────┘
+splitmate/
+├── App.tsx                  # Root component: ThemeProvider + NavigationContainer
+├── app.json                 # Expo app metadata
+├── babel.config.js          # Babel config with path aliases
+├── tsconfig.json            # Strict TypeScript + path aliases
+├── .eslintrc.js             # ESLint rules
+├── .prettierrc              # Prettier config
+├── .husky/pre-commit        # Pre-commit hooks
+└── src/
+    ├── types/               # Core domain TypeScript interfaces
+    │   └── index.ts         # Trip, Participant, Expense, Split, Settlement, ...
+    ├── constants/           # App-wide constants
+    │   ├── theme.ts         # Color tokens, typography, spacing, radii, shadows
+    │   └── routes.ts        # Route name enums + ParamList types
+    ├── context/             # React Context providers
+    │   └── ThemeContext.tsx  # Light/dark theme with AsyncStorage persistence
+    ├── navigation/          # React Navigation setup
+    │   ├── RootNavigator.tsx     # Bottom tab navigator
+    │   └── TripStackNavigator.tsx # Stack navigator for trip screens
+    ├── screens/             # Top-level screen components
+    │   ├── HomeScreen.tsx
+    │   ├── TripsScreen.tsx
+    │   └── SettingsScreen.tsx
+    ├── components/          # Reusable UI components
+    │   └── common/
+    │       ├── Button.tsx     # Themed button (5 variants, 3 sizes)
+    │       ├── Card.tsx       # Card container (elevated, outlined, filled)
+    │       └── Typography.tsx # Display, Heading, Body, Caption, Label
+    ├── hooks/               # Custom React hooks
+    │   └── useAsyncStorage.ts  # Generic typed AsyncStorage hook
+    └── utils/               # Pure utility functions
+        ├── currency.ts      # Money formatting, conversion helpers
+        ├── date.ts          # Date formatting and relative time
+        ├── id.ts            # ID generation utilities
+        ├── aria.ts          # Accessibility label helpers
+        ├── classNames.ts    # cn() utility (web/cross-platform)
+        └── keys.ts          # AsyncStorage key constants
 ```
 
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | React Native (Expo Managed) |
-| Language | TypeScript (strict mode) |
-| Navigation | React Navigation v6 (Stack + Bottom Tabs) |
-| Theming | Custom ThemeContext (light/dark) |
-| Persistence | AsyncStorage (Phase 1) |
-| Linting | ESLint + @typescript-eslint |
-| Formatting | Prettier |
-| Git Hooks | Husky + lint-staged |
-
----
-
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js >= 18
-- npm >= 9 or Yarn >= 1.22
+- Node.js ≥ 18
+- npm ≥ 9 or Yarn ≥ 1.22
 - Expo CLI: `npm install -g expo-cli`
-- Expo Go app on your iOS/Android device (or a simulator)
+- iOS Simulator (macOS) or Android Emulator
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/splitease.git
-cd splitease
+git clone https://github.com/your-org/splitmate.git
+cd splitmate
 
 # Install dependencies
 npm install
 
-# Install Husky hooks
-npm run prepare
-
-# Start the development server
+# Start Expo dev server
 npm start
-```
 
-### Running on Device
-
-```bash
-# iOS Simulator
+# Run on iOS
 npm run ios
 
-# Android Emulator
+# Run on Android
 npm run android
-
-# Web browser
-npm run web
 ```
 
-Scan the QR code with **Expo Go** (Android) or the Camera app (iOS) to run on a physical device.
-
----
-
-## Project Structure
-
-```
-splitease/
-├── App.tsx                    # Root component
-├── app.json                   # Expo configuration
-├── babel.config.js            # Babel + module resolver aliases
-├── tsconfig.json              # TypeScript strict config
-├── .eslintrc.js               # ESLint rules
-├── .prettierrc                # Prettier rules
-├── .husky/                    # Git hooks
-│   └── pre-commit             # lint + type-check on commit
-├── assets/
-│   ├── icon.png               # App icon
-│   └── splash.png             # Splash screen
-└── src/
-    ├── types/
-    │   └── index.ts           # Trip, Expense, Participant, Split, Currency
-    ├── constants/
-    │   ├── theme.ts           # Color palette, typography, spacing, shadows
-    │   └── routes.ts          # Route name enums
-    ├── context/
-    │   └── ThemeContext.tsx   # Light/dark ThemeProvider + useTheme hook
-    ├── hooks/
-    │   ├── useAsyncStorage.ts # Persistent state hook
-    │   ├── useFocusVisible.ts # Keyboard focus tracking
-    │   └── useId.ts           # Stable unique ID generation
-    ├── utils/
-    │   ├── aria.ts            # Accessibility helpers
-    │   ├── classNames.ts      # Conditional style merging
-    │   ├── currency.ts        # Currency formatting utilities
-    │   ├── date.ts            # Date formatting utilities
-    │   ├── id.ts              # UUID generation
-    │   └── keys.ts            # Keyboard key constants
-    ├── components/
-    │   └── common/
-    │       ├── Card.tsx       # Reusable card with shadow
-    │       ├── Button.tsx     # Themed button (5 variants)
-    │       └── Typography.tsx # Heading, Body, Caption components
-    ├── navigation/
-    │   ├── RootNavigator.tsx      # Bottom tab navigator
-    │   └── TripStackNavigator.tsx # Trip stack navigator
-    └── screens/
-        ├── HomeScreen.tsx     # Hero + feature highlights
-        ├── TripsScreen.tsx    # Trip list with placeholder data
-        └── SettingsScreen.tsx # Theme toggle + preferences
-```
-
----
-
-## Development Workflow
-
-### Commands
+### Environment Setup
 
 ```bash
-npm start          # Start Expo dev server
-npm run ios        # Open iOS simulator
-npm run android    # Open Android emulator
-npm run lint       # Run ESLint
-npm run lint:fix   # Auto-fix ESLint issues
-npm run type-check # Run TypeScript type-checker
-npm run format     # Prettier format all files
+# Install Husky pre-commit hooks
+npm run prepare
+
+# Verify type checking
+npm run type-check
+
+# Run linter
+npm run lint
+
+# Auto-fix lint issues
+npm run lint:fix
+
+# Format code
+npm run format
 ```
-
-### Path Aliases
-
-TypeScript path aliases are configured for clean imports:
-
-```typescript
-import { useTheme } from '@context/ThemeContext';
-import { HomeScreen } from '@screens/HomeScreen';
-import { Button } from '@components/common/Button';
-import { Trip } from '@types/index';
-import { Routes } from '@constants/routes';
-```
-
-### Pre-commit Hooks
-
-Every commit automatically runs:
-1. **ESLint** — catches code quality issues on staged `.ts/.tsx` files
-2. **Prettier** — formats staged files
-3. **TypeScript** — full type-check across the codebase
 
 ---
 
-## Phase Roadmap
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [Expo](https://expo.dev/) (managed workflow) |
+| Language | TypeScript (strict mode) |
+| Navigation | [React Navigation v6](https://reactnavigation.org/) (Stack + Bottom Tabs) |
+| Storage | [@react-native-async-storage/async-storage](https://github.com/react-native-async-storage/async-storage) |
+| Theming | Custom ThemeContext with light/dark tokens |
+| Linting | ESLint + @typescript-eslint + react-native plugins |
+| Formatting | Prettier |
+| Pre-commit | Husky + lint-staged |
+
+---
+
+## 📋 Domain Model
+
+```
+Trip
+├── id, name, description, destination
+├── currency: CurrencyCode
+├── status: planning | active | completed | archived
+├── startDate?, endDate?
+├── participants: Participant[]
+└── expenseIds: string[]
+
+Participant
+├── id, name, email?, avatarUrl?
+└── createdAt
+
+Expense
+├── id, tripId, title, description?
+├── amount: Money { amount: number, currency: CurrencyCode }
+├── category: food | transport | accommodation | ...
+├── paidBy: participantId
+├── splitId: string
+└── date, createdAt, updatedAt
+
+Split
+├── id, expenseId
+├── method: equal | exact | percentage | shares
+└── shares: SplitShare[]
+    ├── participantId
+    ├── amount (smallest unit)
+    ├── percentage?
+    └── shares?
+
+Settlement
+├── id, tripId
+├── fromParticipantId → toParticipantId
+├── amount: Money
+└── settled: boolean
+```
+
+---
+
+## 🗺️ Development Phases
 
 | Phase | Status | Description |
-|-------|--------|-------------|
-| **Phase 1** | ✅ Complete | Foundation: navigation, theming, placeholder screens |
-| **Phase 2** | 🔜 Planned | Trip & expense CRUD with AsyncStorage |
-| **Phase 3** | 🔜 Planned | Balance calculation & settlement suggestions |
-| **Phase 4** | 🔜 Planned | Camera receipts & multi-currency conversion |
-| **Phase 5** | 🔜 Planned | Cloud sync & real-time collaboration |
+|---|---|---|
+| **Phase 1** | ✅ Complete | Foundation: Navigation, theming, folder structure, TypeScript interfaces |
+| **Phase 2** | 🔄 Planned | Trip CRUD: Create, list, and view trips with AsyncStorage persistence |
+| **Phase 3** | 🔄 Planned | Expense tracking: Add/edit expenses, split calculations |
+| **Phase 4** | 🔄 Planned | Settlement view: Who owes whom, mark as paid |
+| **Phase 5** | 🔄 Planned | Polish: Animations, export, onboarding flow |
 
 ---
 
-## Contributing
+## 🧑‍💻 Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Commit with conventional commits: `git commit -m "feat: add expense splitting"`
-4. Push and open a Pull Request
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feat/your-feature`
+3. Commit your changes (Husky will run lint + type-check)
+4. Push and open a pull request
 
 ---
 
-## License
+## 📄 License
 
-MIT © SplitEase Contributors
+MIT © SplitMate Contributors

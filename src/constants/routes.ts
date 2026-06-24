@@ -1,25 +1,57 @@
-// ─── Root Tab Routes ─────────────────────────────────────────────────────────
+// ─── Root Navigator Routes ────────────────────────────────────────────────────
 
-export enum RootTab {
-  Home = 'Home',
-  Trips = 'Trips',
-  Settings = 'Settings',
+export enum RootRoutes {
+  HOME = 'Home',
+  TRIPS = 'Trips',
+  SETTINGS = 'Settings',
 }
 
 // ─── Trip Stack Routes ────────────────────────────────────────────────────────
 
-export enum TripStack {
-  TripsList = 'TripsList',
-  TripDetail = 'TripDetail',
-  AddExpense = 'AddExpense',
-  ExpenseDetail = 'ExpenseDetail',
+export enum TripRoutes {
+  TRIPS_LIST = 'TripsList',
+  TRIP_DETAIL = 'TripDetail',
+  TRIP_CREATE = 'TripCreate',
+  TRIP_EDIT = 'TripEdit',
+  EXPENSE_DETAIL = 'ExpenseDetail',
+  EXPENSE_CREATE = 'ExpenseCreate',
+  EXPENSE_EDIT = 'ExpenseEdit',
+  PARTICIPANTS = 'Participants',
+  SETTLEMENTS = 'Settlements',
 }
 
-// ─── Combined Route Names ─────────────────────────────────────────────────────
+// ─── Settings Stack Routes ────────────────────────────────────────────────────
 
-export const Routes = {
-  ...RootTab,
-  ...TripStack,
-} as const;
+export enum SettingsRoutes {
+  SETTINGS_HOME = 'SettingsHome',
+  CURRENCY = 'Currency',
+  APPEARANCE = 'Appearance',
+  ABOUT = 'About',
+}
 
-export type RouteName = (typeof Routes)[keyof typeof Routes];
+// ─── Route Params ─────────────────────────────────────────────────────────────
+
+export type RootTabParamList = {
+  [RootRoutes.HOME]: undefined;
+  [RootRoutes.TRIPS]: undefined;
+  [RootRoutes.SETTINGS]: undefined;
+};
+
+export type TripStackParamList = {
+  [TripRoutes.TRIPS_LIST]: undefined;
+  [TripRoutes.TRIP_DETAIL]: { tripId: string };
+  [TripRoutes.TRIP_CREATE]: undefined;
+  [TripRoutes.TRIP_EDIT]: { tripId: string };
+  [TripRoutes.EXPENSE_DETAIL]: { expenseId: string; tripId: string };
+  [TripRoutes.EXPENSE_CREATE]: { tripId: string };
+  [TripRoutes.EXPENSE_EDIT]: { expenseId: string; tripId: string };
+  [TripRoutes.PARTICIPANTS]: { tripId: string };
+  [TripRoutes.SETTLEMENTS]: { tripId: string };
+};
+
+export type SettingsStackParamList = {
+  [SettingsRoutes.SETTINGS_HOME]: undefined;
+  [SettingsRoutes.CURRENCY]: undefined;
+  [SettingsRoutes.APPEARANCE]: undefined;
+  [SettingsRoutes.ABOUT]: undefined;
+};

@@ -1,30 +1,22 @@
-import type { AccessibilityRole, AccessibilityState } from 'react-native';
+// ─── Accessibility Utilities ──────────────────────────────────────────────────
 
 /**
- * Builds accessibility props for interactive elements.
+ * Generate accessible label for a monetary amount
  */
-export function buildAccessibilityProps(options: {
-  label: string;
-  hint?: string;
-  role?: AccessibilityRole;
-  disabled?: boolean;
-  selected?: boolean;
-  checked?: boolean;
-  expanded?: boolean;
-}) {
-  const { label, hint, role = 'button', disabled, selected, checked, expanded } = options;
+export function moneyAriaLabel(amount: string, currency: string): string {
+  return `${amount} ${currency}`;
+}
 
-  const accessibilityState: AccessibilityState = {};
-  if (disabled !== undefined) accessibilityState.disabled = disabled;
-  if (selected !== undefined) accessibilityState.selected = selected;
-  if (checked !== undefined) accessibilityState.checked = checked;
-  if (expanded !== undefined) accessibilityState.expanded = expanded;
+/**
+ * Generate accessible label for a trip status
+ */
+export function tripStatusAriaLabel(status: string): string {
+  return `Trip status: ${status}`;
+}
 
-  return {
-    accessible: true,
-    accessibilityLabel: label,
-    accessibilityHint: hint,
-    accessibilityRole: role,
-    accessibilityState,
-  };
+/**
+ * Build accessible hint for interactive elements
+ */
+export function buildAccessibilityHint(action: string, target: string): string {
+  return `${action} ${target}`;
 }

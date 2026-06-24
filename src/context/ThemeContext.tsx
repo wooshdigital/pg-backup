@@ -7,25 +7,24 @@ import React, {
   useState,
 } from 'react';
 import { useColorScheme } from 'react-native';
-import { darkTheme, lightTheme } from '@constants/theme';
-import type { Theme } from '@constants/theme';
-import { useAsyncStorage } from '@hooks/useAsyncStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { darkTheme, lightTheme, type Theme } from '../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ColorMode = 'light' | 'dark' | 'system';
+export type ThemeMode = 'light' | 'dark' | 'system';
 
-interface ThemeContextValue {
+export interface ThemeContextValue {
   theme: Theme;
-  colorMode: ColorMode;
+  themeMode: ThemeMode;
   isDark: boolean;
-  setColorMode: (mode: ColorMode) => void;
-  toggleColorMode: () => void;
+  setThemeMode: (mode: ThemeMode) => void;
+  toggleTheme: () => void;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Storage Key ──────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = '@splitease/color-mode';
+const THEME_STORAGE_KEY = '@splitmate/theme_mode';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -33,56 +32,68 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-interface ThemeProviderProps {
+export interface ThemeProviderProps {
   children: React.ReactNode;
 }
 
-export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
+export function ThemeProvider({ children }: ThemeProviderProps) {
   const systemColorScheme = useColorScheme();
-  const [storedMode, setStoredMode] = useAsyncStorage<ColorMode>(STORAGE_KEY, 'system');
-  const [colorMode, setColorModeState] = useState<ColorMode>(storedMode ?? 'system');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  // Sync local state when storage loads
+  // Load persisted theme preference on mount
   useEffect(() => {
-    if (storedMode) {
-      setColorModeState(storedMode);
-    }
-  }, [storedMode]);
+    void (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === 'light' || stored === 'dark' || stored === 'system') {
+          setThemeModeState(stored);
+        }
+      } catch (error) {
+        console.warn('Failed to load theme preference:', error);
+      } finally {
+        setIsLoaded(true);
+      }
+    })();
+  }, []);
 
-  const isDark = useMemo((): boolean => {
-    if (colorMode === 'system') {
+  const setThemeMode = useCallback(async (mode: ThemeMode) => {
+    try {
+      setThemeModeState(mode);
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch (error) {
+      console.warn('Failed to persist theme preference:', error);
+    }
+  }, []);
+
+  const isDark = useMemo(() => {
+    if (themeMode === 'system') {
       return systemColorScheme === 'dark';
     }
-    return colorMode === 'dark';
-  }, [colorMode, systemColorScheme]);
+    return themeMode === 'dark';
+  }, [themeMode, systemColorScheme]);
 
-  const theme = useMemo((): Theme => {
-    return isDark ? darkTheme : lightTheme;
-  }, [isDark]);
+  const theme = useMemo<Theme>(() => (isDark ? darkTheme : lightTheme), [isDark]);
 
-  const setColorMode = useCallback(
-    (mode: ColorMode) => {
-      setColorModeState(mode);
-      void setStoredMode(mode);
-    },
-    [setStoredMode],
-  );
+  const toggleTheme = useCallback(() => {
+    void setThemeMode(isDark ? 'light' : 'dark');
+  }, [isDark, setThemeMode]);
 
-  const toggleColorMode = useCallback(() => {
-    const next: ColorMode = isDark ? 'light' : 'dark';
-    setColorMode(next);
-  }, [isDark, setColorMode]);
-
-  const value = useMemo(
-    (): ThemeContextValue => ({
+  const value = useMemo<ThemeContextValue>(
+    () => ({
       theme,
-      colorMode,
+      themeMode,
       isDark,
-      setColorMode,
-      toggleColorMode,
+      setThemeMode: (mode: ThemeMode) => void setThemeMode(mode),
+      toggleTheme,
     }),
-    [theme, colorMode, isDark, setColorMode, toggleColorMode],
+    [theme, themeMode, isDark, setThemeMode, toggleTheme],
   );
+
+  // Avoid flash of incorrect theme
+  if (!isLoaded) {
+    return null;
+  }
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

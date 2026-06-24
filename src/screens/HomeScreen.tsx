@@ -1,102 +1,118 @@
 import React from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
-import { useTheme } from '@context/ThemeContext';
-import { Card } from '@components/common/Card';
-import { Button } from '@components/common/Button';
-import { Body, Caption, Display, H3 } from '@components/common/Typography';
-import { spacing } from '@constants/theme';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
+import { Card } from '../components/common/Card';
+import { Button } from '../components/common/Button';
+import { Heading, Body, Caption } from '../components/common/Typography';
+import type { Theme } from '../constants/theme';
 
-// ─── Feature Card Data ────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const FEATURES = [
-  {
-    id: '1',
-    emoji: '✈️',
-    title: 'Group Trips',
-    description: 'Create trips and invite friends to split costs together.',
-  },
-  {
-    id: '2',
-    emoji: '💸',
-    title: 'Smart Splitting',
-    description: 'Split equally, by percentage, exact amounts, or custom shares.',
-  },
-  {
-    id: '3',
-    emoji: '📊',
-    title: 'Clear Balances',
-    description: 'See who owes what at a glance with instant balance summaries.',
-  },
-  {
-    id: '4',
-    emoji: '🌍',
-    title: 'Multi-Currency',
-    description: 'Track expenses in any currency with automatic conversion.',
-  },
-] as const;
+interface FeatureItemProps {
+  emoji: string;
+  title: string;
+  description: string;
+}
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-export function HomeScreen(): JSX.Element {
-  const { theme, isDark, toggleColorMode } = useTheme();
+function FeatureItem({ emoji, title, description }: FeatureItemProps) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
+  return (
+    <View style={styles.featureItem}>
+      <View style={styles.featureEmoji}>
+        <Body size="lg">{emoji}</Body>
+      </View>
+      <View style={styles.featureText}>
+        <Body size="md" bold>
+          {title}
+        </Body>
+        <Body size="sm" color="secondary">
+          {description}
+        </Body>
+      </View>
+    </View>
+  );
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+export function HomeScreen() {
+  const { theme, toggleTheme, isDark } = useTheme();
+  const styles = makeStyles(theme);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Hero Section */}
         <View style={styles.hero}>
           <View style={styles.logoContainer}>
-            <Body style={styles.logoEmoji}>💰</Body>
+            <Body size="lg" style={styles.logoEmoji}>
+              ✈️
+            </Body>
           </View>
-          <Display align="center" color={theme.colors.primary}>
-            SplitEase
-          </Display>
-          <Body align="center" color={theme.colors.textSecondary} style={styles.tagline}>
-            Split expenses effortlessly.{'\n'}No awkward money conversations.
+          <Heading level={1} align="center">
+            SplitMate
+          </Heading>
+          <Body size="lg" color="secondary" align="center" style={styles.tagline}>
+            Split expenses with friends, stress-free.
           </Body>
         </View>
 
-        {/* CTA Buttons */}
-        <View style={styles.ctaContainer}>
-          <Button label="Create a Trip" variant="primary" size="lg" fullWidth />
-          <View style={styles.ctaGap} />
-          <Button label="Join a Trip" variant="outline" size="lg" fullWidth />
-        </View>
-
-        {/* Features Section */}
-        <View style={styles.section}>
-          <H3 color={theme.colors.textPrimary}>Why SplitEase?</H3>
-          <Caption style={styles.sectionSubtitle}>Everything you need for group travel</Caption>
-
-          <View style={styles.featureGrid}>
-            {FEATURES.map((feature) => (
-              <Card key={feature.id} style={styles.featureCard} elevation="sm" bordered>
-                <Body style={styles.featureEmoji}>{feature.emoji}</Body>
-                <Body weight="semibold" style={styles.featureTitle}>
-                  {feature.title}
-                </Body>
-                <Caption>{feature.description}</Caption>
-              </Card>
-            ))}
-          </View>
-        </View>
-
-        {/* Theme Toggle (dev helper) */}
-        <View style={styles.devSection}>
-          <Caption align="center" color={theme.colors.textDisabled}>
-            Dev Tools
-          </Caption>
-          <Button
-            label={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-            variant="ghost"
-            size="sm"
-            onPress={toggleColorMode}
+        {/* Feature Cards */}
+        <Card variant="elevated" style={styles.featureCard}>
+          <Heading level={3} style={styles.sectionTitle}>
+            What you can do
+          </Heading>
+          <FeatureItem
+            emoji="🧳"
+            title="Create Trips"
+            description="Organize expenses by trip or event"
           />
-        </View>
+          <FeatureItem
+            emoji="💸"
+            title="Track Expenses"
+            description="Log who paid and split automatically"
+          />
+          <FeatureItem
+            emoji="🤝"
+            title="Settle Up"
+            description="See who owes whom at a glance"
+          />
+          <FeatureItem
+            emoji="💱"
+            title="Multi-Currency"
+            description="Support for 150+ currencies"
+          />
+        </Card>
+
+        {/* Status Card */}
+        <Card variant="outlined" padding={4} style={styles.statusCard}>
+          <Caption uppercase color="secondary" style={styles.statusLabel}>
+            Development Status
+          </Caption>
+          <Body size="md" style={styles.statusText}>
+            Phase 1 complete — Foundation & Setup ✅
+          </Body>
+          <Body size="sm" color="secondary">
+            Navigation, theming, and project structure are all in place.
+          </Body>
+        </Card>
+
+        {/* Theme Toggle */}
+        <Button
+          label={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+          variant="outline"
+          onPress={toggleTheme}
+          fullWidth
+          style={styles.themeButton}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -104,65 +120,77 @@ export function HomeScreen(): JSX.Element {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: spacing[4],
-    paddingBottom: spacing[10],
-  },
-  hero: {
-    alignItems: 'center',
-    paddingTop: spacing[10],
-    paddingBottom: spacing[8],
-  },
-  logoContainer: {
-    marginBottom: spacing[4],
-  },
-  logoEmoji: {
-    fontSize: 64,
-  },
-  tagline: {
-    marginTop: spacing[3],
-    lineHeight: 24,
-  },
-  ctaContainer: {
-    marginBottom: spacing[8],
-  },
-  ctaGap: {
-    height: spacing[3],
-  },
-  section: {
-    marginBottom: spacing[8],
-  },
-  sectionSubtitle: {
-    marginTop: spacing[1],
-    marginBottom: spacing[4],
-  },
-  featureGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing[3],
-  },
-  featureCard: {
-    flex: 1,
-    minWidth: 140,
-  },
-  featureEmoji: {
-    fontSize: 28,
-    marginBottom: spacing[2],
-  },
-  featureTitle: {
-    marginBottom: spacing[1],
-  },
-  devSection: {
-    alignItems: 'center',
-    gap: spacing[2],
-    paddingTop: spacing[4],
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-});
+function makeStyles(theme: Theme) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: theme.spacing[4],
+      paddingBottom: theme.spacing[8],
+    },
+    hero: {
+      alignItems: 'center',
+      paddingTop: theme.spacing[8],
+      paddingBottom: theme.spacing[6],
+    },
+    logoContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: theme.radii['2xl'],
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: theme.spacing[4],
+      ...theme.shadows.lg,
+    },
+    logoEmoji: {
+      fontSize: 36,
+    },
+    tagline: {
+      marginTop: theme.spacing[2],
+      maxWidth: 260,
+    },
+    featureCard: {
+      marginBottom: theme.spacing[4],
+    },
+    sectionTitle: {
+      marginBottom: theme.spacing[4],
+    },
+    featureItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: theme.spacing[3],
+    },
+    featureEmoji: {
+      width: 40,
+      height: 40,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surfaceVariant,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: theme.spacing[3],
+    },
+    featureText: {
+      flex: 1,
+      gap: theme.spacing[0.5],
+    },
+    statusCard: {
+      marginBottom: theme.spacing[4],
+      gap: theme.spacing[1],
+    },
+    statusLabel: {
+      marginBottom: theme.spacing[1],
+    },
+    statusText: {
+      marginBottom: theme.spacing[1],
+    },
+    themeButton: {
+      marginTop: theme.spacing[2],
+    },
+  });
+}
