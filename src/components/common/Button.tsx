@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -9,12 +9,12 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import type { Theme } from '../../constants/theme';
+import { borderRadius, spacing, typography } from '../../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonSize = 'sm' | 'base' | 'lg';
 
 export interface ButtonProps extends Omit<TouchableOpacityProps, 'style'> {
   label: string;
@@ -28,65 +28,132 @@ export interface ButtonProps extends Omit<TouchableOpacityProps, 'style'> {
   textStyle?: TextStyle;
 }
 
+// ─── Size Config ──────────────────────────────────────────────────────────────
+
+const sizeConfig = {
+  sm: {
+    paddingVertical: spacing[1.5],
+    paddingHorizontal: spacing[3],
+    fontSize: typography.fontSize.sm,
+    borderRadius: borderRadius.base,
+    minHeight: 32,
+  },
+  base: {
+    paddingVertical: spacing[2.5],
+    paddingHorizontal: spacing[5],
+    fontSize: typography.fontSize.base,
+    borderRadius: borderRadius.md,
+    minHeight: 44,
+  },
+  lg: {
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[6],
+    fontSize: typography.fontSize.md,
+    borderRadius: borderRadius.lg,
+    minHeight: 52,
+  },
+} as const;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Button({
   label,
   variant = 'primary',
-  size = 'md',
+  size = 'base',
   loading = false,
   leftIcon,
   rightIcon,
   fullWidth = false,
-  disabled = false,
+  disabled,
   style,
   textStyle,
+  onPress,
   ...rest
 }: ButtonProps) {
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const config = sizeConfig[size];
+  const isDisabled = disabled ?? loading;
 
-  const isDisabled = disabled || loading;
+  const getVariantStyles = useCallback((): { container: ViewStyle; text: TextStyle } => {
+    switch (variant) {
+      case 'primary':
+        return {
+          container: {
+            backgroundColor: isDisabled ? theme.primaryLight : theme.primary,
+          },
+          text: { color: theme.primaryForeground },
+        };
+      case 'secondary':
+        return {
+          container: {
+            backgroundColor: isDisabled ? theme.border : theme.secondary,
+          },
+          text: { color: theme.secondaryForeground },
+        };
+      case 'outline':
+        return {
+          container: {
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            borderColor: isDisabled ? theme.border : theme.primary,
+          },
+          text: { color: isDisabled ? theme.textDisabled : theme.primary },
+        };
+      case 'ghost':
+        return {
+          container: {
+            backgroundColor: 'transparent',
+          },
+          text: { color: isDisabled ? theme.textDisabled : theme.primary },
+        };
+      case 'danger':
+        return {
+          container: {
+            backgroundColor: isDisabled ? theme.dangerLight : theme.danger,
+          },
+          text: { color: theme.dangerForeground },
+        };
+    }
+  }, [variant, isDisabled, theme]);
+
+  const variantStyles = getVariantStyles();
+
+  const containerStyle: ViewStyle = {
+    borderRadius: config.borderRadius,
+    paddingVertical: config.paddingVertical,
+    paddingHorizontal: config.paddingHorizontal,
+    minHeight: config.minHeight,
+    opacity: isDisabled ? 0.6 : 1,
+    alignSelf: fullWidth ? 'stretch' : 'flex-start',
+    ...variantStyles.container,
+  };
+
+  const labelStyle: TextStyle = {
+    fontSize: config.fontSize,
+    fontWeight: typography.fontWeight.semiBold,
+    ...variantStyles.text,
+  };
 
   return (
     <TouchableOpacity
-      style={[
-        styles.base,
-        styles[`size_${size}`],
-        styles[`variant_${variant}`],
-        fullWidth && styles.fullWidth,
-        isDisabled && styles.disabled,
-        style,
-      ]}
+      activeOpacity={0.75}
       disabled={isDisabled}
-      activeOpacity={0.8}
+      onPress={onPress}
+      style={[styles.container, containerStyle, style]}
       accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled }}
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       {...rest}
     >
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={
-            variant === 'outline' || variant === 'ghost'
-              ? theme.colors.primary
-              : theme.colors.textOnPrimary
-          }
+          color={variantStyles.text.color}
         />
       ) : (
         <>
           {leftIcon}
-          <Text
-            style={[
-              styles.label,
-              styles[`labelSize_${size}`],
-              styles[`labelVariant_${variant}`],
-              isDisabled && styles.labelDisabled,
-              textStyle,
-            ]}
-          >
-            {label}
-          </Text>
+          <Text style={[styles.label, labelStyle, textStyle]}>{label}</Text>
           {rightIcon}
         </>
       )}
@@ -96,86 +163,14 @@ export function Button({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-function makeStyles(theme: Theme) {
-  return StyleSheet.create({
-    base: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing[2],
-      borderRadius: theme.radii.md,
-    },
-    // Sizes
-    size_sm: {
-      paddingHorizontal: theme.spacing[3],
-      paddingVertical: theme.spacing[1.5],
-      minHeight: 32,
-    },
-    size_md: {
-      paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[2.5],
-      minHeight: 44,
-    },
-    size_lg: {
-      paddingHorizontal: theme.spacing[6],
-      paddingVertical: theme.spacing[3],
-      minHeight: 52,
-    },
-    // Variants
-    variant_primary: {
-      backgroundColor: theme.colors.primary,
-    },
-    variant_secondary: {
-      backgroundColor: theme.colors.primaryLight,
-    },
-    variant_outline: {
-      backgroundColor: theme.colors.transparent,
-      borderWidth: 1.5,
-      borderColor: theme.colors.primary,
-    },
-    variant_ghost: {
-      backgroundColor: theme.colors.transparent,
-    },
-    variant_destructive: {
-      backgroundColor: theme.colors.error,
-    },
-    // States
-    fullWidth: {
-      width: '100%',
-    },
-    disabled: {
-      opacity: 0.5,
-    },
-    // Labels
-    label: {
-      fontWeight: theme.fontWeights.semibold,
-    },
-    labelSize_sm: {
-      fontSize: theme.fontSizes.sm,
-    },
-    labelSize_md: {
-      fontSize: theme.fontSizes.md,
-    },
-    labelSize_lg: {
-      fontSize: theme.fontSizes.lg,
-    },
-    labelVariant_primary: {
-      color: theme.colors.textOnPrimary,
-    },
-    labelVariant_secondary: {
-      color: theme.colors.primary,
-    },
-    labelVariant_outline: {
-      color: theme.colors.primary,
-    },
-    labelVariant_ghost: {
-      color: theme.colors.primary,
-    },
-    labelVariant_destructive: {
-      color: theme.colors.textOnPrimary,
-    },
-    labelDisabled: {
-      opacity: 0.7,
-    },
-  });
-}
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  label: {
+    textAlign: 'center',
+  },
+});

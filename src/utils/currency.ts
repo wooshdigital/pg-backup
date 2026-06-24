@@ -1,77 +1,59 @@
-import type { CurrencyCode, Money } from '../types';
+import type { CurrencyCode } from '../types';
 
-// ─── Currency Map ─────────────────────────────────────────────────────────────
+// ─── Currency Registry ────────────────────────────────────────────────────────
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  JPY: '¥',
-  CAD: 'CA$',
-  AUD: 'A$',
-  CHF: 'Fr',
-  CNY: '¥',
-  INR: '₹',
-  MXN: 'MX$',
-  BRL: 'R$',
-  KRW: '₩',
-  SGD: 'S$',
-  HKD: 'HK$',
-  NOK: 'kr',
-  SEK: 'kr',
-  DKK: 'kr',
-  NZD: 'NZ$',
-  ZAR: 'R',
-  THB: '฿',
+export const CURRENCIES: Record<CurrencyCode, { symbol: string; name: string; decimals: number }> = {
+  USD: { symbol: '$', name: 'US Dollar', decimals: 2 },
+  EUR: { symbol: '€', name: 'Euro', decimals: 2 },
+  GBP: { symbol: '£', name: 'British Pound', decimals: 2 },
+  JPY: { symbol: '¥', name: 'Japanese Yen', decimals: 0 },
+  CAD: { symbol: 'CA$', name: 'Canadian Dollar', decimals: 2 },
+  AUD: { symbol: 'A$', name: 'Australian Dollar', decimals: 2 },
+  CHF: { symbol: 'CHF', name: 'Swiss Franc', decimals: 2 },
+  CNY: { symbol: '¥', name: 'Chinese Yuan', decimals: 2 },
+  INR: { symbol: '₹', name: 'Indian Rupee', decimals: 2 },
+  MXN: { symbol: 'MX$', name: 'Mexican Peso', decimals: 2 },
+  BRL: { symbol: 'R$', name: 'Brazilian Real', decimals: 2 },
+  KRW: { symbol: '₩', name: 'South Korean Won', decimals: 0 },
+  SGD: { symbol: 'S$', name: 'Singapore Dollar', decimals: 2 },
+  HKD: { symbol: 'HK$', name: 'Hong Kong Dollar', decimals: 2 },
+  NOK: { symbol: 'kr', name: 'Norwegian Krone', decimals: 2 },
+  SEK: { symbol: 'kr', name: 'Swedish Krona', decimals: 2 },
+  DKK: { symbol: 'kr', name: 'Danish Krone', decimals: 2 },
+  NZD: { symbol: 'NZ$', name: 'New Zealand Dollar', decimals: 2 },
+  ZAR: { symbol: 'R', name: 'South African Rand', decimals: 2 },
+  THB: { symbol: '฿', name: 'Thai Baht', decimals: 2 },
 };
 
-const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'CLP', 'PYG']);
+// ─── Formatting ───────────────────────────────────────────────────────────────
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+export function formatCurrency(
+  amount: number,
+  currency: CurrencyCode,
+  options: { showSymbol?: boolean; showCode?: boolean } = {},
+): string {
+  const { showSymbol = true, showCode = false } = options;
+  const { symbol, decimals } = CURRENCIES[currency];
 
-export function getCurrencySymbol(code: CurrencyCode): string {
-  return CURRENCY_SYMBOLS[code] ?? code;
+  const formatted = amount.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  const parts: string[] = [];
+  if (showSymbol) parts.push(symbol);
+  parts.push(formatted);
+  if (showCode) parts.push(currency);
+
+  return parts.join(showSymbol ? '' : ' ');
 }
 
-export function isZeroDecimal(code: CurrencyCode): boolean {
-  return ZERO_DECIMAL_CURRENCIES.has(code);
+export function parseCurrencyInput(input: string): number {
+  // Remove any non-numeric characters except decimal point
+  const cleaned = input.replace(/[^0-9.]/g, '');
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? 0 : parsed;
 }
 
-/**
- * Convert smallest unit (cents) to display amount
- */
-export function toDisplayAmount(amountInCents: number, currency: CurrencyCode): number {
-  if (isZeroDecimal(currency)) return amountInCents;
-  return amountInCents / 100;
-}
-
-/**
- * Convert display amount to smallest unit (cents)
- */
-export function toCents(amount: number, currency: CurrencyCode): number {
-  if (isZeroDecimal(currency)) return Math.round(amount);
-  return Math.round(amount * 100);
-}
-
-/**
- * Format a Money object to a human-readable string
- */
-export function formatMoney(money: Money, options?: { showCode?: boolean }): string {
-  const displayAmount = toDisplayAmount(money.amount, money.currency);
-  const symbol = getCurrencySymbol(money.currency);
-  const decimals = isZeroDecimal(money.currency) ? 0 : 2;
-
-  const formatted = displayAmount.toFixed(decimals);
-  const result = `${symbol}${formatted}`;
-
-  return options?.showCode ? `${result} ${money.currency}` : result;
-}
-
-/**
- * Format a raw number as currency
- */
-export function formatCurrency(amount: number, currency: CurrencyCode): string {
-  const symbol = getCurrencySymbol(currency);
-  const decimals = isZeroDecimal(currency) ? 0 : 2;
-  return `${symbol}${amount.toFixed(decimals)}`;
+export function roundToCurrency(amount: number, currency: CurrencyCode): number {
+  const { decimals } = CURRENCIES[currency];
+  const factor = Math.pow(10, decimals);
+  return Math.round(amount * factor) / factor;
 }

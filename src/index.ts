@@ -1,4 +1,4 @@
-// Re-export public API for the src module
+// Re-export everything for convenient imports
 export * from './types';
 export * from './constants';
 export * from './context';

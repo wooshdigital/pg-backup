@@ -1,19 +1,32 @@
 // ─── Currency ────────────────────────────────────────────────────────────────
 
-export type CurrencyCode = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD' | 'CHF' | 'CNY' | string;
+export type CurrencyCode =
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'JPY'
+  | 'CAD'
+  | 'AUD'
+  | 'CHF'
+  | 'CNY'
+  | 'INR'
+  | 'MXN'
+  | 'BRL'
+  | 'KRW'
+  | 'SGD'
+  | 'HKD'
+  | 'NOK'
+  | 'SEK'
+  | 'DKK'
+  | 'NZD'
+  | 'ZAR'
+  | 'THB';
 
 export interface Currency {
   code: CurrencyCode;
   symbol: string;
   name: string;
-  decimalPlaces: number;
-}
-
-// ─── Money ───────────────────────────────────────────────────────────────────
-
-export interface Money {
-  amount: number; // stored in smallest unit (cents)
-  currency: CurrencyCode;
+  decimals: number;
 }
 
 // ─── Participant ──────────────────────────────────────────────────────────────
@@ -23,6 +36,8 @@ export interface Participant {
   name: string;
   email?: string;
   avatarUrl?: string;
+  /** Whether this participant is the local device user */
+  isCurrentUser: boolean;
   createdAt: string; // ISO 8601
 }
 
@@ -32,12 +47,10 @@ export type SplitMethod = 'equal' | 'exact' | 'percentage' | 'shares';
 
 export interface SplitShare {
   participantId: string;
-  /** Exact amount in smallest currency unit */
-  amount: number;
-  /** Percentage (0–100) used when splitMethod = 'percentage' */
-  percentage?: number;
-  /** Number of shares when splitMethod = 'shares' */
-  shares?: number;
+  /** Raw value: amount (exact), percentage (percentage), or share count (shares) */
+  value: number;
+  /** Resolved amount in the trip's base currency */
+  resolvedAmount: number;
 }
 
 export interface Split {
@@ -45,20 +58,19 @@ export interface Split {
   expenseId: string;
   method: SplitMethod;
   shares: SplitShare[];
-  createdAt: string;
-  updatedAt: string;
 }
 
-// ─── Expense ─────────────────────────────────────────────────────────────────
+// ─── Expense ──────────────────────────────────────────────────────────────────
 
 export type ExpenseCategory =
+  | 'accommodation'
   | 'food'
   | 'transport'
-  | 'accommodation'
-  | 'entertainment'
+  | 'activities'
   | 'shopping'
   | 'health'
   | 'utilities'
+  | 'entertainment'
   | 'other';
 
 export interface Expense {
@@ -66,14 +78,35 @@ export interface Expense {
   tripId: string;
   title: string;
   description?: string;
-  amount: Money;
+  amount: number;
+  currency: CurrencyCode;
+  /** Amount converted to the trip's base currency */
+  amountInBaseCurrency: number;
   category: ExpenseCategory;
-  paidBy: string; // participantId
-  splitId: string;
+  /** Participant ID of the person who paid */
+  paidById: string;
+  /** All participants who owe for this expense */
+  participantIds: string[];
+  split: Split;
   receiptUrl?: string;
   date: string; // ISO 8601
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+// ─── Balance ──────────────────────────────────────────────────────────────────
+
+export interface Balance {
+  participantId: string;
+  amount: number; // positive = owed money, negative = owes money
+  currency: CurrencyCode;
+}
+
+export interface Settlement {
+  fromParticipantId: string;
+  toParticipantId: string;
+  amount: number;
+  currency: CurrencyCode;
 }
 
 // ─── Trip ─────────────────────────────────────────────────────────────────────
@@ -86,36 +119,45 @@ export interface Trip {
   description?: string;
   destination?: string;
   coverImageUrl?: string;
-  currency: CurrencyCode;
+  baseCurrency: CurrencyCode;
   status: TripStatus;
+  participants: Participant[];
+  expenses: Expense[];
+  balances: Balance[];
+  suggestedSettlements: Settlement[];
   startDate?: string; // ISO 8601
   endDate?: string; // ISO 8601
-  participants: Participant[];
-  expenseIds: string[];
-  createdBy: string; // participantId
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
 }
 
-// ─── Settlement ───────────────────────────────────────────────────────────────
+// ─── Navigation ───────────────────────────────────────────────────────────────
 
-export interface Settlement {
-  id: string;
-  tripId: string;
-  fromParticipantId: string;
-  toParticipantId: string;
-  amount: Money;
-  settled: boolean;
-  settledAt?: string;
-  createdAt: string;
-}
+export type RootTabParamList = {
+  Home: undefined;
+  Trips: undefined;
+  Settings: undefined;
+};
 
-// ─── App State ────────────────────────────────────────────────────────────────
+export type TripStackParamList = {
+  TripsList: undefined;
+  TripDetail: { tripId: string };
+  AddExpense: { tripId: string };
+  ExpenseDetail: { tripId: string; expenseId: string };
+  AddParticipant: { tripId: string };
+  Settlements: { tripId: string };
+};
+
+// ─── Storage ──────────────────────────────────────────────────────────────────
 
 export interface AppState {
   trips: Trip[];
-  expenses: Record<string, Expense>;
-  splits: Record<string, Split>;
-  participants: Record<string, Participant>;
-  settlements: Settlement[];
+  currentUserId: string | null;
+  settings: AppSettings;
+}
+
+export interface AppSettings {
+  defaultCurrency: CurrencyCode;
+  theme: 'light' | 'dark' | 'system';
+  notificationsEnabled: boolean;
 }

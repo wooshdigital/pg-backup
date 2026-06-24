@@ -1,47 +1,31 @@
 // ─── ID Generation ────────────────────────────────────────────────────────────
 
-/**
- * Generate a simple unique ID.
- * For production, consider using 'uuid' package.
- */
-export function generateId(prefix?: string): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 9);
-  const id = `${timestamp}-${random}`;
-  return prefix ? `${prefix}_${id}` : id;
-}
+let counter = 0;
 
 /**
- * Generate a trip ID
+ * Generates a pseudo-unique ID. For production, consider using
+ * a UUID library or a crypto-based approach.
  */
+export function generateId(prefix = 'id'): string {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  counter = (counter + 1) % 10000;
+  const seq = counter.toString(36).padStart(3, '0');
+  return `${prefix}_${timestamp}_${randomPart}_${seq}`;
+}
+
 export function generateTripId(): string {
   return generateId('trip');
 }
 
-/**
- * Generate an expense ID
- */
 export function generateExpenseId(): string {
   return generateId('exp');
 }
 
-/**
- * Generate a participant ID
- */
 export function generateParticipantId(): string {
-  return generateId('par');
+  return generateId('part');
 }
 
-/**
- * Generate a split ID
- */
 export function generateSplitId(): string {
-  return generateId('spl');
-}
-
-/**
- * Generate a settlement ID
- */
-export function generateSettlementId(): string {
-  return generateId('set');
+  return generateId('split');
 }

@@ -1,46 +1,48 @@
 import React from 'react';
-import { StyleSheet, View, type ViewProps, type ViewStyle } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  type ViewProps,
+  type ViewStyle,
+} from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
-import type { Theme } from '../../constants/theme';
+import { borderRadius, shadows, spacing } from '../../constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type CardVariant = 'elevated' | 'outlined' | 'filled';
+export type CardElevation = 'none' | 'sm' | 'base' | 'md' | 'lg';
 
 export interface CardProps extends ViewProps {
-  variant?: CardVariant;
-  padding?: keyof Theme['spacing'] | number;
+  children: React.ReactNode;
+  elevation?: CardElevation;
+  padding?: keyof typeof spacing;
   style?: ViewStyle;
-  children?: React.ReactNode;
+  radius?: keyof typeof borderRadius;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Card({
-  variant = 'elevated',
+  children,
+  elevation = 'base',
   padding = 4,
   style,
-  children,
+  radius = 'lg',
   ...rest
 }: CardProps) {
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
 
-  const paddingValue =
-    typeof padding === 'number' && padding > 10
-      ? padding
-      : theme.spacing[padding as keyof Theme['spacing']] ?? theme.spacing[4];
+  const cardStyle: ViewStyle = {
+    backgroundColor: theme.surface,
+    borderRadius: borderRadius[radius],
+    padding: spacing[padding],
+    borderWidth: 1,
+    borderColor: theme.border,
+    ...shadows[elevation],
+  };
 
   return (
-    <View
-      style={[
-        styles.base,
-        styles[variant],
-        { padding: paddingValue },
-        style,
-      ]}
-      {...rest}
-    >
+    <View style={[styles.card, cardStyle, style]} {...rest}>
       {children}
     </View>
   );
@@ -48,23 +50,8 @@ export function Card({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-function makeStyles(theme: Theme) {
-  return StyleSheet.create({
-    base: {
-      borderRadius: theme.radii.lg,
-      overflow: 'hidden',
-    },
-    elevated: {
-      backgroundColor: theme.colors.card,
-      ...theme.shadows.md,
-    },
-    outlined: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    filled: {
-      backgroundColor: theme.colors.surfaceVariant,
-    },
-  });
-}
+const styles = StyleSheet.create({
+  card: {
+    overflow: 'hidden',
+  },
+});

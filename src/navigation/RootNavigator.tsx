@@ -1,42 +1,59 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useTheme } from '../context/ThemeContext';
 import { HomeScreen } from '../screens/HomeScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { TripStackNavigator } from './TripStackNavigator';
-import { useTheme } from '../context/ThemeContext';
+import { RootRoute } from '../constants/routes';
 import { Body } from '../components/common/Typography';
-import { RootRoutes, type RootTabParamList } from '../constants/routes';
+import { borderRadius, shadows, spacing } from '../constants/theme';
+import type { RootTabParamList } from '../types';
 
-// ─── Tab Navigator ────────────────────────────────────────────────────────────
+// ─── Tab Config ───────────────────────────────────────────────────────────────
 
-const Tab = createBottomTabNavigator<RootTabParamList>();
+interface TabConfig {
+  route: RootRoute;
+  emoji: string;
+  label: string;
+}
+
+const TAB_CONFIG: TabConfig[] = [
+  { route: RootRoute.Home, emoji: '🏠', label: 'Home' },
+  { route: RootRoute.Trips, emoji: '✈️', label: 'Trips' },
+  { route: RootRoute.Settings, emoji: '⚙️', label: 'Settings' },
+];
 
 // ─── Tab Icon ─────────────────────────────────────────────────────────────────
 
 interface TabIconProps {
   emoji: string;
+  label: string;
   focused: boolean;
 }
 
-function TabIcon({ emoji, focused }: TabIconProps) {
+function TabIcon({ emoji, label, focused }: TabIconProps) {
+  const { theme } = useTheme();
+
   return (
-    <Body size="lg" style={focused ? styles.tabIconFocused : styles.tabIcon}>
-      {emoji}
-    </Body>
+    <View style={[styles.tabIcon, focused && styles.tabIconFocused]}>
+      <Body style={styles.tabEmoji}>{emoji}</Body>
+      <Body
+        style={[
+          styles.tabLabel,
+          { color: focused ? theme.primary : theme.textTertiary },
+          focused && styles.tabLabelFocused,
+        ]}
+      >
+        {label}
+      </Body>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  tabIcon: {
-    opacity: 0.6,
-  },
-  tabIconFocused: {
-    opacity: 1,
-  },
-});
+// ─── Navigator ────────────────────────────────────────────────────────────────
 
-// ─── Root Navigator ───────────────────────────────────────────────────────────
+const Tab = createBottomTabNavigator<RootTabParamList>();
 
 export function RootNavigator() {
   const { theme } = useTheme();
@@ -46,43 +63,71 @@ export function RootNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.tabBarBackground,
-          borderTopColor: theme.colors.border,
+          backgroundColor: theme.surface,
+          borderTopColor: theme.border,
           borderTopWidth: 1,
+          height: 80,
+          paddingBottom: 12,
+          paddingTop: 8,
+          ...shadows.sm,
         },
-        tabBarActiveTintColor: theme.colors.tabBarActive,
-        tabBarInactiveTintColor: theme.colors.tabBarInactive,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-          marginBottom: 2,
-        },
+        tabBarShowLabel: false,
       }}
     >
       <Tab.Screen
-        name={RootRoutes.HOME}
+        name={RootRoute.Home}
         component={HomeScreen}
         options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🏠" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon emoji="🏠" label="Home" focused={focused} />
+          ),
         }}
       />
       <Tab.Screen
-        name={RootRoutes.TRIPS}
+        name={RootRoute.Trips}
         component={TripStackNavigator}
         options={{
-          tabBarLabel: 'Trips',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="✈️" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon emoji="✈️" label="Trips" focused={focused} />
+          ),
         }}
       />
       <Tab.Screen
-        name={RootRoutes.SETTINGS}
+        name={RootRoute.Settings}
         component={SettingsScreen}
         options={{
-          tabBarLabel: 'Settings',
-          tabBarIcon: ({ focused }) => <TabIcon emoji="⚙️" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon emoji="⚙️" label="Settings" focused={focused} />
+          ),
         }}
       />
     </Tab.Navigator>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  tabIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.base,
+  },
+  tabIconFocused: {
+    // subtle indicator
+  },
+  tabEmoji: {
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  tabLabelFocused: {
+    fontWeight: '700',
+  },
+});

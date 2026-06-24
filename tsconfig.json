@@ -3,24 +3,31 @@
   "compilerOptions": {
     "strict": true,
     "noImplicitAny": true,
-    "noImplicitReturns": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "exactOptionalPropertyTypes": false,
-    "forceConsistentCasingInFileNames": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
+      "@/*": ["src/*"],
       "@components/*": ["src/components/*"],
       "@screens/*": ["src/screens/*"],
       "@navigation/*": ["src/navigation/*"],
       "@context/*": ["src/context/*"],
       "@hooks/*": ["src/hooks/*"],
       "@utils/*": ["src/utils/*"],
-      "@constants/*": ["src/constants/*"],
-      "@types/*": ["src/types/*"]
+      "@types/*": ["src/types/*"],
+      "@constants/*": ["src/constants/*"]
     }
   },
   "include": [
