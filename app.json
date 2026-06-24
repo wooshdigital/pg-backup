@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SplitWise Clone",
-    "slug": "splitwise-clone",
+    "name": "SplitEase",
+    "slug": "splitease",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,24 +9,21 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#6C63FF"
-    },
-    "updates": {
-      "fallbackToCacheTimeout": 0
+      "backgroundColor": "#6366F1"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.splitwiseclone"
+      "bundleIdentifier": "com.splitease.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#6C63FF"
+        "backgroundColor": "#6366F1"
       },
-      "package": "com.yourcompany.splitwiseclone"
+      "package": "com.splitease.app"
     },
     "web": {
       "favicon": "./assets/icon.png"

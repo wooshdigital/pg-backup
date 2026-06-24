@@ -1,16 +1,20 @@
 /**
- * Generate a UUID v4-like unique identifier.
- * Falls back to a timestamp-based ID if crypto is unavailable.
+ * Generates a pseudo-random UUID v4.
+ * In production, prefer a library like `uuid` or `expo-crypto`.
  */
 export function generateId(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
-  // Fallback: timestamp + random
-  return (
-    Date.now().toString(36) +
-    Math.random().toString(36).substring(2, 9) +
-    Math.random().toString(36).substring(2, 9)
-  );
+/**
+ * Generates a short human-readable ID (useful for display).
+ * e.g. 'trip-a3f2b1'
+ */
+export function generateShortId(prefix?: string): string {
+  const id = Math.random().toString(36).substring(2, 8);
+  return prefix ? `${prefix}-${id}` : id;
 }

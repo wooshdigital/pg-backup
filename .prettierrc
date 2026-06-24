@@ -1,7 +1,7 @@
 {
   "semi": true,
+  "trailingComma": "all",
   "singleQuote": true,
-  "trailingComma": "es5",
   "printWidth": 100,
   "tabWidth": 2,
   "useTabs": false,
@@ -12,11 +12,8 @@
   "importOrder": [
     "^react$",
     "^react-native$",
-    "^@react-navigation/(.*)$",
-    "^@expo/(.*)$",
-    "^expo(.*)$",
     "<THIRD_PARTY_MODULES>",
-    "^@/(.*)$",
+    "^@(screens|components|context|hooks|utils|constants|navigation|types)/(.*)$",
     "^[./]"
   ],
   "importOrderSeparation": true,

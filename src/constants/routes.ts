@@ -1,6 +1,6 @@
-// ─── Root Tab Routes ──────────────────────────────────────────────────────────
+// ─── Root Tab Routes ─────────────────────────────────────────────────────────
 
-export enum RootRoutes {
+export enum RootTab {
   Home = 'Home',
   Trips = 'Trips',
   Settings = 'Settings',
@@ -8,19 +8,18 @@ export enum RootRoutes {
 
 // ─── Trip Stack Routes ────────────────────────────────────────────────────────
 
-export enum TripRoutes {
+export enum TripStack {
   TripsList = 'TripsList',
   TripDetail = 'TripDetail',
   AddExpense = 'AddExpense',
   ExpenseDetail = 'ExpenseDetail',
-  AddParticipant = 'AddParticipant',
 }
 
-// ─── All Routes (union for convenience) ──────────────────────────────────────
+// ─── Combined Route Names ─────────────────────────────────────────────────────
 
 export const Routes = {
-  ...RootRoutes,
-  ...TripRoutes,
+  ...RootTab,
+  ...TripStack,
 } as const;
 
-export type RouteNames = (typeof Routes)[keyof typeof Routes];
+export type RouteName = (typeof Routes)[keyof typeof Routes];

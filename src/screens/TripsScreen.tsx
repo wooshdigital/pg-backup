@@ -1,110 +1,138 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../context/ThemeContext';
-import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
-import { Heading, Body, Caption } from '../components/common/Typography';
+import { SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { useTheme } from '@context/ThemeContext';
+import { Card } from '@components/common/Card';
+import { Button } from '@components/common/Button';
+import { Body, Caption, H2, H3 } from '@components/common/Typography';
+import { spacing } from '@constants/theme';
 
-// ─── Empty State ─────────────────────────────────────────────────────────────
+// ─── Placeholder Data ─────────────────────────────────────────────────────────
 
-function EmptyState() {
+const PLACEHOLDER_TRIPS = [
+  {
+    id: '1',
+    name: 'Tokyo Adventure',
+    destination: 'Tokyo, Japan',
+    emoji: '🗼',
+    participants: 4,
+    status: 'active' as const,
+    totalExpenses: 328500, // in cents JPY
+    dateRange: 'Mar 15 – Mar 22, 2024',
+  },
+  {
+    id: '2',
+    name: 'Barcelona Weekend',
+    destination: 'Barcelona, Spain',
+    emoji: '🏖️',
+    participants: 3,
+    status: 'planning' as const,
+    totalExpenses: 0,
+    dateRange: 'Apr 5 – Apr 8, 2024',
+  },
+  {
+    id: '3',
+    name: 'NYC Trip',
+    destination: 'New York, USA',
+    emoji: '🗽',
+    participants: 6,
+    status: 'completed' as const,
+    totalExpenses: 245000,
+    dateRange: 'Feb 1 – Feb 5, 2024',
+  },
+] as const;
+
+// ─── Status Badge ─────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: 'active' | 'planning' | 'completed' }) {
   const { theme } = useTheme();
+
+  const statusConfig = {
+    active: { label: 'Active', color: theme.colors.success, bg: theme.colors.successLight },
+    planning: { label: 'Planning', color: theme.colors.warning, bg: theme.colors.warningLight },
+    completed: { label: 'Done', color: theme.colors.textSecondary, bg: theme.colors.surfaceSecondary },
+  };
+
+  const config = statusConfig[status];
+
   return (
-    <Card style={styles.emptyCard} elevation={1}>
-      <View style={styles.emptyIconContainer}>
-        <Heading level={1} align="center">
-          🗺️
-        </Heading>
+    <View style={[styles.badge, { backgroundColor: config.bg }]}>
+      <Caption color={config.color} style={styles.badgeText}>
+        {config.label}
+      </Caption>
+    </View>
+  );
+}
+
+// ─── Trip Card ────────────────────────────────────────────────────────────────
+
+function TripCard({ trip }: { trip: (typeof PLACEHOLDER_TRIPS)[number] }) {
+  const { theme } = useTheme();
+
+  return (
+    <Card style={styles.tripCard} elevation="base" bordered>
+      <View style={styles.tripCardHeader}>
+        <View style={[styles.tripEmoji, { backgroundColor: theme.colors.primaryLight }]}>
+          <Body style={styles.tripEmojiText}>{trip.emoji}</Body>
+        </View>
+        <View style={styles.tripInfo}>
+          <H3>{trip.name}</H3>
+          <Caption>{trip.destination}</Caption>
+        </View>
+        <StatusBadge status={trip.status} />
       </View>
-      <Heading level={3} align="center" style={styles.emptyTitle}>
-        No trips yet
-      </Heading>
-      <Body color={theme.colors.textSecondary} align="center" style={styles.emptySubtext}>
-        Create your first trip and start splitting expenses with friends and family.
-      </Body>
-      <Button
-        label="+ Create Trip"
-        onPress={() => {}}
-        variant="primary"
-        fullWidth
-        style={styles.emptyButton}
-      />
+
+      <View style={[styles.tripCardFooter, { borderTopColor: theme.colors.border }]}>
+        <View style={styles.tripMeta}>
+          <Caption>👥 {trip.participants} people</Caption>
+        </View>
+        <Caption>{trip.dateRange}</Caption>
+      </View>
     </Card>
   );
 }
 
-// ─── Trips Screen ─────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
-export function TripsScreen() {
+export function TripsScreen(): JSX.Element {
   const { theme } = useTheme();
-  // Placeholder – trips will come from context/storage in a later phase
-  const trips: unknown[] = [];
 
   return (
-    <SafeAreaView
-      style={[styles.safe, { backgroundColor: theme.colors.background }]}
-      edges={['top']}
-    >
-      {/* ── Header ────────────────────────────────────────────────────────── */}
-      <View
-        style={[
-          styles.headerRow,
-          {
-            paddingHorizontal: theme.spacing.md,
-            paddingTop: theme.spacing.md,
-            paddingBottom: theme.spacing.sm,
-          },
-        ]}
-      >
-        <Heading level={1}>My Trips</Heading>
-        {trips.length > 0 && (
-          <Button label="+ New" onPress={() => {}} variant="primary" size="sm" />
-        )}
-      </View>
-
-      {/* ── Filter Pills (placeholder) ───────────────────────────────────── */}
-      <View
-        style={[
-          styles.filterRow,
-          { paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.sm },
-        ]}
-      >
-        {(['All', 'Active', 'Planning', 'Completed'] as const).map((filter) => (
-          <View
-            key={filter}
-            style={[
-              styles.filterPill,
-              {
-                backgroundColor: filter === 'All' ? theme.colors.primary : theme.colors.surface,
-                borderColor: theme.colors.border,
-                marginRight: theme.spacing.xs,
-              },
-            ]}
-          >
-            <Caption
-              color={filter === 'All' ? theme.colors.textInverse : theme.colors.textSecondary}
-              weight="medium"
-            >
-              {filter}
-            </Caption>
-          </View>
-        ))}
-      </View>
-
-      {/* ── Content ───────────────────────────────────────────────────────── */}
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
       <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing.xxl },
-        ]}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {trips.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <Body>Trip list goes here</Body>
-        )}
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <H2>My Trips</H2>
+            <Caption color={theme.colors.textSecondary}>
+              {PLACEHOLDER_TRIPS.length} trips total
+            </Caption>
+          </View>
+          <Button label="+ New Trip" variant="primary" size="sm" />
+        </View>
+
+        {/* Trip List */}
+        <View style={styles.list}>
+          {PLACEHOLDER_TRIPS.map((trip) => (
+            <TripCard key={trip.id} trip={trip} />
+          ))}
+        </View>
+
+        {/* Empty State Hint */}
+        <Card style={styles.emptyHint} elevation="none" bordered>
+          <Body align="center" style={styles.emptyEmoji}>
+            🚀
+          </Body>
+          <Body align="center" weight="semibold">
+            More features coming soon
+          </Body>
+          <Caption align="center" style={styles.emptyCaption}>
+            Add expenses, track balances, and settle up — all in one place.
+          </Caption>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -113,44 +141,77 @@ export function TripsScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: {
+  safeArea: {
     flex: 1,
   },
-  headerRow: {
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: spacing[4],
+    paddingBottom: spacing[10],
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingTop: spacing[6],
+    paddingBottom: spacing[4],
+  },
+  list: {
+    gap: spacing[3],
+    marginBottom: spacing[6],
+  },
+  tripCard: {
+    gap: spacing[3],
+  },
+  tripCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+  },
+  tripEmoji: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripEmojiText: {
+    fontSize: 24,
+  },
+  tripInfo: {
+    flex: 1,
+  },
+  tripCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingTop: spacing[3],
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  filterRow: {
+  tripMeta: {
     flexDirection: 'row',
+    gap: spacing[3],
+  },
+  badge: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: 99,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  emptyHint: {
     alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[6],
   },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
+  emptyEmoji: {
+    fontSize: 36,
   },
-  scrollContent: {
-    paddingTop: 8,
-  },
-  emptyCard: {
-    marginTop: 24,
-    alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-  },
-  emptyIconContainer: {
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    marginBottom: 24,
-    lineHeight: 22,
-  },
-  emptyButton: {
-    marginTop: 0,
+  emptyCaption: {
+    maxWidth: 260,
   },
 });

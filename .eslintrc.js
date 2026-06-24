@@ -2,16 +2,17 @@ module.exports = {
   root: true,
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    ecmaVersion: 2022,
+    ecmaVersion: 2020,
     sourceType: 'module',
     ecmaFeatures: {
       jsx: true,
     },
     project: './tsconfig.json',
+    tsconfigRootDir: __dirname,
   },
   env: {
     browser: true,
-    es2022: true,
+    es2020: true,
     'react-native/react-native': true,
   },
   settings: {
@@ -24,7 +25,6 @@ module.exports = {
     'react',
     'react-hooks',
     'react-native',
-    'prettier',
   ],
   extends: [
     'eslint:recommended',
@@ -33,25 +33,23 @@ module.exports = {
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
     'plugin:react-native/all',
-    'prettier',
-    'plugin:prettier/recommended',
   ],
   rules: {
     // TypeScript
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    '@typescript-eslint/no-non-null-assertion': 'warn',
-    '@typescript-eslint/consistent-type-imports': 'error',
-    '@typescript-eslint/prefer-nullish-coalescing': 'error',
-    '@typescript-eslint/prefer-optional-chain': 'error',
+    '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+    '@typescript-eslint/no-floating-promises': 'error',
+    '@typescript-eslint/await-thenable': 'error',
 
     // React
     'react/react-in-jsx-scope': 'off',
     'react/prop-types': 'off',
     'react/display-name': 'off',
-    'react/self-closing-comp': 'error',
+
+    // React Hooks
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
 
@@ -63,18 +61,19 @@ module.exports = {
     'react-native/no-raw-text': 'off',
 
     // General
-    'prettier/prettier': 'error',
     'no-console': ['warn', { allow: ['warn', 'error'] }],
-    eqeqeq: ['error', 'always'],
+    'prefer-const': 'error',
+    'no-var': 'error',
+    'eqeqeq': ['error', 'always'],
   },
   ignorePatterns: [
     'node_modules/',
-    '.expo/',
     'dist/',
     'build/',
+    '.expo/',
     'babel.config.js',
-    'metro.config.js',
-    '*.config.js',
-    '*.config.ts',
+    'rollup.config.ts',
+    'vite.config.ts',
+    'vitest.config.ts',
   ],
 };

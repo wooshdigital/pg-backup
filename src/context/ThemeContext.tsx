@@ -7,99 +7,82 @@ import React, {
   useState,
 } from 'react';
 import { useColorScheme } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { darkTheme, lightTheme } from '../constants/theme';
-import type { AppTheme, ThemeMode } from '../types';
+import { darkTheme, lightTheme } from '@constants/theme';
+import type { Theme } from '@constants/theme';
+import { useAsyncStorage } from '@hooks/useAsyncStorage';
 
-// ─── Storage Key ──────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const THEME_STORAGE_KEY = '@app/themeMode';
-
-// ─── Context Type ─────────────────────────────────────────────────────────────
+export type ColorMode = 'light' | 'dark' | 'system';
 
 interface ThemeContextValue {
-  /** The resolved theme object (never 'system') */
-  theme: AppTheme;
-  /** The user-selected mode, including 'system' */
-  themeMode: ThemeMode;
-  /** Whether the resolved theme is dark */
+  theme: Theme;
+  colorMode: ColorMode;
   isDark: boolean;
-  /** Change the theme mode and persist it */
-  setThemeMode: (mode: ThemeMode) => Promise<void>;
-  /** Toggle between light and dark */
-  toggleTheme: () => Promise<void>;
+  setColorMode: (mode: ColorMode) => void;
+  toggleColorMode: () => void;
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = '@splitease/color-mode';
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-ThemeContext.displayName = 'ThemeContext';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 interface ThemeProviderProps {
   children: React.ReactNode;
-  /** Override for testing */
-  initialMode?: ThemeMode;
 }
 
-export function ThemeProvider({ children, initialMode }: ThemeProviderProps) {
+export function ThemeProvider({ children }: ThemeProviderProps): JSX.Element {
   const systemColorScheme = useColorScheme();
-  const [themeMode, setThemeModeState] = useState<ThemeMode>(initialMode ?? 'system');
-  const [isLoaded, setIsLoaded] = useState(initialMode !== undefined);
+  const [storedMode, setStoredMode] = useAsyncStorage<ColorMode>(STORAGE_KEY, 'system');
+  const [colorMode, setColorModeState] = useState<ColorMode>(storedMode ?? 'system');
 
-  // Load persisted theme on mount
+  // Sync local state when storage loads
   useEffect(() => {
-    if (initialMode !== undefined) return;
+    if (storedMode) {
+      setColorModeState(storedMode);
+    }
+  }, [storedMode]);
 
-    const loadTheme = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-        if (stored === 'light' || stored === 'dark' || stored === 'system') {
-          setThemeModeState(stored);
-        }
-      } catch (error) {
-        console.warn('[ThemeContext] Failed to load theme from storage:', error);
-      } finally {
-        setIsLoaded(true);
-      }
-    };
-
-    void loadTheme();
-  }, [initialMode]);
-
-  // Resolve dark/light from mode + system
-  const isDark = useMemo<boolean>(() => {
-    if (themeMode === 'system') {
+  const isDark = useMemo((): boolean => {
+    if (colorMode === 'system') {
       return systemColorScheme === 'dark';
     }
-    return themeMode === 'dark';
-  }, [themeMode, systemColorScheme]);
+    return colorMode === 'dark';
+  }, [colorMode, systemColorScheme]);
 
-  // Resolved theme
-  const theme = useMemo<AppTheme>(() => (isDark ? darkTheme : lightTheme), [isDark]);
+  const theme = useMemo((): Theme => {
+    return isDark ? darkTheme : lightTheme;
+  }, [isDark]);
 
-  // Persist + update mode
-  const setThemeMode = useCallback(async (mode: ThemeMode) => {
-    setThemeModeState(mode);
-    try {
-      await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
-    } catch (error) {
-      console.warn('[ThemeContext] Failed to persist theme:', error);
-    }
-  }, []);
-
-  const toggleTheme = useCallback(async () => {
-    await setThemeMode(isDark ? 'light' : 'dark');
-  }, [isDark, setThemeMode]);
-
-  const value = useMemo<ThemeContextValue>(
-    () => ({ theme, themeMode, isDark, setThemeMode, toggleTheme }),
-    [theme, themeMode, isDark, setThemeMode, toggleTheme]
+  const setColorMode = useCallback(
+    (mode: ColorMode) => {
+      setColorModeState(mode);
+      void setStoredMode(mode);
+    },
+    [setStoredMode],
   );
 
-  // Avoid flash of wrong theme while loading from storage
-  if (!isLoaded) return null;
+  const toggleColorMode = useCallback(() => {
+    const next: ColorMode = isDark ? 'light' : 'dark';
+    setColorMode(next);
+  }, [isDark, setColorMode]);
+
+  const value = useMemo(
+    (): ThemeContextValue => ({
+      theme,
+      colorMode,
+      isDark,
+      setColorMode,
+      toggleColorMode,
+    }),
+    [theme, colorMode, isDark, setColorMode, toggleColorMode],
+  );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
@@ -108,8 +91,8 @@ export function ThemeProvider({ children, initialMode }: ThemeProviderProps) {
 
 export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a <ThemeProvider>');
+  if (!context) {
+    throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
 }

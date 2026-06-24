@@ -1,101 +1,87 @@
 import React from 'react';
-import { Text, type StyleProp, type TextStyle } from 'react-native';
-import { useTheme } from '../../context/ThemeContext';
+import { Text, StyleSheet } from 'react-native';
+import type { StyleProp, TextStyle } from 'react-native';
+import { useTheme } from '@context/ThemeContext';
+import { typography } from '@constants/theme';
 
-// ─── Base Props ───────────────────────────────────────────────────────────────
+// ─── Shared Props ─────────────────────────────────────────────────────────────
 
-interface TypographyProps {
+interface BaseTextProps {
   children: React.ReactNode;
   style?: StyleProp<TextStyle>;
   color?: string;
   align?: 'left' | 'center' | 'right' | 'justify';
   numberOfLines?: number;
   testID?: string;
-  accessibilityLabel?: string;
 }
 
 // ─── Display ──────────────────────────────────────────────────────────────────
 
-export function Display({
-  children,
-  style,
-  color,
-  align,
-  numberOfLines,
-  testID,
-  accessibilityLabel,
-}: TypographyProps) {
+export function Display({ children, style, color, align, numberOfLines, testID }: BaseTextProps) {
   const { theme } = useTheme();
-
   return (
     <Text
-      numberOfLines={numberOfLines}
-      testID={testID}
-      accessibilityLabel={accessibilityLabel}
       style={[
-        {
-          fontSize: theme.typography.fontSize.xxxl,
-          fontWeight: theme.typography.fontWeight.bold,
-          color: color ?? theme.colors.text,
-          lineHeight: theme.typography.fontSize.xxxl * theme.typography.lineHeight.tight,
-          textAlign: align,
-        },
+        styles.display,
+        { color: color ?? theme.colors.textPrimary, textAlign: align },
         style,
       ]}
+      numberOfLines={numberOfLines}
+      testID={testID}
     >
       {children}
     </Text>
   );
 }
 
-// ─── Heading ──────────────────────────────────────────────────────────────────
+// ─── Headings ─────────────────────────────────────────────────────────────────
 
-interface HeadingProps extends TypographyProps {
-  level?: 1 | 2 | 3 | 4;
-}
-
-export function Heading({
-  children,
-  style,
-  color,
-  align,
-  numberOfLines,
-  testID,
-  accessibilityLabel,
-  level = 1,
-}: HeadingProps) {
+export function H1({ children, style, color, align, numberOfLines, testID }: BaseTextProps) {
   const { theme } = useTheme();
-
-  const fontSizeMap = {
-    1: theme.typography.fontSize.xxl,
-    2: theme.typography.fontSize.xl,
-    3: theme.typography.fontSize.lg,
-    4: theme.typography.fontSize.md,
-  };
-
-  const fontWeightMap: Record<number, TextStyle['fontWeight']> = {
-    1: theme.typography.fontWeight.bold,
-    2: theme.typography.fontWeight.bold,
-    3: theme.typography.fontWeight.semibold,
-    4: theme.typography.fontWeight.semibold,
-  };
-
   return (
     <Text
+      style={[styles.h1, { color: color ?? theme.colors.textPrimary, textAlign: align }, style]}
       numberOfLines={numberOfLines}
       testID={testID}
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="header"
-      style={[
-        {
-          fontSize: fontSizeMap[level],
-          fontWeight: fontWeightMap[level],
-          color: color ?? theme.colors.text,
-          lineHeight: fontSizeMap[level] * theme.typography.lineHeight.tight,
-          textAlign: align,
-        },
-        style,
-      ]}
+    >
+      {children}
+    </Text>
+  );
+}
+
+export function H2({ children, style, color, align, numberOfLines, testID }: BaseTextProps) {
+  const { theme } = useTheme();
+  return (
+    <Text
+      style={[styles.h2, { color: color ?? theme.colors.textPrimary, textAlign: align }, style]}
+      numberOfLines={numberOfLines}
+      testID={testID}
+    >
+      {children}
+    </Text>
+  );
+}
+
+export function H3({ children, style, color, align, numberOfLines, testID }: BaseTextProps) {
+  const { theme } = useTheme();
+  return (
+    <Text
+      style={[styles.h3, { color: color ?? theme.colors.textPrimary, textAlign: align }, style]}
+      numberOfLines={numberOfLines}
+      testID={testID}
+    >
+      {children}
+    </Text>
+  );
+}
+
+export function H4({ children, style, color, align, numberOfLines, testID }: BaseTextProps) {
+  const { theme } = useTheme();
+  return (
+    <Text
+      style={[styles.h4, { color: color ?? theme.colors.textPrimary, textAlign: align }, style]}
+      numberOfLines={numberOfLines}
+      testID={testID}
     >
       {children}
     </Text>
@@ -104,8 +90,8 @@ export function Heading({
 
 // ─── Body ─────────────────────────────────────────────────────────────────────
 
-interface BodyProps extends TypographyProps {
-  size?: 'lg' | 'md' | 'sm';
+interface BodyProps extends BaseTextProps {
+  size?: 'sm' | 'base' | 'lg';
   weight?: 'regular' | 'medium' | 'semibold' | 'bold';
 }
 
@@ -115,73 +101,51 @@ export function Body({
   color,
   align,
   numberOfLines,
-  testID,
-  accessibilityLabel,
-  size = 'md',
+  size = 'base',
   weight = 'regular',
+  testID,
 }: BodyProps) {
   const { theme } = useTheme();
 
   const fontSizeMap = {
-    lg: theme.typography.fontSize.lg,
-    md: theme.typography.fontSize.md,
-    sm: theme.typography.fontSize.sm,
+    sm: typography.fontSize.sm,
+    base: typography.fontSize.base,
+    lg: typography.fontSize.lg,
   };
 
   return (
     <Text
-      numberOfLines={numberOfLines}
-      testID={testID}
-      accessibilityLabel={accessibilityLabel}
       style={[
+        styles.body,
         {
           fontSize: fontSizeMap[size],
-          fontWeight: theme.typography.fontWeight[weight],
-          color: color ?? theme.colors.text,
-          lineHeight: fontSizeMap[size] * theme.typography.lineHeight.normal,
+          fontWeight: typography.fontWeight[weight],
+          color: color ?? theme.colors.textPrimary,
           textAlign: align,
         },
         style,
       ]}
+      numberOfLines={numberOfLines}
+      testID={testID}
     >
       {children}
     </Text>
   );
 }
 
-// ─── Caption ──────────────────────────────────────────────────────────────────
+// ─── Caption ─────────────────────────────────────────────────────────────────
 
-interface CaptionProps extends TypographyProps {
-  weight?: 'regular' | 'medium';
-}
-
-export function Caption({
-  children,
-  style,
-  color,
-  align,
-  numberOfLines,
-  testID,
-  accessibilityLabel,
-  weight = 'regular',
-}: CaptionProps) {
+export function Caption({ children, style, color, align, numberOfLines, testID }: BaseTextProps) {
   const { theme } = useTheme();
-
   return (
     <Text
-      numberOfLines={numberOfLines}
-      testID={testID}
-      accessibilityLabel={accessibilityLabel}
       style={[
-        {
-          fontSize: theme.typography.fontSize.xs,
-          fontWeight: theme.typography.fontWeight[weight],
-          color: color ?? theme.colors.textSecondary,
-          lineHeight: theme.typography.fontSize.xs * theme.typography.lineHeight.normal,
-          textAlign: align,
-        },
+        styles.caption,
+        { color: color ?? theme.colors.textSecondary, textAlign: align },
         style,
       ]}
+      numberOfLines={numberOfLines}
+      testID={testID}
     >
       {children}
     </Text>
@@ -190,36 +154,65 @@ export function Caption({
 
 // ─── Label ────────────────────────────────────────────────────────────────────
 
-export function Label({
-  children,
-  style,
-  color,
-  align,
-  numberOfLines,
-  testID,
-  accessibilityLabel,
-}: TypographyProps) {
+export function Label({ children, style, color, align, numberOfLines, testID }: BaseTextProps) {
   const { theme } = useTheme();
-
   return (
     <Text
-      numberOfLines={numberOfLines}
-      testID={testID}
-      accessibilityLabel={accessibilityLabel}
       style={[
-        {
-          fontSize: theme.typography.fontSize.sm,
-          fontWeight: theme.typography.fontWeight.medium,
-          color: color ?? theme.colors.textSecondary,
-          lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.normal,
-          textAlign: align,
-          textTransform: 'uppercase',
-          letterSpacing: 0.8,
-        },
+        styles.label,
+        { color: color ?? theme.colors.textPrimary, textAlign: align },
         style,
       ]}
+      numberOfLines={numberOfLines}
+      testID={testID}
     >
       {children}
     </Text>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  display: {
+    fontSize: typography.fontSize['4xl'],
+    fontWeight: typography.fontWeight.extrabold,
+    letterSpacing: typography.letterSpacing.tight,
+    lineHeight: typography.fontSize['4xl'] * typography.lineHeight.tight,
+  },
+  h1: {
+    fontSize: typography.fontSize['3xl'],
+    fontWeight: typography.fontWeight.bold,
+    letterSpacing: typography.letterSpacing.tight,
+    lineHeight: typography.fontSize['3xl'] * typography.lineHeight.tight,
+  },
+  h2: {
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    lineHeight: typography.fontSize['2xl'] * typography.lineHeight.tight,
+  },
+  h3: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.semibold,
+    lineHeight: typography.fontSize.xl * typography.lineHeight.normal,
+  },
+  h4: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    lineHeight: typography.fontSize.lg * typography.lineHeight.normal,
+  },
+  body: {
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
+  },
+  caption: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.regular,
+    lineHeight: typography.fontSize.xs * typography.lineHeight.normal,
+  },
+  label: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    letterSpacing: typography.letterSpacing.wide,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
+  },
+});
