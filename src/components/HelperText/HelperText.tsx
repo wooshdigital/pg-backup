@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { HTMLAttributes } from 'react';
 import { useFormField } from '../FormField/useFormField';
 import styles from './HelperText.module.css';
 
-export interface HelperTextProps {
+export interface HelperTextProps extends HTMLAttributes<HTMLSpanElement> {
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
@@ -12,22 +12,34 @@ export const HelperText: React.FC<HelperTextProps> = ({
   children,
   className,
   style,
+  ...rest
 }) => {
-  const { helperId, hasError } = useFormField();
+  const context = (() => {
+    try {
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useFormField();
+    } catch {
+      return null;
+    }
+  })();
 
-  // When there's an error, hide the helper text visually and from AT
-  // but keep it in the DOM to avoid layout shift
+  const id = context?.helperId;
+  const hasError = context?.hasError ?? false;
+
   return (
     <span
-      id={helperId}
+      id={id}
       role="note"
-      className={[styles.helperText, className].filter(Boolean).join(' ')}
-      style={style}
       aria-hidden={hasError ? 'true' : undefined}
+      className={[styles.helperText, hasError ? styles.hidden : '', className]
+        .filter(Boolean)
+        .join(' ')}
+      style={style}
+      {...rest}
     >
       {children}
     </span>
   );
 };
 
-HelperText.displayName = 'HelperText';
+export default HelperText;

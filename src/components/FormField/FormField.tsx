@@ -1,44 +1,49 @@
-import React, { useMemo } from 'react';
+import React, { HTMLAttributes, ReactNode, useMemo } from 'react';
 import { FormFieldContext, FormFieldContextValue } from './FormFieldContext';
 import styles from './FormField.module.css';
-import { generateId } from '../../utils/id';
 
-export interface FormFieldProps {
-  /** Override the base ID used for namespacing child IDs */
+export interface FormFieldProps extends HTMLAttributes<HTMLDivElement> {
+  /** Base ID used to namespace all child element IDs */
   id?: string;
   /** Whether the field has a validation error */
   hasError?: boolean;
-  /** Whether the field is disabled */
-  disabled?: boolean;
   /** Whether the field is required */
   required?: boolean;
-  children: React.ReactNode;
+  /** Whether the field is disabled */
+  disabled?: boolean;
+  children: ReactNode;
   className?: string;
   style?: React.CSSProperties;
+}
+
+let idCounter = 0;
+function generateId(prefix: string): string {
+  return `${prefix}-${++idCounter}`;
 }
 
 export const FormField: React.FC<FormFieldProps> = ({
   id,
   hasError = false,
-  disabled = false,
   required = false,
+  disabled = false,
   children,
   className,
   style,
+  ...rest
 }) => {
-  const baseId = useMemo(() => id ?? generateId('form-field'), [id]);
+  const fieldId = useMemo(() => id || generateId('field'), [id]);
 
   const contextValue = useMemo<FormFieldContextValue>(
     () => ({
-      fieldId: baseId,
-      labelId: `${baseId}-label`,
-      helperId: `${baseId}-helper`,
-      errorId: `${baseId}-error`,
+      fieldId,
+      labelId: `${fieldId}-label`,
+      helperId: `${fieldId}-helper`,
+      errorId: `${fieldId}-error`,
       hasError,
-      disabled,
       required,
+      disabled,
     }),
-    [baseId, hasError, disabled, required]
+    [fieldId, hasError, required, disabled]
   );
 
   return (
@@ -46,8 +51,9 @@ export const FormField: React.FC<FormFieldProps> = ({
       <div
         className={[styles.formField, className].filter(Boolean).join(' ')}
         style={style}
+        data-has-error={hasError || undefined}
         data-disabled={disabled || undefined}
-        data-error={hasError || undefined}
+        {...rest}
       >
         {children}
       </div>
@@ -55,4 +61,4 @@ export const FormField: React.FC<FormFieldProps> = ({
   );
 };
 
-FormField.displayName = 'FormField';
+export default FormField;

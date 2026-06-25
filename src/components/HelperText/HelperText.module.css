@@ -1,14 +1,15 @@
 .helperText {
   display: block;
-  font-family: var(--font-family-base, inherit);
   font-size: var(--font-size-xs, 0.75rem);
-  line-height: var(--line-height-relaxed, 1.5);
-  color: var(--color-text-secondary, #6b7280);
+  line-height: var(--line-height-normal, 1.5);
+  color: var(--color-muted, #6b7280);
 }
 
-/* When aria-hidden is set (i.e. when there's an error), visually hide */
-.helperText[aria-hidden='true'] {
+.hidden {
+  /* Visually hidden but still takes up space to prevent layout shift.
+     aria-hidden="true" is set on the element itself to hide from AT. */
   visibility: hidden;
+  /* Collapse height so it doesn't leave a gap */
   height: 0;
   overflow: hidden;
   margin: 0;

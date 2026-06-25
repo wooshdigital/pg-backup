@@ -1,18 +1,18 @@
-import React from 'react';
+import React, { HTMLAttributes } from 'react';
 import { useFormField } from '../FormField/useFormField';
 import styles from './ErrorMessage.module.css';
 
-export interface ErrorMessageProps {
+export interface ErrorMessageProps extends HTMLAttributes<HTMLSpanElement> {
   children: React.ReactNode;
+  /** Whether to show the error icon (default: true) */
+  showIcon?: boolean;
   className?: string;
   style?: React.CSSProperties;
-  /** Override the error icon (pass null to suppress) */
-  icon?: React.ReactNode | null;
 }
 
-const DefaultErrorIcon: React.FC = () => (
+const ErrorIcon: React.FC = () => (
   <svg
-    className={styles.errorIcon}
+    className={styles.icon}
     aria-hidden="true"
     focusable="false"
     width="12"
@@ -22,43 +22,43 @@ const DefaultErrorIcon: React.FC = () => (
     xmlns="http://www.w3.org/2000/svg"
   >
     <circle cx="6" cy="6" r="5.5" stroke="currentColor" />
-    <line x1="6" y1="3.5" x2="6" y2="6.5" stroke="currentColor" strokeLinecap="round" />
+    <path d="M6 3.5V6.5" stroke="currentColor" strokeLinecap="round" />
     <circle cx="6" cy="8.5" r="0.5" fill="currentColor" />
   </svg>
 );
 
 export const ErrorMessage: React.FC<ErrorMessageProps> = ({
   children,
+  showIcon = true,
   className,
   style,
-  icon,
+  ...rest
 }) => {
-  const { errorId, hasError } = useFormField();
+  const context = (() => {
+    try {
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useFormField();
+    } catch {
+      return null;
+    }
+  })();
 
-  if (!hasError) {
-    return null;
-  }
-
-  const showIcon = icon !== null;
-  const iconToRender = icon !== undefined ? icon : <DefaultErrorIcon />;
+  const id = context?.errorId;
 
   return (
     <span
-      id={errorId}
+      id={id}
       role="alert"
       aria-live="polite"
       aria-atomic="true"
       className={[styles.errorMessage, className].filter(Boolean).join(' ')}
       style={style}
+      {...rest}
     >
-      {showIcon && iconToRender && (
-        <span className={styles.iconWrapper} aria-hidden="true">
-          {iconToRender}
-        </span>
-      )}
+      {showIcon && <ErrorIcon />}
       <span className={styles.errorText}>{children}</span>
     </span>
   );
 };
 
-ErrorMessage.displayName = 'ErrorMessage';
+export default ErrorMessage;

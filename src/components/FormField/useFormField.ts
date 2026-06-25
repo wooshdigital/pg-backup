@@ -6,7 +6,7 @@ export function useFormField(): FormFieldContextValue {
   if (!context) {
     throw new Error(
       'useFormField must be used within a <FormField> component. ' +
-        'Make sure you have wrapped your form field components with <FormField>.'
+        'Make sure your component is wrapped with <FormField>.'
     );
   }
   return context;

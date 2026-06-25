@@ -1,32 +1,49 @@
-import React from 'react';
+import React, { LabelHTMLAttributes } from 'react';
 import { useFormField } from '../FormField/useFormField';
 import styles from './Label.module.css';
 
-export interface LabelProps {
-  children: React.ReactNode;
-  /** Override the htmlFor value (defaults to fieldId from context) */
+export interface LabelProps extends Omit<LabelHTMLAttributes<HTMLLabelElement>, 'htmlFor'> {
+  /** Override the auto-wired htmlFor (rarely needed) */
   htmlFor?: string;
+  /** Override to show required indicator regardless of FormField context */
+  required?: boolean;
+  /** Show disabled styling regardless of FormField context */
+  disabled?: boolean;
+  /** Tooltip content shown next to the label */
+  tooltip?: string;
+  children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
-  /** Show a tooltip trigger button next to the label */
-  tooltipContent?: React.ReactNode;
-  onTooltipClick?: () => void;
 }
 
 export const Label: React.FC<LabelProps> = ({
-  children,
   htmlFor,
+  required: requiredProp,
+  disabled: disabledProp,
+  tooltip,
+  children,
   className,
   style,
-  tooltipContent,
-  onTooltipClick,
+  ...rest
 }) => {
-  const { fieldId, labelId, required, disabled } = useFormField();
+  const context = (() => {
+    try {
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useFormField();
+    } catch {
+      return null;
+    }
+  })();
+
+  const fieldId = htmlFor ?? context?.fieldId;
+  const labelId = context?.labelId;
+  const required = requiredProp ?? context?.required ?? false;
+  const disabled = disabledProp ?? context?.disabled ?? false;
 
   return (
     <label
       id={labelId}
-      htmlFor={htmlFor ?? fieldId}
+      htmlFor={fieldId}
       className={[
         styles.label,
         disabled ? styles.disabled : '',
@@ -35,29 +52,26 @@ export const Label: React.FC<LabelProps> = ({
         .filter(Boolean)
         .join(' ')}
       style={style}
+      {...rest}
     >
       <span className={styles.labelText}>{children}</span>
       {required && (
-        <span
-          className={styles.required}
-          aria-label="required"
-          title="This field is required"
-        >
+        <span className={styles.required} aria-hidden="true" title="Required">
           {' '}*
         </span>
       )}
-      {tooltipContent && onTooltipClick && (
+      {tooltip && (
         <button
           type="button"
           className={styles.tooltipTrigger}
-          onClick={onTooltipClick}
           aria-label={`More information about ${typeof children === 'string' ? children : 'this field'}`}
+          title={tooltip}
         >
-          <span aria-hidden="true">?</span>
+          <span aria-hidden="true">ⓘ</span>
         </button>
       )}
     </label>
   );
 };
 
-Label.displayName = 'Label';
+export default Label;

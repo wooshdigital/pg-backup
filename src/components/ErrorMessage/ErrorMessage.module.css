@@ -2,41 +2,31 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1, 0.25rem);
-  font-family: var(--font-family-base, inherit);
   font-size: var(--font-size-xs, 0.75rem);
-  line-height: var(--line-height-relaxed, 1.5);
-  color: var(--color-error, #ef4444);
+  line-height: var(--line-height-normal, 1.5);
+  color: var(--color-error, #dc2626);
   animation: errorAppear 0.15s ease-out;
 }
 
-.iconWrapper {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--color-error, #ef4444);
-}
-
-.errorIcon {
-  display: block;
-}
-
 .errorText {
-  display: inline;
+  /* Allow text to wrap naturally */
+  min-width: 0;
+}
+
+.icon {
+  flex-shrink: 0;
+  /* Slight optical alignment */
+  margin-top: 0.05em;
+  color: var(--color-error, #dc2626);
 }
 
 @keyframes errorAppear {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-0.25rem);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .errorMessage {
-    animation: none;
   }
 }
