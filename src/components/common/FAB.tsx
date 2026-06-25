@@ -1,38 +1,40 @@
 import React from 'react';
 import {
-  TouchableOpacity,
-  Text,
   StyleSheet,
+  Text,
+  TouchableOpacity,
+  TouchableOpacityProps,
   ViewStyle,
-  TextStyle,
-  Platform,
 } from 'react-native';
 
-interface FABProps {
+interface FABProps extends TouchableOpacityProps {
   onPress: () => void;
-  icon?: string;
   label?: string;
+  icon?: string;
   style?: ViewStyle;
-  accessibilityLabel?: string;
 }
 
 export const FAB: React.FC<FABProps> = ({
   onPress,
-  icon = '+',
   label,
+  icon = '+',
   style,
-  accessibilityLabel = 'Floating action button',
+  ...rest
 }) => {
   return (
     <TouchableOpacity
       style={[styles.fab, style]}
       onPress={onPress}
       activeOpacity={0.85}
-      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityLabel={label ?? 'Floating action button'}
+      {...rest}
     >
-      <Text style={styles.icon}>{icon}</Text>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? (
+        <Text style={styles.labelText}>{`${icon}  ${label}`}</Text>
+      ) : (
+        <Text style={styles.iconText}>{icon}</Text>
+      )}
     </TouchableOpacity>
   );
 };
@@ -42,29 +44,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 28,
     right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#4F6EF7',
+    borderRadius: 32,
+    minWidth: 56,
+    height: 56,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.22,
     shadowRadius: 8,
-    elevation: 8,
-  } as ViewStyle,
-  icon: {
+    elevation: 6,
+  },
+  iconText: {
+    color: '#fff',
     fontSize: 28,
-    color: '#FFFFFF',
     lineHeight: 32,
     fontWeight: '400',
-  } as TextStyle,
-  label: {
-    fontSize: 14,
-    color: '#FFFFFF',
+  },
+  labelText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
-    marginLeft: 6,
-  } as TextStyle,
+    letterSpacing: 0.3,
+  },
 });

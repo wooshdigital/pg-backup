@@ -1,95 +1,55 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SwipeableRow } from '../common/SwipeableRow';
-import { Trip } from '../../types';
-import { formatDateRange } from '../../utils/formatters';
 import { getCurrencyByCode } from '../../constants/currencies';
+import { formatDateRange } from '../../utils/formatters';
+import { Trip } from '../../types';
 
 interface TripCardProps {
   trip: Trip;
-  onPress?: (trip: Trip) => void;
-  onDelete?: (trip: Trip) => void;
+  onPress: () => void;
+  onDelete: () => void;
 }
 
 export const TripCard: React.FC<TripCardProps> = ({ trip, onPress, onDelete }) => {
   const currency = getCurrencyByCode(trip.currency);
   const dateRange = formatDateRange(trip.startDate, trip.endDate);
-  const participantCount = trip.participantIds.length;
-
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Trip',
-      `Are you sure you want to delete "${trip.name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => onDelete?.(trip),
-        },
-      ],
-    );
-  };
 
   return (
-    <SwipeableRow onDelete={handleDelete} deleteLabel="Delete">
+    <SwipeableRow onDelete={onDelete}>
       <TouchableOpacity
         style={styles.card}
-        onPress={() => onPress?.(trip)}
-        activeOpacity={0.8}
+        onPress={onPress}
+        activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel={`Trip: ${trip.name}, ${dateRange}`}
+        accessibilityLabel={`Trip: ${trip.name}`}
       >
-        <View style={styles.cardContent}>
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <Text style={styles.tripName} numberOfLines={1}>
-                {trip.name}
-              </Text>
-              {currency && (
-                <View style={styles.currencyBadge}>
-                  <Text style={styles.currencyFlag}>{currency.flag}</Text>
-                  <Text style={styles.currencyCode}>{currency.code}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>📅</Text>
-              <Text style={styles.metaText} numberOfLines={1}>
-                {dateRange || 'No dates set'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.footer}>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>👥</Text>
-              <Text style={styles.metaText}>
-                {participantCount === 0
-                  ? 'No participants'
-                  : `${participantCount} participant${participantCount !== 1 ? 's' : ''}`}
-              </Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Text style={styles.metaIcon}>🧾</Text>
-              <Text style={styles.metaText}>
-                {trip.expenseIds.length} expense{trip.expenseIds.length !== 1 ? 's' : ''}
-              </Text>
-            </View>
+        <View style={styles.topRow}>
+          <Text style={styles.tripName} numberOfLines={1}>
+            {trip.name}
+          </Text>
+          <View style={styles.currencyBadge}>
+            <Text style={styles.currencyFlag}>{currency?.flag ?? '🌐'}</Text>
+            <Text style={styles.currencyCode}>{trip.currency}</Text>
           </View>
         </View>
 
-        <View style={styles.chevronContainer}>
-          <Text style={styles.cardChevron}>›</Text>
+        <View style={styles.bottomRow}>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaIcon}>📅</Text>
+            <Text style={styles.metaText}>{dateRange}</Text>
+          </View>
+
+          <View style={styles.metaItem}>
+            <Text style={styles.metaIcon}>👥</Text>
+            <Text style={styles.metaText}>
+              {trip.participantIds.length === 0
+                ? 'No participants'
+                : `${trip.participantIds.length} participant${
+                    trip.participantIds.length === 1 ? '' : 's'
+                  }`}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     </SwipeableRow>
@@ -98,43 +58,36 @@ export const TripCard: React.FC<TripCardProps> = ({ trip, onPress, onDelete }) =
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    marginHorizontal: 16,
-    marginVertical: 6,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 3,
   },
-  cardContent: {
-    flex: 1,
-  },
-  header: {
-    marginBottom: 10,
-  },
-  titleRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    marginBottom: 10,
   },
   tripName: {
     fontSize: 17,
     fontWeight: '700',
     color: '#111827',
     flex: 1,
+    marginRight: 10,
   },
   currencyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EEF2FF',
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    borderRadius: 20,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     gap: 4,
   },
@@ -144,15 +97,18 @@ const styles = StyleSheet.create({
   currencyCode: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#6366F1',
+    color: '#4F6EF7',
+    letterSpacing: 0.5,
   },
-  metaRow: {
-    marginBottom: 8,
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   metaIcon: {
     fontSize: 13,
@@ -160,17 +116,6 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 13,
     color: '#6B7280',
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  chevronContainer: {
-    marginLeft: 8,
-  },
-  cardChevron: {
-    fontSize: 22,
-    color: '#D1D5DB',
-    fontWeight: '300',
+    fontWeight: '500',
   },
 });

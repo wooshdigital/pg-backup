@@ -1,52 +1,49 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
-import { TripStackNavigator } from './TripStackNavigator';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { HomeScreen } from '../screens/HomeScreen';
+import { TripsListScreen } from '../screens/TripsListScreen';
+import { CreateTripScreen } from '../screens/CreateTripScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { RootStackParamList } from '../types';
 
-export type RootTabParamList = {
-  TripsTab: undefined;
-  Settings: undefined;
-};
-
-const Tab = createBottomTabNavigator<RootTabParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
   return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={{
+    <Stack.Navigator
+      initialRouteName="Home"
+      screenOptions={{
+        headerStyle: { backgroundColor: '#fff' },
+        headerTintColor: '#4F6EF7',
+        headerTitleStyle: { fontWeight: '700', color: '#111827' },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: '#F9FAFB' },
+      }}
+    >
+      <Stack.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ title: 'SplitMate' }}
+      />
+      <Stack.Screen
+        name="TripsList"
+        component={TripsListScreen}
+        options={{ title: 'My Trips' }}
+      />
+      <Stack.Screen
+        name="CreateTrip"
+        component={CreateTripScreen}
+        options={{
+          title: 'New Trip',
+          presentation: 'modal',
           headerShown: false,
-          tabBarActiveTintColor: '#6366F1',
-          tabBarInactiveTintColor: '#9CA3AF',
-          tabBarStyle: {
-            borderTopColor: '#E5E7EB',
-            backgroundColor: '#FFFFFF',
-          },
         }}
-      >
-        <Tab.Screen
-          name="TripsTab"
-          component={TripStackNavigator}
-          options={{
-            title: 'Trips',
-            tabBarIcon: ({ color, size }) => (
-              <Text style={{ fontSize: size - 4, color }}>✈️</Text>
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{
-            title: 'Settings',
-            tabBarIcon: ({ color, size }) => (
-              <Text style={{ fontSize: size - 4, color }}>⚙️</Text>
-            ),
-          }}
-        />
-      </Tab.Navigator>
-    </NavigationContainer>
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: 'Settings' }}
+      />
+    </Stack.Navigator>
   );
 };

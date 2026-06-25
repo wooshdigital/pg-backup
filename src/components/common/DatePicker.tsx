@@ -1,23 +1,23 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   Modal,
   Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import DateTimePicker, {
+import RNDateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+import { formatShortDate } from '../../utils/formatters';
 
 interface DatePickerProps {
   label: string;
-  value: Date | null;
+  value: Date;
   onChange: (date: Date) => void;
   minimumDate?: Date;
   maximumDate?: Date;
-  placeholder?: string;
 }
 
 export const DatePicker: React.FC<DatePickerProps> = ({
@@ -26,21 +26,16 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   onChange,
   minimumDate,
   maximumDate,
-  placeholder = 'Select date',
 }) => {
   const [showPicker, setShowPicker] = useState(false);
-  const [tempDate, setTempDate] = useState<Date>(value ?? new Date());
+  const [tempDate, setTempDate] = useState(value);
 
-  const handleChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+  const handleChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
       setShowPicker(false);
-      if (event.type === 'set' && selectedDate) {
-        onChange(selectedDate);
-      }
+      if (selectedDate) onChange(selectedDate);
     } else {
-      if (selectedDate) {
-        setTempDate(selectedDate);
-      }
+      if (selectedDate) setTempDate(selectedDate);
     }
   };
 
@@ -50,73 +45,64 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   };
 
   const handleCancelIOS = () => {
+    setTempDate(value);
     setShowPicker(false);
-    setTempDate(value ?? new Date());
   };
-
-  const displayText = value
-    ? value.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : placeholder;
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
-        style={styles.button}
+      <Pressable
+        style={styles.trigger}
         onPress={() => {
-          setTempDate(value ?? new Date());
+          setTempDate(value);
           setShowPicker(true);
         }}
-        accessibilityLabel={`${label}: ${displayText}`}
         accessibilityRole="button"
+        accessibilityLabel={`${label}: ${formatShortDate(value.toISOString())}`}
       >
-        <Text style={[styles.buttonText, !value && styles.placeholder]}>
-          {displayText}
-        </Text>
+        <Text style={styles.triggerText}>{formatShortDate(value.toISOString())}</Text>
         <Text style={styles.calendarIcon}>📅</Text>
-      </TouchableOpacity>
+      </Pressable>
 
+      {/* Android: inline picker shown in a modal */}
       {Platform.OS === 'android' && showPicker && (
-        <DateTimePicker
-          value={tempDate}
+        <RNDateTimePicker
           mode="date"
-          display="default"
+          value={value}
           onChange={handleChange}
           minimumDate={minimumDate}
           maximumDate={maximumDate}
+          display="default"
         />
       )}
 
+      {/* iOS: modal with confirm/cancel */}
       {Platform.OS === 'ios' && (
         <Modal
           transparent
-          visible={showPicker}
           animationType="slide"
+          visible={showPicker}
           onRequestClose={handleCancelIOS}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={handleCancelIOS}>
-                  <Text style={styles.modalAction}>Cancel</Text>
-                </TouchableOpacity>
+                <Pressable onPress={handleCancelIOS}>
+                  <Text style={styles.modalCancel}>Cancel</Text>
+                </Pressable>
                 <Text style={styles.modalTitle}>{label}</Text>
-                <TouchableOpacity onPress={handleConfirmIOS}>
-                  <Text style={[styles.modalAction, styles.confirmAction]}>Done</Text>
-                </TouchableOpacity>
+                <Pressable onPress={handleConfirmIOS}>
+                  <Text style={styles.modalConfirm}>Done</Text>
+                </Pressable>
               </View>
-              <DateTimePicker
-                value={tempDate}
+              <RNDateTimePicker
                 mode="date"
-                display="spinner"
+                value={tempDate}
                 onChange={handleChange}
                 minimumDate={minimumDate}
                 maximumDate={maximumDate}
-                style={styles.iosPicker}
+                display="spinner"
               />
             </View>
           </View>
@@ -131,43 +117,42 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: '#6B7280',
     marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  button: {
+  trigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 13,
   },
-  buttonText: {
+  triggerText: {
     fontSize: 15,
     color: '#111827',
-  },
-  placeholder: {
-    color: '#9CA3AF',
+    fontWeight: '500',
   },
   calendarIcon: {
     fontSize: 18,
   },
-  // Modal (iOS)
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 32,
+    paddingBottom: 30,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -176,22 +161,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F3F4F6',
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
   },
-  modalAction: {
+  modalCancel: {
     fontSize: 16,
     color: '#6B7280',
   },
-  confirmAction: {
-    color: '#6366F1',
+  modalConfirm: {
+    fontSize: 16,
     fontWeight: '600',
-  },
-  iosPicker: {
-    height: 200,
+    color: '#4F6EF7',
   },
 });

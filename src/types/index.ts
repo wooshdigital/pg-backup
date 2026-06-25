@@ -9,9 +9,27 @@ export interface Trip {
   expenseIds: string[];
 }
 
-export interface Currency {
-  code: string;
-  symbol: string;
+export interface Participant {
+  id: string;
   name: string;
-  flag: string;
 }
+
+export interface Expense {
+  id: string;
+  tripId: string;
+  description: string;
+  amount: number;
+  currency: string;
+  paidBy: string;
+  splitAmong: string[];
+  date: string;
+  createdAt: string;
+}
+
+export type RootStackParamList = {
+  Home: undefined;
+  TripsList: undefined;
+  CreateTrip: undefined;
+  TripDetail: { tripId: string };
+  Settings: undefined;
+};

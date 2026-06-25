@@ -1,18 +1,14 @@
 import React, { useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { Animated, StyleSheet, Text, View } from 'react-native';
+import { RectButton } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 interface SwipeableRowProps {
   children: React.ReactNode;
   onDelete: () => void;
-  deleteLabel?: string;
 }
 
-export const SwipeableRow: React.FC<SwipeableRowProps> = ({
-  children,
-  onDelete,
-  deleteLabel = 'Delete',
-}) => {
+export const SwipeableRow: React.FC<SwipeableRowProps> = ({ children, onDelete }) => {
   const swipeableRef = useRef<Swipeable>(null);
 
   const handleDelete = () => {
@@ -21,8 +17,8 @@ export const SwipeableRow: React.FC<SwipeableRowProps> = ({
   };
 
   const renderRightActions = (
-    progress: Animated.AnimatedInterpolation<number>,
-    dragX: Animated.AnimatedInterpolation<number>,
+    _progress: Animated.AnimatedInterpolation<number>,
+    dragX: Animated.AnimatedInterpolation<number>
   ) => {
     const scale = dragX.interpolate({
       inputRange: [-80, 0],
@@ -30,25 +26,13 @@ export const SwipeableRow: React.FC<SwipeableRowProps> = ({
       extrapolate: 'clamp',
     });
 
-    const opacity = progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0, 1],
-    });
-
     return (
-      <Animated.View style={[styles.deleteContainer, { opacity }]}>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={handleDelete}
-          accessibilityLabel={deleteLabel}
-          accessibilityRole="button"
-        >
-          <Animated.Text style={[styles.deleteIcon, { transform: [{ scale }] }]}>
-            🗑️
-          </Animated.Text>
-          <Text style={styles.deleteText}>{deleteLabel}</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      <RectButton style={styles.deleteAction} onPress={handleDelete}>
+        <Animated.View style={[styles.actionContent, { transform: [{ scale }] }]}>
+          <Text style={styles.deleteIcon}>🗑</Text>
+          <Text style={styles.deleteText}>Delete</Text>
+        </Animated.View>
+      </RectButton>
     );
   };
 
@@ -57,8 +41,8 @@ export const SwipeableRow: React.FC<SwipeableRowProps> = ({
       ref={swipeableRef}
       renderRightActions={renderRightActions}
       rightThreshold={40}
-      friction={2}
       overshootRight={false}
+      friction={2}
     >
       {children}
     </Swipeable>
@@ -66,26 +50,25 @@ export const SwipeableRow: React.FC<SwipeableRowProps> = ({
 };
 
 const styles = StyleSheet.create({
-  deleteContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 88,
-  },
-  deleteButton: {
-    flex: 1,
+  deleteAction: {
     backgroundColor: '#EF4444',
     justifyContent: 'center',
     alignItems: 'center',
-    width: 88,
-    borderRadius: 14,
-    marginLeft: 8,
+    width: 80,
+    borderRadius: 16,
+    marginVertical: 4,
+    marginRight: 4,
+  },
+  actionContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   deleteIcon: {
     fontSize: 20,
     marginBottom: 2,
   },
   deleteText: {
-    color: '#FFFFFF',
+    color: '#fff',
     fontSize: 12,
     fontWeight: '600',
   },

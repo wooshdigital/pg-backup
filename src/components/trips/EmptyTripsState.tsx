@@ -1,34 +1,25 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface EmptyTripsStateProps {
-  onCreatePress?: () => void;
+  onCreateTrip: () => void;
 }
 
-export const EmptyTripsState: React.FC<EmptyTripsStateProps> = () => {
+export const EmptyTripsState: React.FC<EmptyTripsStateProps> = ({ onCreateTrip }) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.illustration}>✈️</Text>
+      <Text style={styles.illustration}>🗺️</Text>
       <Text style={styles.title}>No trips yet</Text>
       <Text style={styles.subtitle}>
-        Tap the{' '}
-        <Text style={styles.highlight}>+</Text>
-        {' '}button below to create your first trip and start tracking expenses together.
+        Start planning your next adventure!{'\n'}Create a trip to track shared expenses.
       </Text>
-      <View style={styles.hints}>
-        <View style={styles.hintRow}>
-          <Text style={styles.hintIcon}>🗓️</Text>
-          <Text style={styles.hintText}>Set a date range for your trip</Text>
-        </View>
-        <View style={styles.hintRow}>
-          <Text style={styles.hintIcon}>💱</Text>
-          <Text style={styles.hintText}>Choose your travel currency</Text>
-        </View>
-        <View style={styles.hintRow}>
-          <Text style={styles.hintIcon}>👥</Text>
-          <Text style={styles.hintText}>Invite friends and split expenses</Text>
-        </View>
-      </View>
+      <TouchableOpacity
+        style={styles.ctaButton}
+        onPress={onCreateTrip}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.ctaText}>+ Create your first trip</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -38,52 +29,42 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingTop: 60,
-    paddingBottom: 120,
+    paddingHorizontal: 32,
+    paddingVertical: 60,
   },
   illustration: {
-    fontSize: 72,
+    fontSize: 80,
     marginBottom: 24,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 12,
+    marginBottom: 10,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 36,
+    lineHeight: 22,
+    marginBottom: 32,
   },
-  highlight: {
-    color: '#6366F1',
-    fontWeight: '700',
-    fontSize: 18,
+  ctaButton: {
+    backgroundColor: '#4F6EF7',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: '#4F6EF7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  hints: {
-    width: '100%',
-    gap: 12,
-  },
-  hintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  hintIcon: {
-    fontSize: 20,
-  },
-  hintText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
+  ctaText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });

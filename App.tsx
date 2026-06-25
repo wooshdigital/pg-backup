@@ -1,5 +1,6 @@
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { NavigationContainer } from '@react-navigation/native';
 import { StyleSheet } from 'react-native';
 import { TripProvider } from './src/context/TripContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
@@ -8,7 +9,9 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <TripProvider>
-        <RootNavigator />
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
       </TripProvider>
     </GestureHandlerRootView>
   );

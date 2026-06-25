@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import {
-  View,
+  FlatList,
+  Modal,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  Modal,
-  FlatList,
-  StyleSheet,
-  SafeAreaView,
-  TextInput,
+  View,
 } from 'react-native';
-import { CURRENCIES } from '../../constants/currencies';
-import { Currency } from '../../types';
+import { CURRENCIES, Currency, getCurrencyByCode } from '../../constants/currencies';
 
 interface CurrencyPickerProps {
   value: string;
-  onChange: (currencyCode: string) => void;
+  onChange: (code: string) => void;
   label?: string;
 }
 
@@ -24,45 +23,50 @@ export const CurrencyPicker: React.FC<CurrencyPickerProps> = ({
   label = 'Currency',
 }) => {
   const [visible, setVisible] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const selectedCurrency = CURRENCIES.find((c) => c.code === value);
-
-  const filtered = search.trim()
-    ? CURRENCIES.filter(
-        (c) =>
-          c.name.toLowerCase().includes(search.toLowerCase()) ||
-          c.code.toLowerCase().includes(search.toLowerCase()),
-      )
-    : CURRENCIES;
+  const selected = getCurrencyByCode(value);
 
   const handleSelect = (currency: Currency) => {
     onChange(currency.code);
     setVisible(false);
-    setSearch('');
+  };
+
+  const renderItem = ({ item }: { item: Currency }) => {
+    const isSelected = item.code === value;
+    return (
+      <TouchableOpacity
+        style={[styles.currencyRow, isSelected && styles.currencyRowSelected]}
+        onPress={() => handleSelect(item)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.flag}>{item.flag}</Text>
+        <View style={styles.currencyInfo}>
+          <Text style={[styles.currencyCode, isSelected && styles.currencyCodeSelected]}>
+            {item.code}
+          </Text>
+          <Text style={styles.currencyName}>{item.name}</Text>
+        </View>
+        <Text style={styles.currencySymbol}>{item.symbol}</Text>
+        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+      </TouchableOpacity>
+    );
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
-        style={styles.selector}
+      <Pressable
+        style={styles.trigger}
         onPress={() => setVisible(true)}
-        accessibilityLabel={`${label}: ${selectedCurrency?.name ?? 'Select currency'}`}
         accessibilityRole="button"
+        accessibilityLabel={`Currency: ${selected?.name ?? value}`}
       >
-        {selectedCurrency ? (
-          <View style={styles.selectedRow}>
-            <Text style={styles.flag}>{selectedCurrency.flag}</Text>
-            <Text style={styles.selectorText}>
-              {selectedCurrency.code} – {selectedCurrency.name}
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.placeholder}>Select currency</Text>
-        )}
+        <Text style={styles.flag}>{selected?.flag ?? '🌐'}</Text>
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={styles.triggerCode}>{selected?.code ?? value}</Text>
+          <Text style={styles.triggerName}>{selected?.name ?? ''}</Text>
+        </View>
         <Text style={styles.chevron}>›</Text>
-      </TouchableOpacity>
+      </Pressable>
 
       <Modal
         visible={visible}
@@ -73,53 +77,16 @@ export const CurrencyPicker: React.FC<CurrencyPickerProps> = ({
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Currency</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setVisible(false);
-                setSearch('');
-              }}
-              accessibilityLabel="Close currency picker"
-            >
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
+            <Pressable onPress={() => setVisible(false)} style={styles.closeButton}>
+              <Text style={styles.closeText}>✕</Text>
+            </Pressable>
           </View>
-
-          <View style={styles.searchContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search currencies..."
-              placeholderTextColor="#9CA3AF"
-              value={search}
-              onChangeText={setSearch}
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-            />
-          </View>
-
           <FlatList
-            data={filtered}
+            data={CURRENCIES}
             keyExtractor={(item) => item.code}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.item, item.code === value && styles.itemSelected]}
-                onPress={() => handleSelect(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.name} (${item.code})`}
-                accessibilityState={{ selected: item.code === value }}
-              >
-                <Text style={styles.itemFlag}>{item.flag}</Text>
-                <View style={styles.itemText}>
-                  <Text style={[styles.itemCode, item.code === value && styles.itemCodeSelected]}>
-                    {item.code}
-                  </Text>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                </View>
-                <Text style={styles.itemSymbol}>{item.symbol}</Text>
-                {item.code === value && <Text style={styles.checkmark}>✓</Text>}
-              </TouchableOpacity>
-            )}
           />
         </SafeAreaView>
       </Modal>
@@ -132,48 +99,44 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: '#6B7280',
     marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  selector: {
+  trigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  selectedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
+    paddingVertical: 13,
   },
   flag: {
     fontSize: 22,
   },
-  selectorText: {
+  triggerCode: {
     fontSize: 15,
+    fontWeight: '600',
     color: '#111827',
   },
-  placeholder: {
-    fontSize: 15,
-    color: '#9CA3AF',
+  triggerName: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 1,
   },
   chevron: {
-    fontSize: 20,
+    fontSize: 22,
     color: '#9CA3AF',
     fontWeight: '300',
   },
-  // Modal
   modal: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -182,7 +145,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F3F4F6',
   },
   modalTitle: {
     fontSize: 18,
@@ -190,73 +153,63 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   closeButton: {
-    fontSize: 18,
-    color: '#6B7280',
-    padding: 4,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
   },
-  searchContainer: {
+  closeText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  currencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 12,
+    paddingVertical: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#F3F4F6',
     borderRadius: 10,
   },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  itemSelected: {
+  currencyRowSelected: {
     backgroundColor: '#EEF2FF',
   },
-  itemFlag: {
-    fontSize: 24,
-  },
-  itemText: {
+  currencyInfo: {
     flex: 1,
+    marginLeft: 12,
   },
-  itemCode: {
+  currencyCode: {
     fontSize: 15,
     fontWeight: '600',
     color: '#111827',
   },
-  itemCodeSelected: {
-    color: '#6366F1',
+  currencyCodeSelected: {
+    color: '#4F6EF7',
   },
-  itemName: {
+  currencyName: {
     fontSize: 13,
     color: '#6B7280',
     marginTop: 1,
   },
-  itemSymbol: {
+  currencySymbol: {
     fontSize: 15,
-    color: '#6B7280',
+    color: '#9CA3AF',
     fontWeight: '500',
-    minWidth: 32,
-    textAlign: 'right',
+    marginRight: 8,
   },
   checkmark: {
     fontSize: 16,
-    color: '#6366F1',
+    color: '#4F6EF7',
     fontWeight: '700',
-    marginLeft: 4,
   },
   separator: {
     height: 1,
     backgroundColor: '#F3F4F6',
-    marginLeft: 68,
+    marginHorizontal: 8,
   },
 });
