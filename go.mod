@@ -1,4 +1,4 @@
-module github.com/yourusername/pg-dump-worker
+module github.com/your-org/dbworker
 
 go 1.22
 

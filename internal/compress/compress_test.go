@@ -3,217 +3,206 @@ package compress_test
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/rand"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
-
-	"github.com/yourusername/pg-dump-worker/internal/compress"
+	"github.com/your-org/dbworker/internal/compress"
 )
 
-// sampleData returns a moderately compressible payload.
-func sampleData() string {
-	base := "The quick brown fox jumps over the lazy dog. "
-	var sb strings.Builder
-	for i := 0; i < 2000; i++ {
-		sb.WriteString(base)
-	}
-	return sb.String()
-}
-
-// --- GzipCompressor ---
-
-func TestGzipCompressor_RoundTrip(t *testing.T) {
-	original := []byte(sampleData())
+// roundTrip compresses data with c, then decompresses it and asserts byte equality.
+func roundTrip(t *testing.T, c compress.Compressor, decompressor func(r io.Reader) (io.ReadCloser, error), input []byte) {
+	t.Helper()
 
 	var compressed bytes.Buffer
-	c := compress.NewGzipCompressor(gzip.DefaultCompression)
-	if err := c.Compress(bytes.NewReader(original), &compressed); err != nil {
+	if err := c.Compress(bytes.NewReader(input), &compressed); err != nil {
 		t.Fatalf("Compress: %v", err)
 	}
 
-	// Decompress manually.
-	r, err := gzip.NewReader(&compressed)
+	rc, err := decompressor(bytes.NewReader(compressed.Bytes()))
 	if err != nil {
-		t.Fatalf("gzip.NewReader: %v", err)
+		t.Fatalf("decompressor open: %v", err)
 	}
-	got, err := io.ReadAll(r)
+	defer rc.Close()
+
+	got, err := io.ReadAll(rc)
 	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-	if err := r.Close(); err != nil {
-		t.Fatalf("gzip.Reader.Close: %v", err)
+		t.Fatalf("decompressor read: %v", err)
 	}
 
-	if !bytes.Equal(original, got) {
-		t.Errorf("round-trip mismatch: len(original)=%d len(got)=%d", len(original), len(got))
+	if !bytes.Equal(input, got) {
+		t.Fatalf("round-trip mismatch: input len=%d got len=%d", len(input), len(got))
 	}
 }
 
-func TestGzipCompressor_Extension(t *testing.T) {
-	c := compress.NewGzipCompressor(gzip.DefaultCompression)
-	if got := c.Extension(); got != ".gz" {
-		t.Errorf("Extension() = %q, want %q", got, ".gz")
+func gzipDecompressor(r io.Reader) (io.ReadCloser, error) {
+	return gzip.NewReader(r)
+}
+
+func zstdDecompressor(r io.Reader) (io.ReadCloser, error) {
+	dec, err := zstd.NewReader(r)
+	if err != nil {
+		return nil, err
+	}
+	return io.NopCloser(dec), nil
+}
+
+var testInputs = []struct {
+	name string
+	data []byte
+}{
+	{"empty", []byte{}},
+	{"small_text", []byte("SELECT 1; -- hello world")},
+	{"sql_dump", []byte(strings.Repeat("INSERT INTO tbl VALUES (1,'foo','bar');\n", 1000))},
+	{"random_1KB", randomBytes(1024)},
+	{"random_64KB", randomBytes(64 * 1024)},
+}
+
+func randomBytes(n int) []byte {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// ---- Gzip round-trip tests ----
+
+func TestGzipRoundTrip_DefaultLevel(t *testing.T) {
+	c, err := compress.NewGzipCompressor(gzip.DefaultCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range testInputs {
+		t.Run(tc.name, func(t *testing.T) {
+			roundTrip(t, c, gzipDecompressor, tc.data)
+		})
 	}
 }
 
-func TestGzipCompressor_LevelsRoundTrip(t *testing.T) {
-	levels := []int{gzip.BestSpeed, gzip.BestCompression, gzip.DefaultCompression}
-	original := []byte(sampleData())
+func TestGzipRoundTrip_BestSpeed(t *testing.T) {
+	c, err := compress.NewGzipCompressor(gzip.BestSpeed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range testInputs {
+		t.Run(tc.name, func(t *testing.T) {
+			roundTrip(t, c, gzipDecompressor, tc.data)
+		})
+	}
+}
 
-	for _, lvl := range levels {
-		lvl := lvl
-		t.Run("", func(t *testing.T) {
-			var compressed bytes.Buffer
-			c := compress.NewGzipCompressor(lvl)
-			if err := c.Compress(bytes.NewReader(original), &compressed); err != nil {
-				t.Fatalf("Compress level %d: %v", lvl, err)
+func TestGzipRoundTrip_BestCompression(t *testing.T) {
+	c, err := compress.NewGzipCompressor(gzip.BestCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range testInputs {
+		t.Run(tc.name, func(t *testing.T) {
+			roundTrip(t, c, gzipDecompressor, tc.data)
+		})
+	}
+}
+
+func TestGzipInvalidLevel(t *testing.T) {
+	_, err := compress.NewGzipCompressor(100)
+	if err == nil {
+		t.Fatal("expected error for invalid level, got nil")
+	}
+}
+
+// ---- Zstd round-trip tests ----
+
+func TestZstdRoundTrip_Fastest(t *testing.T) {
+	c, err := compress.NewZstdCompressor(zstd.SpeedFastest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range testInputs {
+		t.Run(tc.name, func(t *testing.T) {
+			roundTrip(t, c, zstdDecompressor, tc.data)
+		})
+	}
+}
+
+func TestZstdRoundTrip_Default(t *testing.T) {
+	c, err := compress.NewZstdCompressor(zstd.SpeedDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range testInputs {
+		t.Run(tc.name, func(t *testing.T) {
+			roundTrip(t, c, zstdDecompressor, tc.data)
+		})
+	}
+}
+
+func TestZstdRoundTrip_BestCompression(t *testing.T) {
+	c, err := compress.NewZstdCompressor(zstd.SpeedBestCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range testInputs {
+		t.Run(tc.name, func(t *testing.T) {
+			roundTrip(t, c, zstdDecompressor, tc.data)
+		})
+	}
+}
+
+// ---- Nop round-trip tests ----
+
+func TestNopRoundTrip(t *testing.T) {
+	c := &compress.NopCompressor{}
+	for _, tc := range testInputs {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := c.Compress(bytes.NewReader(tc.data), &buf); err != nil {
+				t.Fatalf("Compress: %v", err)
 			}
-			r, err := gzip.NewReader(&compressed)
-			if err != nil {
-				t.Fatalf("gzip.NewReader: %v", err)
-			}
-			got, err := io.ReadAll(r)
-			if err != nil {
-				t.Fatalf("ReadAll: %v", err)
-			}
-			_ = r.Close()
-			if !bytes.Equal(original, got) {
-				t.Errorf("level %d round-trip mismatch", lvl)
+			if !bytes.Equal(tc.data, buf.Bytes()) {
+				t.Fatal("NopCompressor modified data")
 			}
 		})
 	}
 }
 
-// --- ZstdCompressor ---
+// ---- Factory tests ----
 
-func TestZstdCompressor_RoundTrip(t *testing.T) {
-	original := []byte(sampleData())
-
-	var compressed bytes.Buffer
-	c := compress.NewZstdCompressor(2)
-	if err := c.Compress(bytes.NewReader(original), &compressed); err != nil {
-		t.Fatalf("Compress: %v", err)
-	}
-
-	// Decompress manually.
-	r, err := zstd.NewReader(&compressed)
+func TestNewCompressor_None(t *testing.T) {
+	c, err := compress.NewCompressor(compress.Config{Format: compress.FormatNone})
 	if err != nil {
-		t.Fatalf("zstd.NewReader: %v", err)
+		t.Fatal(err)
 	}
-	got, err := io.ReadAll(r)
-	r.Close()
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-
-	if !bytes.Equal(original, got) {
-		t.Errorf("round-trip mismatch: len(original)=%d len(got)=%d", len(original), len(got))
+	if c.Extension() != "" {
+		t.Fatalf("expected empty extension, got %q", c.Extension())
 	}
 }
-
-func TestZstdCompressor_Extension(t *testing.T) {
-	c := compress.NewZstdCompressor(1)
-	if got := c.Extension(); got != ".zst" {
-		t.Errorf("Extension() = %q, want %q", got, ".zst")
-	}
-}
-
-func TestZstdCompressor_LevelsRoundTrip(t *testing.T) {
-	original := []byte(sampleData())
-
-	for level := 1; level <= 4; level++ {
-		level := level
-		t.Run("", func(t *testing.T) {
-			var compressed bytes.Buffer
-			c := compress.NewZstdCompressor(level)
-			if err := c.Compress(bytes.NewReader(original), &compressed); err != nil {
-				t.Fatalf("Compress level %d: %v", level, err)
-			}
-			r, err := zstd.NewReader(&compressed)
-			if err != nil {
-				t.Fatalf("zstd.NewReader: %v", err)
-			}
-			got, err := io.ReadAll(r)
-			r.Close()
-			if err != nil {
-				t.Fatalf("ReadAll level %d: %v", level, err)
-			}
-			if !bytes.Equal(original, got) {
-				t.Errorf("level %d round-trip mismatch", level)
-			}
-		})
-	}
-}
-
-// --- NoopCompressor ---
-
-func TestNoopCompressor_RoundTrip(t *testing.T) {
-	original := []byte(sampleData())
-
-	var buf bytes.Buffer
-	c := &compress.NoopCompressor{}
-	if err := c.Compress(bytes.NewReader(original), &buf); err != nil {
-		t.Fatalf("Compress: %v", err)
-	}
-	if !bytes.Equal(original, buf.Bytes()) {
-		t.Errorf("noop compressor altered data")
-	}
-}
-
-func TestNoopCompressor_Extension(t *testing.T) {
-	c := &compress.NoopCompressor{}
-	if got := c.Extension(); got != "" {
-		t.Errorf("Extension() = %q, want %q", got, "")
-	}
-}
-
-// --- Factory ---
 
 func TestNewCompressor_Gzip(t *testing.T) {
-	c, err := compress.NewCompressor(compress.Config{Format: "gzip", Level: 1})
+	c, err := compress.NewCompressor(compress.Config{Format: compress.FormatGzip, Level: -1})
 	if err != nil {
-		t.Fatalf("NewCompressor: %v", err)
+		t.Fatal(err)
 	}
 	if c.Extension() != ".gz" {
-		t.Errorf("unexpected extension %q", c.Extension())
+		t.Fatalf("expected .gz, got %q", c.Extension())
 	}
 }
 
 func TestNewCompressor_Zstd(t *testing.T) {
-	c, err := compress.NewCompressor(compress.Config{Format: "zstd", Level: 2})
+	c, err := compress.NewCompressor(compress.Config{Format: compress.FormatZstd, Level: 2})
 	if err != nil {
-		t.Fatalf("NewCompressor: %v", err)
+		t.Fatal(err)
 	}
 	if c.Extension() != ".zst" {
-		t.Errorf("unexpected extension %q", c.Extension())
+		t.Fatalf("expected .zst, got %q", c.Extension())
 	}
 }
 
-func TestNewCompressor_None(t *testing.T) {
-	c, err := compress.NewCompressor(compress.Config{Format: "none"})
-	if err != nil {
-		t.Fatalf("NewCompressor: %v", err)
-	}
-	if c.Extension() != "" {
-		t.Errorf("unexpected extension %q", c.Extension())
-	}
-}
-
-func TestNewCompressor_EmptyFormat(t *testing.T) {
-	c, err := compress.NewCompressor(compress.Config{})
-	if err != nil {
-		t.Fatalf("NewCompressor: %v", err)
-	}
-	if c.Extension() != "" {
-		t.Errorf("unexpected extension %q", c.Extension())
-	}
-}
-
-func TestNewCompressor_UnknownFormat(t *testing.T) {
+func TestNewCompressor_Unknown(t *testing.T) {
 	_, err := compress.NewCompressor(compress.Config{Format: "bz2"})
 	if err == nil {
-		t.Fatal("expected error for unknown format, got nil")
+		t.Fatal("expected error for unknown format")
 	}
 }

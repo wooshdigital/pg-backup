@@ -1,20 +1,19 @@
-# pg-dump-worker configuration example
+# Example configuration for dbworker.
+# Copy to config.yaml and fill in your values.
 
-# PostgreSQL connection URL or DSN.
-database_url: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+database:
+  # PostgreSQL connection string.
+  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
-# Directory where dump artifacts will be written.
-output_dir: "/var/backups/pg-dumps"
+storage:
+  # Directory where dump files will be written.
+  output_dir: "/var/backups/dbdumps"
 
-# Maximum time to allow pg_dump to run before cancellation.
-dump_timeout: 30m
-
-# Compression format: gzip | zstd | none
-# Default: gzip
-compression_format: gzip
-
-# Compression level.
-# gzip: 1 (BestSpeed) – 9 (BestCompression), -1 = default (6)
-# zstd: 1 (Fastest) – 4 (BestCompression), 0 = default (2)
-# Ignored when compression_format is "none".
-compression_level: 6
+compression:
+  # Algorithm: gzip | zstd | none
+  format: gzip
+  # Compression level (algorithm-dependent):
+  #   gzip: -1 (default), 1 (fastest) … 9 (best compression)
+  #   zstd:  1 (fastest) … 4 (best compression)
+  #   none:  ignored
+  level: -1
