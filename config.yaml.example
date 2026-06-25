@@ -1,19 +1,20 @@
-# Example configuration for dbworker.
-# Copy to config.yaml and fill in your values.
+# Example configuration for the pg_dump worker.
 
 database:
-  # PostgreSQL connection string.
-  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+  host: localhost
+  port: 5432
+  name: mydb
+  user: postgres
+  password: ""
+  ssl_mode: disable
 
 storage:
-  # Directory where dump files will be written.
-  output_dir: "/var/backups/dbdumps"
+  output_dir: /var/dumps
 
 compression:
-  # Algorithm: gzip | zstd | none
+  # format: gzip | zstd | none
   format: gzip
-  # Compression level (algorithm-dependent):
-  #   gzip: -1 (default), 1 (fastest) … 9 (best compression)
-  #   zstd:  1 (fastest) … 4 (best compression)
-  #   none:  ignored
+  # level: compression level
+  #   gzip: -1 (default), 1 (fastest) – 9 (best compression)
+  #   zstd:  0 (default),  1 (fastest) – 4 (best compression)
   level: -1
