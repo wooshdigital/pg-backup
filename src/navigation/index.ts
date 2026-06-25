@@ -1,2 +1,2 @@
-export { RootNavigator } from './RootNavigator';
-export { TripStackNavigator } from './TripStackNavigator';
+export * from './RootNavigator';
+export * from './TripStackNavigator';
