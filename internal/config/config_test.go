@@ -5,134 +5,130 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sno6/gosane/internal/config"
+	"github.com/example/pgdumpworker/internal/compress"
+	"github.com/example/pgdumpworker/internal/config"
 )
 
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
+	p := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	return path
+	return p
 }
 
 func TestLoad_Valid(t *testing.T) {
-	path := writeConfig(t, `
-database:
-  host: localhost
-  port: 5432
-  name: mydb
-  user: postgres
-  password: secret
-  ssl_mode: disable
-storage:
-  output_dir: /tmp/dumps
-compression:
-  format: gzip
-  level: 6
+	p := writeConfig(t, `
+database_url: postgres://user:pass@localhost/db
+output_dir: /tmp/dumps
+compression_format: gzip
+compression_level: 6
 `)
-	cfg, err := config.Load(path)
+	cfg, err := config.Load(p)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Database.Host != "localhost" {
-		t.Errorf("Host = %q, want %q", cfg.Database.Host, "localhost")
+	if cfg.CompressionFormat != compress.FormatGzip {
+		t.Errorf("CompressionFormat = %q, want gzip", cfg.CompressionFormat)
 	}
-	if cfg.Compression.Format != config.CompressionGzip {
-		t.Errorf("Format = %q, want %q", cfg.Compression.Format, config.CompressionGzip)
-	}
-	if cfg.Compression.Level != 6 {
-		t.Errorf("Level = %d, want 6", cfg.Compression.Level)
+	if cfg.CompressionLevel != 6 {
+		t.Errorf("CompressionLevel = %d, want 6", cfg.CompressionLevel)
 	}
 }
 
-func TestLoad_Zstd(t *testing.T) {
-	path := writeConfig(t, `
-database:
-  host: db.example.com
-  name: proddb
-  user: admin
-compression:
-  format: zstd
-  level: 3
+func TestLoad_DefaultsToGzip(t *testing.T) {
+	p := writeConfig(t, `
+database_url: postgres://user:pass@localhost/db
+output_dir: /tmp/dumps
 `)
-	cfg, err := config.Load(path)
+	cfg, err := config.Load(p)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Compression.Format != config.CompressionZstd {
-		t.Errorf("Format = %q, want %q", cfg.Compression.Format, config.CompressionZstd)
+	if cfg.CompressionFormat != compress.FormatGzip {
+		t.Errorf("CompressionFormat = %q, want gzip (default)", cfg.CompressionFormat)
 	}
 }
 
-func TestLoad_None(t *testing.T) {
-	path := writeConfig(t, `
-database:
-  host: localhost
-  name: testdb
-  user: postgres
-compression:
-  format: none
+func TestLoad_ZstdFormat(t *testing.T) {
+	p := writeConfig(t, `
+database_url: postgres://user:pass@localhost/db
+output_dir: /tmp/dumps
+compression_format: zstd
+compression_level: 3
 `)
-	cfg, err := config.Load(path)
+	cfg, err := config.Load(p)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Compression.Format != config.CompressionNone {
-		t.Errorf("Format = %q, want %q", cfg.Compression.Format, config.CompressionNone)
+	if cfg.CompressionFormat != compress.FormatZstd {
+		t.Errorf("CompressionFormat = %q, want zstd", cfg.CompressionFormat)
+	}
+}
+
+func TestLoad_NoneFormat(t *testing.T) {
+	p := writeConfig(t, `
+database_url: postgres://user:pass@localhost/db
+output_dir: /tmp/dumps
+compression_format: none
+`)
+	cfg, err := config.Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.CompressionFormat != compress.FormatNone {
+		t.Errorf("CompressionFormat = %q, want none", cfg.CompressionFormat)
 	}
 }
 
 func TestLoad_InvalidFormat(t *testing.T) {
-	path := writeConfig(t, `
-database:
-  host: localhost
-  name: testdb
-  user: postgres
-compression:
-  format: brotli
+	p := writeConfig(t, `
+database_url: postgres://user:pass@localhost/db
+output_dir: /tmp/dumps
+compression_format: bzip2
 `)
-	_, err := config.Load(path)
-	if err == nil {
-		t.Fatal("expected error for invalid compression format, got nil")
+	if _, err := config.Load(p); err == nil {
+		t.Error("expected error for unknown compression_format, got nil")
 	}
 }
 
-func TestLoad_MissingHost(t *testing.T) {
-	path := writeConfig(t, `
-database:
-  name: testdb
-  user: postgres
+func TestLoad_MissingDatabaseURL(t *testing.T) {
+	p := writeConfig(t, `
+output_dir: /tmp/dumps
 `)
-	_, err := config.Load(path)
-	if err == nil {
-		t.Fatal("expected error for missing database host, got nil")
+	if _, err := config.Load(p); err == nil {
+		t.Error("expected error for missing database_url, got nil")
 	}
 }
 
-func TestLoad_FileNotFound(t *testing.T) {
-	_, err := config.Load("/nonexistent/path/config.yaml")
-	if err == nil {
-		t.Fatal("expected error for missing file, got nil")
+func TestLoad_MissingOutputDir(t *testing.T) {
+	p := writeConfig(t, `
+database_url: postgres://user:pass@localhost/db
+`)
+	if _, err := config.Load(p); err == nil {
+		t.Error("expected error for missing output_dir, got nil")
 	}
 }
 
-func TestConfig_Defaults(t *testing.T) {
-	cfg := &config.Config{}
-	cfg.Defaults()
+func TestConfig_CompressorConfig(t *testing.T) {
+	p := writeConfig(t, `
+database_url: postgres://user:pass@localhost/db
+output_dir: /tmp/dumps
+compression_format: zstd
+compression_level: 4
+`)
+	cfg, err := config.Load(p)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
 
-	if cfg.Database.Port != 5432 {
-		t.Errorf("Port = %d, want 5432", cfg.Database.Port)
+	cc := cfg.CompressorConfig()
+	if cc.Format != compress.FormatZstd {
+		t.Errorf("Format = %q, want zstd", cc.Format)
 	}
-	if cfg.Database.SSLMode != "disable" {
-		t.Errorf("SSLMode = %q, want %q", cfg.Database.SSLMode, "disable")
-	}
-	if cfg.Storage.OutputDir != "/tmp" {
-		t.Errorf("OutputDir = %q, want /tmp", cfg.Storage.OutputDir)
-	}
-	if cfg.Compression.Format != config.CompressionGzip {
-		t.Errorf("Format = %q, want %q", cfg.Compression.Format, config.CompressionGzip)
+	if cc.Level != 4 {
+		t.Errorf("Level = %d, want 4", cc.Level)
 	}
 }

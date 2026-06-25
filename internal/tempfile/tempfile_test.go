@@ -5,73 +5,79 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/your-org/dbworker/internal/tempfile"
+	"github.com/example/pgdumpworker/internal/tempfile"
 )
 
-func TestCommit(t *testing.T) {
+func TestNew_CreatesFile(t *testing.T) {
 	dir := t.TempDir()
-	dest := filepath.Join(dir, "out.txt")
-
-	tf, err := tempfile.New(dest)
+	tf, err := tempfile.New(dir, "test-*.tmp")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("New: %v", err)
 	}
+	defer tf.Cleanup()
 
-	data := []byte("hello, world")
-	if _, err := tf.Write(data); err != nil {
-		t.Fatal(err)
-	}
-
-	size, err := tf.Commit()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if size != int64(len(data)) {
-		t.Errorf("size: want %d got %d", len(data), size)
-	}
-
-	got, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != string(data) {
-		t.Errorf("content mismatch")
+	if _, err := os.Stat(tf.Name()); err != nil {
+		t.Errorf("temp file does not exist: %v", err)
 	}
 }
 
-func TestDiscard(t *testing.T) {
+func TestCommit_RenamesFile(t *testing.T) {
 	dir := t.TempDir()
-	dest := filepath.Join(dir, "out.txt")
-
-	tf, err := tempfile.New(dest)
+	tf, err := tempfile.New(dir, "test-*.tmp")
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tf.Write([]byte("data")); err != nil {
-		t.Fatal(err)
-	}
-	if err := tf.Discard(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("New: %v", err)
 	}
 
-	if _, err := os.Stat(dest); !os.IsNotExist(err) {
-		t.Error("expected destination file to not exist after Discard")
+	if _, err := tf.WriteString("hello"); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	dst := filepath.Join(dir, "final.txt")
+	if err := tf.Commit(dst); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	data, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Errorf("got %q, want %q", string(data), "hello")
 	}
 }
 
-func TestMkdirAll(t *testing.T) {
+func TestCleanup_RemovesTempFile(t *testing.T) {
 	dir := t.TempDir()
-	dest := filepath.Join(dir, "nested", "deep", "out.txt")
-
-	tf, err := tempfile.New(dest)
+	tf, err := tempfile.New(dir, "test-*.tmp")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("New: %v", err)
 	}
-	if _, err := tf.Commit(); err != nil {
-		t.Fatal(err)
+
+	name := tf.Name()
+	tf.Cleanup()
+
+	if _, err := os.Stat(name); !os.IsNotExist(err) {
+		t.Errorf("temp file still exists after Cleanup")
 	}
-	if _, err := os.Stat(dest); err != nil {
-		t.Errorf("expected file at %s: %v", dest, err)
+}
+
+func TestCleanup_AfterCommit_IsNoop(t *testing.T) {
+	dir := t.TempDir()
+	tf, err := tempfile.New(dir, "test-*.tmp")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	dst := filepath.Join(dir, "final.txt")
+	if err := tf.Commit(dst); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	// Should not panic or error.
+	tf.Cleanup()
+
+	// final file should still be present.
+	if _, err := os.Stat(dst); err != nil {
+		t.Errorf("final file missing after Cleanup-after-Commit: %v", err)
 	}
 }

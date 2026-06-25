@@ -1,156 +1,144 @@
+// Package dumper runs pg_dump and writes the compressed output to a temp file.
 package dumper
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
-	"github.com/sno6/gosane/internal/compress"
+	"github.com/example/pgdumpworker/internal/compress"
+	"github.com/example/pgdumpworker/internal/tempfile"
 )
 
-const dumpTimestampFormat = "20060102T150405Z"
-
-// Options configures a single dump operation.
+// Options controls a single dump run.
 type Options struct {
-	// DSN is the PostgreSQL connection string.
+	// DSN is the PostgreSQL connection string passed to pg_dump.
 	DSN string
 
-	// OutputDir is where the dump file will be written.
+	// OutputDir is the directory where the dump file is created.
 	OutputDir string
 
-	// Compressor is used to compress the pg_dump output.
-	// Pass a *compress.NopCompressor (or nil) for no compression.
+	// Compressor is applied between pg_dump's stdout and the output file.
+	// If nil, a NopCompressor is used (no compression).
 	Compressor compress.Compressor
+
+	// Now is an optional override for the timestamp embedded in the file name.
+	// When zero, time.Now().UTC() is used.
+	Now time.Time
 }
 
-// Result holds information about a completed dump.
+// Result is returned by Run on success.
 type Result struct {
-	// FilePath is the absolute path to the dump artifact.
+	// FilePath is the absolute path to the completed dump file.
 	FilePath string
-
-	// Duration is the time taken to produce the dump.
-	Duration time.Duration
-
-	// CompressedSize is the size of the output file in bytes.
-	CompressedSize int64
+	// BytesWritten is the number of (possibly compressed) bytes written to FilePath.
+	BytesWritten int64
 }
 
-// Dumper orchestrates pg_dump and optional compression.
-type Dumper struct {
-	opts Options
-}
-
-// New creates a Dumper with the provided options.
-// If opts.Compressor is nil a NopCompressor is used (no compression).
-func New(opts Options) *Dumper {
-	if opts.Compressor == nil {
-		opts.Compressor = &compress.NopCompressor{}
-	}
-	return &Dumper{opts: opts}
-}
-
-// Dump runs pg_dump and writes the (optionally compressed) output to a file
-// inside opts.OutputDir.  The pipeline is:
+// Run executes pg_dump and pipes its output through opts.Compressor into a
+// temporary file that is atomically renamed to the final destination.
 //
-//	pg_dump stdout → Compressor.Compress → output file
+// The output filename format is:
 //
-// Memory usage is O(1) regardless of dump size because io.Pipe keeps at most
-// one write buffer in flight at a time.
-func (d *Dumper) Dump(ctx context.Context) (*Result, error) {
-	if err := os.MkdirAll(d.opts.OutputDir, 0o755); err != nil {
-		return nil, fmt.Errorf("dumper: mkdir %q: %w", d.opts.OutputDir, err)
+//	dump-<timestamp>.sql[.gz|.zst]
+//
+// where the extension depends on the compressor's Extension() method.
+func Run(ctx context.Context, opts Options) (*Result, error) {
+	if opts.DSN == "" {
+		return nil, fmt.Errorf("dumper: DSN is required")
+	}
+	if opts.OutputDir == "" {
+		return nil, fmt.Errorf("dumper: OutputDir is required")
 	}
 
-	filename := dumpFilename(time.Now().UTC(), d.opts.Compressor.Extension())
-	outPath := filepath.Join(d.opts.OutputDir, filename)
+	c := opts.Compressor
+	if c == nil {
+		c = &compress.NopCompressor{}
+	}
 
-	outFile, err := os.Create(outPath)
+	now := opts.Now
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+
+	filename := fmt.Sprintf("dump-%s.sql%s", now.Format("20060102T150405Z"), c.Extension())
+	finalPath := filepath.Join(opts.OutputDir, filename)
+
+	// Create a temp file in the same directory so that the final rename is
+	// atomic on most POSIX file systems.
+	tmp, err := tempfile.New(opts.OutputDir, "pgdump-*.tmp")
 	if err != nil {
-		return nil, fmt.Errorf("dumper: create output file %q: %w", outPath, err)
-	}
-	// outFile is closed by the deferred cleanup or at the end of this function.
-
-	start := time.Now()
-
-	if err := d.runPipeline(ctx, outFile); err != nil {
-		outFile.Close()
-		os.Remove(outPath) // clean up partial file on error
-		return nil, err
+		return nil, fmt.Errorf("dumper: create temp file: %w", err)
 	}
 
-	if err := outFile.Close(); err != nil {
-		os.Remove(outPath)
-		return nil, fmt.Errorf("dumper: close output file: %w", err)
-	}
+	var n int64
+	runErr := func() error {
+		defer tmp.Cleanup()
 
-	info, err := os.Stat(outPath)
-	if err != nil {
-		return nil, fmt.Errorf("dumper: stat output file: %w", err)
+		cmd := exec.CommandContext(ctx, "pg_dump", "--no-password", "--format=plain", opts.DSN)
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return fmt.Errorf("dumper: stdout pipe: %w", err)
+		}
+
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("dumper: start pg_dump: %w", err)
+		}
+
+		// Wrap the temp file with a byte-counting writer so we can report size.
+		cw := &countingWriter{w: tmp}
+
+		// Stream: pg_dump stdout → compressor → temp file.
+		compressErr := c.Compress(stdout, cw)
+
+		// Always wait for pg_dump to exit, even if compression failed.
+		waitErr := cmd.Wait()
+
+		if compressErr != nil {
+			return fmt.Errorf("dumper: compress: %w", compressErr)
+		}
+		if waitErr != nil {
+			return fmt.Errorf("dumper: pg_dump exited with error: %w", waitErr)
+		}
+
+		n = cw.n
+
+		// Flush and sync the temp file before rename.
+		if err := tmp.Sync(); err != nil {
+			return fmt.Errorf("dumper: sync temp file: %w", err)
+		}
+
+		// Atomically move the temp file to the final destination.
+		if err := tmp.Commit(finalPath); err != nil {
+			return fmt.Errorf("dumper: commit dump file: %w", err)
+		}
+
+		return nil
+	}()
+
+	if runErr != nil {
+		return nil, runErr
 	}
 
 	return &Result{
-		FilePath:       outPath,
-		Duration:       time.Since(start),
-		CompressedSize: info.Size(),
+		FilePath:     finalPath,
+		BytesWritten: n,
 	}, nil
 }
 
-// runPipeline wires pg_dump stdout through the compressor into dst.
-func (d *Dumper) runPipeline(ctx context.Context, dst io.Writer) error {
-	args, err := pgDumpArgs(d.opts.DSN)
-	if err != nil {
-		return fmt.Errorf("dumper: build pg_dump args: %w", err)
-	}
-
-	cmd := exec.CommandContext(ctx, "pg_dump", args...)
-	cmd.Stderr = os.Stderr // surface pg_dump errors to our stderr
-
-	pgOut, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("dumper: stdout pipe: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("dumper: start pg_dump: %w", err)
-	}
-
-	// Compress streams pg_dump output directly into dst; no intermediate buffer.
-	compressErr := d.opts.Compressor.Compress(pgOut, dst)
-
-	// Always wait for pg_dump to finish so we capture its exit code.
-	waitErr := cmd.Wait()
-
-	if compressErr != nil {
-		return fmt.Errorf("dumper: compression failed: %w", compressErr)
-	}
-	if waitErr != nil {
-		return fmt.Errorf("dumper: pg_dump exited with error: %w", waitErr)
-	}
-
-	return nil
+// countingWriter wraps an io.Writer and records the total number of bytes
+// written.
+type countingWriter struct {
+	w io.Writer
+	n int64
 }
 
-// dumpFilename produces a timestamped filename with the appropriate extension.
-// Example: dump-20260619T120000Z.sql.gz
-func dumpFilename(t time.Time, compressionExt string) string {
-	base := fmt.Sprintf("dump-%s.sql", t.Format(dumpTimestampFormat))
-	return base + compressionExt
-}
-
-// pgDumpArgs builds the argument list for pg_dump from a DSN.
-func pgDumpArgs(dsn string) ([]string, error) {
-	if dsn == "" {
-		return nil, fmt.Errorf("DSN must not be empty")
-	}
-	// --no-password prevents interactive prompts.
-	// The DSN / connection URI is passed directly to pg_dump.
-	return []string{
-		"--no-password",
-		"--format=plain",
-		dsn,
-	}, nil
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	nn, err := cw.w.Write(p)
+	cw.n += int64(nn)
+	return nn, err
 }

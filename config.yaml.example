@@ -1,20 +1,17 @@
-# Example configuration for the pg_dump worker.
+# pg-dump-worker example configuration
 
-database:
-  host: localhost
-  port: 5432
-  name: mydb
-  user: postgres
-  password: ""
-  ssl_mode: disable
+# PostgreSQL connection string.
+database_url: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
-storage:
-  output_dir: /var/dumps
+# Directory where dump files will be written.
+output_dir: "/var/backups/pg-dumps"
 
-compression:
-  # format: gzip | zstd | none
-  format: gzip
-  # level: compression level
-  #   gzip: -1 (default), 1 (fastest) – 9 (best compression)
-  #   zstd:  0 (default),  1 (fastest) – 4 (best compression)
-  level: -1
+# Compression algorithm to use: none | gzip | zstd
+# Defaults to "gzip" when omitted.
+compression_format: "gzip"
+
+# Algorithm-specific compression level.
+#   gzip: 1 (BestSpeed) – 9 (BestCompression); 0 → default (-1, equivalent to 6)
+#   zstd: 1 (Fastest)   – 4 (BestCompression);  0 → default (3)
+#   none: ignored
+compression_level: 6

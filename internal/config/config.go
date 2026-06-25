@@ -1,3 +1,4 @@
+// Package config loads and validates worker configuration from a YAML file.
 package config
 
 import (
@@ -5,57 +6,28 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/example/pgdumpworker/internal/compress"
 )
 
-// CompressionFormat specifies the compression algorithm to use.
-type CompressionFormat string
-
-const (
-	CompressionGzip CompressionFormat = "gzip"
-	CompressionZstd CompressionFormat = "zstd"
-	CompressionNone CompressionFormat = "none"
-)
-
-// Config holds application configuration.
+// Config holds the complete worker configuration.
 type Config struct {
-	// Database connection details.
-	Database DatabaseConfig `yaml:"database"`
+	// Database connection string (DSN / postgres URI).
+	DatabaseURL string `yaml:"database_url"`
 
-	// Storage configuration.
-	Storage StorageConfig `yaml:"storage"`
-
-	// Compression configuration.
-	Compression CompressionConfig `yaml:"compression"`
-}
-
-// DatabaseConfig holds PostgreSQL connection configuration.
-type DatabaseConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Name     string `yaml:"name"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	SSLMode  string `yaml:"ssl_mode"`
-}
-
-// StorageConfig holds output storage configuration.
-type StorageConfig struct {
 	// OutputDir is the directory where dump files are written.
 	OutputDir string `yaml:"output_dir"`
+
+	// CompressionFormat selects the compression algorithm (none | gzip | zstd).
+	// Defaults to "gzip" when empty.
+	CompressionFormat compress.Format `yaml:"compression_format"`
+
+	// CompressionLevel is an algorithm-specific compression level.
+	// When 0, a sensible default is chosen by the compressor.
+	CompressionLevel int `yaml:"compression_level"`
 }
 
-// CompressionConfig holds compression-related settings.
-type CompressionConfig struct {
-	// Format is one of "gzip", "zstd", or "none".
-	Format CompressionFormat `yaml:"format"`
-
-	// Level is the compression level.
-	// For gzip: 1 (BestSpeed) – 9 (BestCompression), -1 = default.
-	// For zstd: 1 (Fastest) – 4 (BestCompression), 0 = default (2).
-	Level int `yaml:"level"`
-}
-
-// Load reads and parses a YAML config file at path.
+// Load reads a YAML configuration file from path and returns a validated Config.
 func Load(path string) (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -71,49 +43,41 @@ func Load(path string) (*Config, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, fmt.Errorf("config: validate: %w", err)
+		return nil, err
 	}
 
 	return &cfg, nil
 }
 
-// validate performs basic sanity checks on the loaded config.
+// validate checks that required fields are present and values are within
+// acceptable ranges.
 func (c *Config) validate() error {
-	if c.Database.Host == "" {
-		return fmt.Errorf("database.host is required")
+	if c.DatabaseURL == "" {
+		return fmt.Errorf("config: database_url is required")
 	}
-	if c.Database.Name == "" {
-		return fmt.Errorf("database.name is required")
-	}
-	if c.Database.User == "" {
-		return fmt.Errorf("database.user is required")
+	if c.OutputDir == "" {
+		return fmt.Errorf("config: output_dir is required")
 	}
 
-	switch c.Compression.Format {
-	case CompressionGzip, CompressionZstd, CompressionNone, "":
+	// Default compression format.
+	if c.CompressionFormat == "" {
+		c.CompressionFormat = compress.FormatGzip
+	}
+
+	switch c.CompressionFormat {
+	case compress.FormatNone, compress.FormatGzip, compress.FormatZstd:
 		// valid
 	default:
-		return fmt.Errorf("compression.format %q is not supported (use gzip, zstd, or none)", c.Compression.Format)
+		return fmt.Errorf("config: unknown compression_format %q (valid: none, gzip, zstd)", c.CompressionFormat)
 	}
 
 	return nil
 }
 
-// Defaults fills in zero-value fields with sensible defaults.
-func (c *Config) Defaults() {
-	if c.Database.Port == 0 {
-		c.Database.Port = 5432
-	}
-	if c.Database.SSLMode == "" {
-		c.Database.SSLMode = "disable"
-	}
-	if c.Storage.OutputDir == "" {
-		c.Storage.OutputDir = "/tmp"
-	}
-	if c.Compression.Format == "" {
-		c.Compression.Format = CompressionGzip
-	}
-	if c.Compression.Level == 0 {
-		// Use codec-specific defaults; factory handles 0 → default.
+// CompressorConfig returns a compress.Config derived from the current Config.
+func (c *Config) CompressorConfig() compress.Config {
+	return compress.Config{
+		Format: c.CompressionFormat,
+		Level:  c.CompressionLevel,
 	}
 }

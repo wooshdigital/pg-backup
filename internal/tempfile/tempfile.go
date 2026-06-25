@@ -1,73 +1,61 @@
-// Package tempfile provides an atomic write-then-rename file primitive.
+// Package tempfile provides a helper for writing to a temporary file and
+// atomically committing it to a final path.
 package tempfile
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 )
 
-// TempFile writes data to a sibling temporary file and renames it to the
-// final destination on Commit, providing atomic semantics on most OSes.
+// TempFile wraps an *os.File and adds Commit / Cleanup helpers.
 type TempFile struct {
-	dest string
-	f    *os.File
+	*os.File
+	committed bool
 }
 
-// New creates a TempFile targeting dest. The actual data is written to a
-// temporary file in the same directory until Commit or Discard is called.
-func New(dest string) (*TempFile, error) {
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return nil, fmt.Errorf("tempfile: mkdir: %w", err)
+// New creates a temporary file in dir using the given pattern (passed directly
+// to os.CreateTemp). The caller must call either Commit or Cleanup when done.
+func New(dir, pattern string) (*TempFile, error) {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return nil, fmt.Errorf("tempfile: mkdir %q: %w", dir, err)
 	}
-	f, err := os.CreateTemp(filepath.Dir(dest), ".tmp-dump-*")
+
+	f, err := os.CreateTemp(dir, pattern)
 	if err != nil {
 		return nil, fmt.Errorf("tempfile: create: %w", err)
 	}
-	return &TempFile{dest: dest, f: f}, nil
+
+	return &TempFile{File: f}, nil
 }
 
-// Write implements io.Writer.
-func (t *TempFile) Write(p []byte) (int, error) {
-	return t.f.Write(p)
+// Commit closes the file and atomically renames it to dst.
+// dst must be on the same file system as the temp file (same directory).
+func (t *TempFile) Commit(dst string) error {
+	if err := t.File.Close(); err != nil {
+		return fmt.Errorf("tempfile: close before commit: %w", err)
+	}
+
+	// Ensure the destination directory exists.
+	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
+		return fmt.Errorf("tempfile: mkdir for dst: %w", err)
+	}
+
+	if err := os.Rename(t.File.Name(), dst); err != nil {
+		return fmt.Errorf("tempfile: rename to %q: %w", dst, err)
+	}
+
+	t.committed = true
+	return nil
 }
 
-// Commit flushes, syncs, closes the temp file and renames it to the
-// destination. It returns the final file size.
-func (t *TempFile) Commit() (int64, error) {
-	if err := t.f.Sync(); err != nil {
-		_ = t.f.Close()
-		_ = os.Remove(t.f.Name())
-		return 0, fmt.Errorf("tempfile: sync: %w", err)
+// Cleanup removes the temp file if it has not been committed.
+// It is safe to call Cleanup after a successful Commit (it becomes a no-op).
+func (t *TempFile) Cleanup() {
+	if t.committed {
+		return
 	}
-
-	info, err := t.f.Stat()
-	if err != nil {
-		_ = t.f.Close()
-		_ = os.Remove(t.f.Name())
-		return 0, fmt.Errorf("tempfile: stat: %w", err)
-	}
-	size := info.Size()
-
-	if err := t.f.Close(); err != nil {
-		_ = os.Remove(t.f.Name())
-		return 0, fmt.Errorf("tempfile: close: %w", err)
-	}
-
-	if err := os.Rename(t.f.Name(), t.dest); err != nil {
-		_ = os.Remove(t.f.Name())
-		return 0, fmt.Errorf("tempfile: rename: %w", err)
-	}
-
-	return size, nil
+	// Best-effort close – ignore errors because the file may already be closed.
+	_ = t.File.Close()
+	_ = os.Remove(t.File.Name())
 }
-
-// Discard closes and removes the temporary file without committing.
-func (t *TempFile) Discard() error {
-	_ = t.f.Close()
-	return os.Remove(t.f.Name())
-}
-
-// Ensure TempFile implements io.Writer at compile time.
-var _ io.Writer = (*TempFile)(nil)
