@@ -1,26 +1,23 @@
 import React, { useCallback } from 'react';
 import {
   View,
-  Text,
   FlatList,
+  Text,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-  ListRenderItem,
+  SafeAreaView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTrips } from '../hooks/useTrips';
-import { Trip } from '../types';
 import { TripCard } from '../components/trips/TripCard';
 import { EmptyTripsState } from '../components/trips/EmptyTripsState';
 import { FAB } from '../components/common/FAB';
+import { Trip } from '../types';
 
-export function TripsListScreen() {
+export const TripsListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const { trips, loaded, deleteTrip } = useTrips();
+  const { trips, loading, deleteTrip } = useTrips();
 
   const handleTripPress = useCallback(
     (trip: Trip) => {
@@ -29,44 +26,54 @@ export function TripsListScreen() {
     [navigation],
   );
 
+  const handleTripDelete = useCallback(
+    (trip: Trip) => {
+      deleteTrip(trip.id);
+    },
+    [deleteTrip],
+  );
+
   const handleCreateTrip = useCallback(() => {
     navigation.navigate('CreateTrip');
   }, [navigation]);
 
-  const renderItem: ListRenderItem<Trip> = useCallback(
-    ({ item }) => (
-      <TripCard trip={item} onPress={handleTripPress} onDelete={deleteTrip} />
-    ),
-    [handleTripPress, deleteTrip],
-  );
-
-  const keyExtractor = useCallback((item: Trip) => item.id, []);
-
-  if (!loaded) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <View style={styles.centered}>
         <ActivityIndicator size="large" color="#6366F1" />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>My Trips</Text>
-          <Text style={styles.count}>
-            {trips.length} {trips.length === 1 ? 'trip' : 'trips'}
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerTitle}>My Trips</Text>
+          <Text style={styles.headerSubtitle}>
+            {trips.length === 0
+              ? 'Start planning your next adventure'
+              : `${trips.length} trip${trips.length !== 1 ? 's' : ''}`}
           </Text>
         </View>
 
         <FlatList
           data={trips}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          contentContainerStyle={trips.length === 0 ? styles.emptyContent : styles.listContent}
-          ListEmptyComponent={<EmptyTripsState onCreateTrip={handleCreateTrip} />}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TripCard
+              trip={item}
+              onPress={handleTripPress}
+              onDelete={handleTripDelete}
+            />
+          )}
+          contentContainerStyle={[
+            styles.listContent,
+            trips.length === 0 && styles.emptyList,
+          ]}
+          ListEmptyComponent={<EmptyTripsState />}
           showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
 
         <FAB
@@ -77,45 +84,47 @@ export function TripsListScreen() {
       </SafeAreaView>
     </GestureHandlerRootView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  } as ViewStyle,
+    backgroundColor: '#F9FAFB',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-  } as ViewStyle,
-  loadingContainer: {
+  },
+  centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F9FAFB',
-  } as ViewStyle,
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
+  },
+  headerContainer: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-  } as ViewStyle,
-  title: {
-    fontSize: 28,
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 30,
     fontWeight: '800',
     color: '#111827',
-  } as TextStyle,
-  count: {
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
     fontSize: 14,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  } as TextStyle,
+    color: '#6B7280',
+    marginTop: 4,
+  },
   listContent: {
-    paddingTop: 4,
+    paddingTop: 8,
     paddingBottom: 100,
-  } as ViewStyle,
-  emptyContent: {
+  },
+  emptyList: {
     flexGrow: 1,
-  } as ViewStyle,
+  },
+  separator: {
+    height: 0,
+  },
 });

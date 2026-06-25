@@ -5,60 +5,65 @@ import {
   StyleSheet,
   ViewStyle,
   TextStyle,
-  StyleProp,
-  AccessibilityRole,
+  Platform,
 } from 'react-native';
 
 interface FABProps {
   onPress: () => void;
   icon?: string;
   label?: string;
-  style?: StyleProp<ViewStyle>;
+  style?: ViewStyle;
   accessibilityLabel?: string;
 }
 
-export function FAB({ onPress, icon = '+', label, style, accessibilityLabel }: FABProps) {
+export const FAB: React.FC<FABProps> = ({
+  onPress,
+  icon = '+',
+  label,
+  style,
+  accessibilityLabel = 'Floating action button',
+}) => {
   return (
     <TouchableOpacity
       style={[styles.fab, style]}
       onPress={onPress}
-      activeOpacity={0.8}
-      accessibilityLabel={accessibilityLabel ?? label ?? 'Floating action button'}
-      accessibilityRole={'button' as AccessibilityRole}
+      activeOpacity={0.85}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
     >
       <Text style={styles.icon}>{icon}</Text>
       {label ? <Text style={styles.label}>{label}</Text> : null}
     </TouchableOpacity>
   );
-}
+};
 
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 28,
     right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#6366F1',
-    borderRadius: 32,
-    width: 56,
-    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
     flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   } as ViewStyle,
   icon: {
-    color: '#fff',
     fontSize: 28,
+    color: '#FFFFFF',
     lineHeight: 32,
     fontWeight: '400',
   } as TextStyle,
   label: {
-    color: '#fff',
     fontSize: 14,
+    color: '#FFFFFF',
     fontWeight: '600',
     marginLeft: 6,
   } as TextStyle,

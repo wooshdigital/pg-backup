@@ -1,105 +1,115 @@
 import React, {
   createContext,
-  useContext,
   useReducer,
   useEffect,
-  useCallback,
+  useContext,
   ReactNode,
+  Dispatch,
 } from 'react';
 import { Trip } from '../types';
 import { saveTrips, loadTrips } from '../utils/storage';
 
-// ---------------------------------------------------------------------------
-// Action types
-// ---------------------------------------------------------------------------
-type Action =
-  | { type: 'LOAD_TRIPS'; payload: Trip[] }
-  | { type: 'ADD_TRIP'; payload: Trip }
-  | { type: 'DELETE_TRIP'; payload: string };
+// ─── State ───────────────────────────────────────────────────────────────────
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-interface TripState {
+export interface TripState {
   trips: Trip[];
-  loaded: boolean;
+  loading: boolean;
 }
 
 const initialState: TripState = {
   trips: [],
-  loaded: false,
+  loading: true,
 };
 
-// ---------------------------------------------------------------------------
-// Reducer
-// ---------------------------------------------------------------------------
-function tripReducer(state: TripState, action: Action): TripState {
+// ─── Actions ─────────────────────────────────────────────────────────────────
+
+export type TripAction =
+  | { type: 'ADD_TRIP'; payload: Trip }
+  | { type: 'DELETE_TRIP'; payload: string }
+  | { type: 'LOAD_TRIPS'; payload: Trip[] };
+
+// ─── Reducer ─────────────────────────────────────────────────────────────────
+
+function tripReducer(state: TripState, action: TripAction): TripState {
   switch (action.type) {
     case 'LOAD_TRIPS':
-      return { ...state, trips: action.payload, loaded: true };
+      return { ...state, trips: action.payload, loading: false };
+
     case 'ADD_TRIP':
       return { ...state, trips: [action.payload, ...state.trips] };
+
     case 'DELETE_TRIP':
       return {
         ...state,
         trips: state.trips.filter((t) => t.id !== action.payload),
       };
+
     default:
       return state;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
-interface TripContextValue {
-  trips: Trip[];
-  loaded: boolean;
-  addTrip: (trip: Trip) => void;
-  deleteTrip: (id: string) => void;
+// ─── Context ─────────────────────────────────────────────────────────────────
+
+export interface TripContextValue {
+  state: TripState;
+  dispatch: Dispatch<TripAction>;
 }
 
-const TripContext = createContext<TripContextValue | undefined>(undefined);
+export const TripContext = createContext<TripContextValue | undefined>(undefined);
 
-// ---------------------------------------------------------------------------
-// Provider
-// ---------------------------------------------------------------------------
-export function TripProvider({ children }: { children: ReactNode }) {
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
+interface TripProviderProps {
+  children: ReactNode;
+}
+
+export const TripProvider: React.FC<TripProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(tripReducer, initialState);
 
-  // Load persisted trips on mount
+  // Load trips from AsyncStorage on mount
   useEffect(() => {
-    loadTrips().then((trips) => {
-      dispatch({ type: 'LOAD_TRIPS', payload: trips });
+    let cancelled = false;
+
+    const init = async () => {
+      try {
+        const trips = await loadTrips();
+        if (!cancelled) {
+          dispatch({ type: 'LOAD_TRIPS', payload: trips });
+        }
+      } catch (error) {
+        console.error('[TripContext] Failed to load trips:', error);
+        if (!cancelled) {
+          dispatch({ type: 'LOAD_TRIPS', payload: [] });
+        }
+      }
+    };
+
+    init();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist trips to AsyncStorage whenever they change (skip initial load)
+  useEffect(() => {
+    if (state.loading) return;
+    saveTrips(state.trips).catch((err) => {
+      console.error('[TripContext] Failed to persist trips:', err);
     });
-  }, []);
-
-  // Persist trips whenever they change (skip initial unloaded state)
-  useEffect(() => {
-    if (!state.loaded) return;
-    saveTrips(state.trips);
-  }, [state.trips, state.loaded]);
-
-  const addTrip = useCallback((trip: Trip) => {
-    dispatch({ type: 'ADD_TRIP', payload: trip });
-  }, []);
-
-  const deleteTrip = useCallback((id: string) => {
-    dispatch({ type: 'DELETE_TRIP', payload: id });
-  }, []);
+  }, [state.trips, state.loading]);
 
   return (
-    <TripContext.Provider value={{ trips: state.trips, loaded: state.loaded, addTrip, deleteTrip }}>
+    <TripContext.Provider value={{ state, dispatch }}>
       {children}
     </TripContext.Provider>
   );
-}
+};
 
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
-export function useTripContext(): TripContextValue {
-  const ctx = useContext(TripContext);
-  if (!ctx) throw new Error('useTripContext must be used inside TripProvider');
-  return ctx;
-}
+// ─── Convenience hook ────────────────────────────────────────────────────────
+
+export const useTripContext = (): TripContextValue => {
+  const context = useContext(TripContext);
+  if (!context) {
+    throw new Error('useTripContext must be used within a TripProvider');
+  }
+  return context;
+};

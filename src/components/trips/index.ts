@@ -1,3 +1,3 @@
 export * from './TripCard';
-export * from './EmptyTripsState';
 export * from './CurrencyPicker';
+export * from './EmptyTripsState';

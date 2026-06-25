@@ -11,7 +11,7 @@ export type TripStackParamList = {
 
 const Stack = createNativeStackNavigator<TripStackParamList>();
 
-export function TripStackNavigator() {
+export const TripStackNavigator: React.FC = () => {
   return (
     <Stack.Navigator
       screenOptions={{
@@ -23,8 +23,11 @@ export function TripStackNavigator() {
       <Stack.Screen
         name="CreateTrip"
         component={CreateTripScreen}
-        options={{ animation: 'slide_from_bottom' }}
+        options={{
+          animation: 'slide_from_bottom',
+          presentation: 'modal',
+        }}
       />
     </Stack.Navigator>
   );
-}
+};

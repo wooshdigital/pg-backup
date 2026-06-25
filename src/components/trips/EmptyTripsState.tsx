@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
 interface EmptyTripsStateProps {
-  onCreateTrip?: () => void;
+  onCreatePress?: () => void;
 }
 
-export function EmptyTripsState({ onCreateTrip }: EmptyTripsStateProps) {
+export const EmptyTripsState: React.FC<EmptyTripsStateProps> = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.illustration}>✈️</Text>
@@ -13,11 +13,25 @@ export function EmptyTripsState({ onCreateTrip }: EmptyTripsStateProps) {
       <Text style={styles.subtitle}>
         Tap the{' '}
         <Text style={styles.highlight}>+</Text>
-        {' '}button below to plan your first adventure and start splitting expenses with friends.
+        {' '}button below to create your first trip and start tracking expenses together.
       </Text>
+      <View style={styles.hints}>
+        <View style={styles.hintRow}>
+          <Text style={styles.hintIcon}>🗓️</Text>
+          <Text style={styles.hintText}>Set a date range for your trip</Text>
+        </View>
+        <View style={styles.hintRow}>
+          <Text style={styles.hintIcon}>💱</Text>
+          <Text style={styles.hintText}>Choose your travel currency</Text>
+        </View>
+        <View style={styles.hintRow}>
+          <Text style={styles.hintIcon}>👥</Text>
+          <Text style={styles.hintText}>Invite friends and split expenses</Text>
+        </View>
+      </View>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -25,27 +39,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
-    paddingBottom: 80,
-  } as ViewStyle,
+    paddingTop: 60,
+    paddingBottom: 120,
+  },
   illustration: {
     fontSize: 72,
     marginBottom: 24,
-  } as TextStyle,
+  },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 12,
     textAlign: 'center',
-  } as TextStyle,
+  },
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
-  } as TextStyle,
+    marginBottom: 36,
+  },
   highlight: {
     color: '#6366F1',
     fontWeight: '700',
-  } as TextStyle,
+    fontSize: 18,
+  },
+  hints: {
+    width: '100%',
+    gap: 12,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  hintIcon: {
+    fontSize: 20,
+  },
+  hintText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
 });

@@ -1,40 +1,52 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { TripProvider } from '../context/TripContext';
-import { TripsListScreen } from '../screens/TripsListScreen';
-import { CreateTripScreen } from '../screens/CreateTripScreen';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Text } from 'react-native';
+import { TripStackNavigator } from './TripStackNavigator';
+import { SettingsScreen } from '../screens/SettingsScreen';
 
-export type RootStackParamList = {
-  TripsList: undefined;
-  CreateTrip: undefined;
-  TripDetail: { tripId: string };
+export type RootTabParamList = {
+  TripsTab: undefined;
+  Settings: undefined;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<RootTabParamList>();
 
-export function RootNavigator() {
+export const RootNavigator: React.FC = () => {
   return (
-    <TripProvider>
-      <NavigationContainer>
-        <Stack.Navigator
-          initialRouteName="TripsList"
-          screenOptions={{
-            headerShown: false,
-            animation: 'slide_from_right',
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#6366F1',
+          tabBarInactiveTintColor: '#9CA3AF',
+          tabBarStyle: {
+            borderTopColor: '#E5E7EB',
+            backgroundColor: '#FFFFFF',
+          },
+        }}
+      >
+        <Tab.Screen
+          name="TripsTab"
+          component={TripStackNavigator}
+          options={{
+            title: 'Trips',
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ fontSize: size - 4, color }}>✈️</Text>
+            ),
           }}
-        >
-          <Stack.Screen name="TripsList" component={TripsListScreen} />
-          <Stack.Screen
-            name="CreateTrip"
-            component={CreateTripScreen}
-            options={{
-              animation: 'slide_from_bottom',
-              presentation: 'modal',
-            }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </TripProvider>
+        />
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            title: 'Settings',
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ fontSize: size - 4, color }}>⚙️</Text>
+            ),
+          }}
+        />
+      </Tab.Navigator>
+    </NavigationContainer>
   );
-}
+};

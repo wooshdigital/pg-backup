@@ -26,4 +26,7 @@ export const CURRENCIES: Currency[] = [
 export const getCurrencyByCode = (code: string): Currency | undefined =>
   CURRENCIES.find((c) => c.code === code);
 
-export const DEFAULT_CURRENCY = CURRENCIES[0];
+export const getCurrencySymbol = (code: string): string => {
+  const currency = getCurrencyByCode(code);
+  return currency ? currency.symbol : code;
+};

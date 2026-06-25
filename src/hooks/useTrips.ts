@@ -1,31 +1,29 @@
-import { useCallback } from 'react';
-import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
-import { useTripContext } from '../context/TripContext';
+import { useContext, useCallback } from 'react';
+import { TripContext } from '../context/TripContext';
 import { Trip } from '../types';
+import { generateId } from '../utils/id';
 
-interface CreateTripInput {
+export interface CreateTripInput {
   name: string;
   currency: string;
   startDate: string;
   endDate: string;
 }
 
-interface UseTripsResult {
-  trips: Trip[];
-  loaded: boolean;
-  createTrip: (input: CreateTripInput) => Trip;
-  deleteTrip: (id: string) => void;
-}
+export function useTrips() {
+  const context = useContext(TripContext);
 
-export function useTrips(): UseTripsResult {
-  const { trips, loaded, addTrip, deleteTrip } = useTripContext();
+  if (!context) {
+    throw new Error('useTrips must be used within a TripProvider');
+  }
 
-  const createTrip = useCallback(
+  const { state, dispatch } = context;
+
+  const addTrip = useCallback(
     (input: CreateTripInput): Trip => {
-      const trip: Trip = {
-        id: uuidv4(),
-        name: input.name,
+      const newTrip: Trip = {
+        id: generateId(),
+        name: input.name.trim(),
         currency: input.currency,
         startDate: input.startDate,
         endDate: input.endDate,
@@ -33,11 +31,24 @@ export function useTrips(): UseTripsResult {
         participantIds: [],
         expenseIds: [],
       };
-      addTrip(trip);
-      return trip;
+
+      dispatch({ type: 'ADD_TRIP', payload: newTrip });
+      return newTrip;
     },
-    [addTrip],
+    [dispatch],
   );
 
-  return { trips, loaded, createTrip, deleteTrip };
+  const deleteTrip = useCallback(
+    (id: string) => {
+      dispatch({ type: 'DELETE_TRIP', payload: id });
+    },
+    [dispatch],
+  );
+
+  return {
+    trips: state.trips,
+    loading: state.loading,
+    addTrip,
+    deleteTrip,
+  };
 }

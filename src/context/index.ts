@@ -1,2 +1,2 @@
-export { TripProvider, useTripContext } from './TripContext';
-export { ThemeContext } from './ThemeContext';
+export * from './TripContext';
+export * from './ThemeContext';
