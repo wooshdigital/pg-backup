@@ -2,24 +2,27 @@ package compress
 
 import (
 	"fmt"
-
-	"github.com/your-org/your-project/internal/config"
 )
 
-// NewCompressor constructs a Compressor matching the supplied configuration.
-// Returns an error if the format is unrecognised.
-func NewCompressor(cfg config.CompressionConfig) (Compressor, error) {
+// Config holds configuration for selecting and tuning a compressor.
+type Config struct {
+	// Format is one of "gzip", "zstd", or "none".
+	Format string
+	// Level is the compression level. Interpretation depends on the Format.
+	// For gzip: 1–9 (or -1 for default). For zstd: 1–4.
+	Level int
+}
+
+// NewCompressor returns a Compressor based on the provided Config.
+func NewCompressor(cfg Config) (Compressor, error) {
 	switch cfg.Format {
-	case config.CompressionNone:
-		return &NoneCompressor{}, nil
-
-	case config.CompressionGzip, "":
-		return &GzipCompressor{Level: cfg.Level}, nil
-
-	case config.CompressionZstd:
-		return &ZstdCompressor{Level: cfg.Level}, nil
-
+	case "gzip":
+		return NewGzipCompressor(cfg.Level), nil
+	case "zstd":
+		return NewZstdCompressor(cfg.Level), nil
+	case "none", "":
+		return &NoopCompressor{}, nil
 	default:
-		return nil, fmt.Errorf("compress: unknown format %q", cfg.Format)
+		return nil, fmt.Errorf("compress: unknown format %q (expected gzip, zstd, or none)", cfg.Format)
 	}
 }

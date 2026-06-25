@@ -1,16 +1,20 @@
-database:
-  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+# pg-dump-worker configuration example
 
-storage:
-  path: "/var/backups/pgdumps"
+# PostgreSQL connection URL or DSN.
+database_url: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
-worker:
-  schedule: "0 2 * * *"   # daily at 02:00 UTC
+# Directory where dump artifacts will be written.
+output_dir: "/var/backups/pg-dumps"
 
-compress:
-  # Compression format: gzip, zstd, or none
-  format: gzip
-  # Compression level:
-  #   gzip: 1 (fastest) to 9 (best), 0 = default
-  #   zstd: 1 (fastest) to 4 (best), 0 = default
-  level: 0
+# Maximum time to allow pg_dump to run before cancellation.
+dump_timeout: 30m
+
+# Compression format: gzip | zstd | none
+# Default: gzip
+compression_format: gzip
+
+# Compression level.
+# gzip: 1 (BestSpeed) – 9 (BestCompression), -1 = default (6)
+# zstd: 1 (Fastest) – 4 (BestCompression), 0 = default (2)
+# Ignored when compression_format is "none".
+compression_level: 6

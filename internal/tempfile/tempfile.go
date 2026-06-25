@@ -1,13 +1,16 @@
-// Package tempfile provides helpers for creating temporary files.
 package tempfile
 
 import (
+	"fmt"
 	"os"
 )
 
 // New creates a new temporary file in dir with the given pattern.
-// It is a thin wrapper around os.CreateTemp that ensures consistent
-// error handling across the codebase.
+// The caller is responsible for closing and removing the file.
 func New(dir, pattern string) (*os.File, error) {
-	return os.CreateTemp(dir, pattern)
+	f, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("tempfile: create in %q with pattern %q: %w", dir, pattern, err)
+	}
+	return f, nil
 }
