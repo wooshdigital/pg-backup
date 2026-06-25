@@ -1,3 +1,4 @@
+// Package config loads and validates worker configuration.
 package config
 
 import (
@@ -8,119 +9,115 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// CompressionFormat specifies the compression algorithm to use.
+// CompressionFormat enumerates the supported compression algorithms.
 type CompressionFormat string
 
 const (
+	CompressionNone CompressionFormat = "none"
 	CompressionGzip CompressionFormat = "gzip"
 	CompressionZstd CompressionFormat = "zstd"
-	CompressionNone CompressionFormat = "none"
 )
 
-// Config holds all application configuration.
+// Config holds all configuration for the dump worker.
 type Config struct {
-	Database    DatabaseConfig    `yaml:"database"`
-	Storage     StorageConfig     `yaml:"storage"`
+	// Database connection details.
+	Database DatabaseConfig `yaml:"database"`
+
+	// Storage destination.
+	Storage StorageConfig `yaml:"storage"`
+
+	// Compression settings.
 	Compression CompressionConfig `yaml:"compression"`
-	Schedule    ScheduleConfig    `yaml:"schedule"`
+
+	// Worker behaviour.
+	Schedule string        `yaml:"schedule"`
+	Timeout  time.Duration `yaml:"timeout"`
 }
 
-// DatabaseConfig holds PostgreSQL connection settings.
+// DatabaseConfig contains PostgreSQL connection details.
 type DatabaseConfig struct {
-	DSN      string `yaml:"dsn"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Name     string `yaml:"name"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
+	DSN string `yaml:"dsn"`
 }
 
-// StorageConfig holds settings for where dumps are stored.
+// StorageConfig describes where completed dumps are written.
 type StorageConfig struct {
-	OutputDir string `yaml:"output_dir"`
+	// Path is a local directory path when using local storage.
+	Path string `yaml:"path"`
 }
 
-// CompressionConfig holds compression settings.
+// CompressionConfig controls how dump output is compressed.
 type CompressionConfig struct {
-	// Format is the compression algorithm: "gzip", "zstd", or "none".
+	// Format selects the compression algorithm: "gzip", "zstd", or "none".
+	// Defaults to "gzip" when empty.
 	Format CompressionFormat `yaml:"format"`
-	// Level is the compression level. Interpretation depends on Format:
-	//   gzip: 1 (BestSpeed) to 9 (BestCompression), -1 for default.
-	//   zstd: 1 (fastest) to 4 (best compression).
+
+	// Level is the compression level. Semantics depend on the chosen format:
+	//   gzip: 1 (BestSpeed) – 9 (BestCompression); 0 means DefaultCompression (-1).
+	//   zstd: 1 (fastest) – 22 (best); 0 means default (3).
 	//   none: ignored.
 	Level int `yaml:"level"`
 }
 
-// ScheduleConfig holds cron/interval scheduling settings.
-type ScheduleConfig struct {
-	Cron     string        `yaml:"cron"`
-	Interval time.Duration `yaml:"interval"`
-}
-
-// DefaultConfig returns a Config populated with sensible defaults.
-func DefaultConfig() Config {
-	return Config{
-		Database: DatabaseConfig{
-			Host: "localhost",
-			Port: 5432,
-		},
-		Storage: StorageConfig{
-			OutputDir: "/tmp/pgdumps",
-		},
-		Compression: CompressionConfig{
-			Format: CompressionGzip,
-			Level:  -1, // gzip.DefaultCompression
-		},
-	}
-}
-
-// Load reads and parses a YAML config file from the given path,
-// merging values on top of defaults.
+// Load reads configuration from the file at path and returns a validated Config.
 func Load(path string) (*Config, error) {
-	cfg := DefaultConfig()
-
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("opening config file %q: %w", path, err)
+		return nil, fmt.Errorf("config: open %q: %w", path, err)
 	}
 	defer f.Close()
 
+	var cfg Config
 	dec := yaml.NewDecoder(f)
 	dec.KnownFields(true)
+
 	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("parsing config file %q: %w", path, err)
+		return nil, fmt.Errorf("config: decode %q: %w", path, err)
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
 	}
 
 	return &cfg, nil
 }
 
-// Validate checks that the configuration is internally consistent.
-func (c *Config) Validate() error {
+// validate checks that mandatory fields are present and values are in range.
+func (c *Config) validate() error {
+	if c.Database.DSN == "" {
+		return fmt.Errorf("database.dsn must not be empty")
+	}
+
+	// Apply default compression format.
+	if c.Compression.Format == "" {
+		c.Compression.Format = CompressionGzip
+	}
+
 	switch c.Compression.Format {
-	case CompressionGzip, CompressionZstd, CompressionNone, "":
+	case CompressionNone, CompressionGzip, CompressionZstd:
 		// valid
 	default:
-		return fmt.Errorf("unsupported compression format %q: must be one of gzip, zstd, none", c.Compression.Format)
+		return fmt.Errorf("compression.format %q is not one of: none, gzip, zstd", c.Compression.Format)
 	}
 
 	if c.Compression.Format == CompressionGzip {
-		level := c.Compression.Level
-		// gzip levels: -1 (default), 0 (no compression), 1–9
-		if level != -1 && level != 0 && (level < 1 || level > 9) {
-			return fmt.Errorf("invalid gzip compression level %d: must be -1 (default) or 0–9", level)
+		// gzip levels: -1 (default), 1–9.
+		if c.Compression.Level != 0 && (c.Compression.Level < 1 || c.Compression.Level > 9) {
+			return fmt.Errorf("compression.level %d is out of range for gzip (1–9 or 0 for default)", c.Compression.Level)
 		}
 	}
 
 	if c.Compression.Format == CompressionZstd {
-		level := c.Compression.Level
-		if level < 1 || level > 4 {
-			return fmt.Errorf("invalid zstd compression level %d: must be 1–4", level)
+		if c.Compression.Level != 0 && (c.Compression.Level < 1 || c.Compression.Level > 22) {
+			return fmt.Errorf("compression.level %d is out of range for zstd (1–22 or 0 for default)", c.Compression.Level)
 		}
 	}
 
 	return nil
+}
+
+// NewCompressor returns a compress.Compressor matching the configuration.
+// It is defined here to avoid an import cycle; the actual construction is
+// delegated to the compress package via the factory in that package.
+func (c *Config) CompressionFormatString() string {
+	return string(c.Compression.Format)
 }

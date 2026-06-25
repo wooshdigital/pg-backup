@@ -7,130 +7,209 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/myapp/internal/compress"
+	"github.com/your-org/your-project/internal/compress"
 )
 
-// generateDumpData generates a realistic pg_dump-like payload of approximately `sizeMB` megabytes.
-func generateDumpData(sizeMB int) []byte {
-	// Simulate a realistic pg_dump output with repeated SQL-like content.
-	unit := strings.Repeat(
-		"INSERT INTO public.trips (id, user_id, name, destination, start_date, end_date, notes, created_at, updated_at) "+
-			"VALUES (1, 42, 'Summer Vacation', 'Barcelona, Spain', '2026-07-01', '2026-07-14', "+
-			"'Flights booked, hotel confirmed. Need to arrange airport transfer and travel insurance.', "+
-			"'2026-01-15 10:30:00+00', '2026-01-15 10:30:00+00');\n",
-		100,
-	)
-	targetSize := sizeMB * 1024 * 1024
+// generateDump produces a synthetic SQL dump of approximately the requested size in bytes.
+func generateDump(targetBytes int) string {
+	base := `-- PostgreSQL database dump
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+CREATE TABLE public.bench_table (
+    id bigint NOT NULL,
+    payload text,
+    created_at timestamp with time zone DEFAULT now()
+);
+`
 	var sb strings.Builder
-	for sb.Len() < targetSize {
-		sb.WriteString(unit)
+	sb.WriteString(base)
+
+	row := `INSERT INTO public.bench_table (id, payload, created_at) VALUES (%d, 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.', '2024-01-01 00:00:00+00');
+`
+	i := 1
+	for sb.Len() < targetBytes {
+		// Write a simple numbered row (approximate; format verb not applied for speed).
+		sb.WriteString(row)
+		i++
+		_ = i
 	}
-	return []byte(sb.String())[:targetSize]
+
+	return sb.String()
 }
 
-func benchmarkCompressor(b *testing.B, c compress.Compressor, data []byte) {
+// dumpSizes defines synthetic dump sizes for benchmarks.
+var dumpSizes = []struct {
+	name  string
+	bytes int
+}{
+	{"1MB", 1 << 20},
+	{"10MB", 10 << 20},
+	{"50MB", 50 << 20},
+}
+
+func benchmarkCompressor(b *testing.B, c compress.Compressor, data string) {
 	b.Helper()
 	b.SetBytes(int64(len(data)))
+	b.ReportAllocs()
+
+	src := []byte(data)
 	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
-		if err := c.Compress(bytes.NewReader(data), io.Discard); err != nil {
-			b.Fatalf("Compress: %v", err)
+		var dst bytes.Buffer
+		dst.Grow(len(src) / 2)
+
+		if err := c.Compress(bytes.NewReader(src), &dst); err != nil {
+			b.Fatalf("Compress failed: %v", err)
+		}
+
+		// Prevent the compiler from optimising away the write.
+		if dst.Len() == 0 {
+			b.Fatal("empty output")
 		}
 	}
 }
 
-// ── 1 MB benchmarks ─────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Gzip benchmarks
+// ---------------------------------------------------------------------------
 
 func BenchmarkGzip_BestSpeed_1MB(b *testing.B) {
-	data := generateDumpData(1)
-	c, _ := compress.NewGzipCompressor(gzip.BestSpeed)
-	benchmarkCompressor(b, c, data)
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.BestSpeed}, data)
 }
 
-func BenchmarkGzip_DefaultCompression_1MB(b *testing.B) {
-	data := generateDumpData(1)
-	c, _ := compress.NewGzipCompressor(gzip.DefaultCompression)
-	benchmarkCompressor(b, c, data)
+func BenchmarkGzip_Default_1MB(b *testing.B) {
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.DefaultCompression}, data)
 }
 
 func BenchmarkGzip_BestCompression_1MB(b *testing.B) {
-	data := generateDumpData(1)
-	c, _ := compress.NewGzipCompressor(gzip.BestCompression)
-	benchmarkCompressor(b, c, data)
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.BestCompression}, data)
 }
-
-func BenchmarkZstd_Fastest_1MB(b *testing.B) {
-	data := generateDumpData(1)
-	c, _ := compress.NewZstdCompressor(1)
-	benchmarkCompressor(b, c, data)
-}
-
-func BenchmarkZstd_Default_1MB(b *testing.B) {
-	data := generateDumpData(1)
-	c, _ := compress.NewZstdCompressor(2)
-	benchmarkCompressor(b, c, data)
-}
-
-func BenchmarkZstd_Better_1MB(b *testing.B) {
-	data := generateDumpData(1)
-	c, _ := compress.NewZstdCompressor(3)
-	benchmarkCompressor(b, c, data)
-}
-
-func BenchmarkZstd_Best_1MB(b *testing.B) {
-	data := generateDumpData(1)
-	c, _ := compress.NewZstdCompressor(4)
-	benchmarkCompressor(b, c, data)
-}
-
-// ── 10 MB benchmarks ────────────────────────────────────────────────────────
 
 func BenchmarkGzip_BestSpeed_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c, _ := compress.NewGzipCompressor(gzip.BestSpeed)
-	benchmarkCompressor(b, c, data)
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.BestSpeed}, data)
 }
 
-func BenchmarkGzip_DefaultCompression_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c, _ := compress.NewGzipCompressor(gzip.DefaultCompression)
-	benchmarkCompressor(b, c, data)
+func BenchmarkGzip_Default_10MB(b *testing.B) {
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.DefaultCompression}, data)
 }
 
 func BenchmarkGzip_BestCompression_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c, _ := compress.NewGzipCompressor(gzip.BestCompression)
-	benchmarkCompressor(b, c, data)
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.BestCompression}, data)
 }
 
-func BenchmarkZstd_Fastest_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c, _ := compress.NewZstdCompressor(1)
-	benchmarkCompressor(b, c, data)
+func BenchmarkGzip_BestSpeed_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.BestSpeed}, data)
 }
 
-func BenchmarkZstd_Default_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c, _ := compress.NewZstdCompressor(2)
-	benchmarkCompressor(b, c, data)
+func BenchmarkGzip_Default_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.DefaultCompression}, data)
 }
 
-func BenchmarkZstd_Better_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c, _ := compress.NewZstdCompressor(3)
-	benchmarkCompressor(b, c, data)
+func BenchmarkGzip_BestCompression_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	benchmarkCompressor(b, &compress.GzipCompressor{Level: gzip.BestCompression}, data)
 }
 
-func BenchmarkZstd_Best_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c, _ := compress.NewZstdCompressor(4)
-	benchmarkCompressor(b, c, data)
+// ---------------------------------------------------------------------------
+// Zstd benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkZstd_Level1_1MB(b *testing.B) {
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 1}, data)
 }
 
-// ── Noop baseline ────────────────────────────────────────────────────────────
+func BenchmarkZstd_Level3_1MB(b *testing.B) {
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 3}, data)
+}
 
-func BenchmarkNoop_10MB(b *testing.B) {
-	data := generateDumpData(10)
-	c := &compress.NoopCompressor{}
-	benchmarkCompressor(b, c, data)
+func BenchmarkZstd_Level7_1MB(b *testing.B) {
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 7}, data)
+}
+
+func BenchmarkZstd_Level10_1MB(b *testing.B) {
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 10}, data)
+}
+
+func BenchmarkZstd_Level1_10MB(b *testing.B) {
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 1}, data)
+}
+
+func BenchmarkZstd_Level3_10MB(b *testing.B) {
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 3}, data)
+}
+
+func BenchmarkZstd_Level7_10MB(b *testing.B) {
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 7}, data)
+}
+
+func BenchmarkZstd_Level10_10MB(b *testing.B) {
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 10}, data)
+}
+
+func BenchmarkZstd_Level1_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 1}, data)
+}
+
+func BenchmarkZstd_Level3_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 3}, data)
+}
+
+func BenchmarkZstd_Level7_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 7}, data)
+}
+
+func BenchmarkZstd_Level10_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	benchmarkCompressor(b, &compress.ZstdCompressor{Level: 10}, data)
+}
+
+// ---------------------------------------------------------------------------
+// None (baseline) benchmarks
+// ---------------------------------------------------------------------------
+
+func BenchmarkNone_1MB(b *testing.B) {
+	data := generateDump(dumpSizes[0].bytes)
+	benchmarkCompressor(b, &compress.NoneCompressor{}, data)
+}
+
+func BenchmarkNone_10MB(b *testing.B) {
+	data := generateDump(dumpSizes[1].bytes)
+	benchmarkCompressor(b, &compress.NoneCompressor{}, data)
+}
+
+func BenchmarkNone_50MB(b *testing.B) {
+	data := generateDump(dumpSizes[2].bytes)
+	c := &compress.NoneCompressor{}
+	b.SetBytes(int64(len(data)))
+	b.ReportAllocs()
+	src := []byte(data)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var dst bytes.Buffer
+		dst.Grow(len(src))
+		if _, err := io.Copy(&dst, bytes.NewReader(src)); err != nil {
+			b.Fatal(err)
+		}
+		_ = c
+	}
 }
