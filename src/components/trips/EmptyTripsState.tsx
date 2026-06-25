@@ -1,33 +1,20 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
 interface EmptyTripsStateProps {
-  onCreatePress?: () => void;
+  onCreateTrip?: () => void;
 }
 
-export function EmptyTripsState({ onCreatePress: _onCreatePress }: EmptyTripsStateProps) {
+export function EmptyTripsState({ onCreateTrip }: EmptyTripsStateProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.illustration}>✈️</Text>
       <Text style={styles.title}>No trips yet</Text>
       <Text style={styles.subtitle}>
-        Start planning your next adventure!{'\n'}
-        Tap the <Text style={styles.plusText}>+</Text> button below to create your first trip.
+        Tap the{' '}
+        <Text style={styles.highlight}>+</Text>
+        {' '}button below to plan your first adventure and start splitting expenses with friends.
       </Text>
-      <View style={styles.featureList}>
-        <FeatureItem emoji="💰" text="Track shared expenses" />
-        <FeatureItem emoji="👥" text="Manage group participants" />
-        <FeatureItem emoji="🧾" text="Split costs fairly" />
-      </View>
-    </View>
-  );
-}
-
-function FeatureItem({ emoji, text }: { emoji: string; text: string }) {
-  return (
-    <View style={styles.featureItem}>
-      <Text style={styles.featureEmoji}>{emoji}</Text>
-      <Text style={styles.featureText}>{text}</Text>
     </View>
   );
 }
@@ -35,54 +22,30 @@ function FeatureItem({ emoji, text }: { emoji: string; text: string }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 40,
     paddingBottom: 80,
-  },
+  } as ViewStyle,
   illustration: {
-    fontSize: 80,
-    marginBottom: 16,
-  },
+    fontSize: 72,
+    marginBottom: 24,
+  } as TextStyle,
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 12,
     textAlign: 'center',
-  },
+  } as TextStyle,
   subtitle: {
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 32,
-  },
-  plusText: {
+  } as TextStyle,
+  highlight: {
+    color: '#6366F1',
     fontWeight: '700',
-    color: '#4F46E5',
-    fontSize: 18,
-  },
-  featureList: {
-    gap: 12,
-    alignSelf: 'stretch',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 20,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  featureEmoji: {
-    fontSize: 22,
-    width: 30,
-    textAlign: 'center',
-  },
-  featureText: {
-    fontSize: 15,
-    color: '#374151',
-    fontWeight: '500',
-  },
+  } as TextStyle,
 });

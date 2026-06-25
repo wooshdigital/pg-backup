@@ -3,36 +3,29 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UseAsyncStorageResult<T> {
   value: T | null;
-  isLoading: boolean;
+  loading: boolean;
   error: Error | null;
   setValue: (newValue: T) => Promise<void>;
   removeValue: () => Promise<void>;
 }
 
-/**
- * Generic hook for reading/writing JSON values to AsyncStorage.
- */
 export function useAsyncStorage<T>(key: string): UseAsyncStorageResult<T> {
-  const [value, setValueState] = useState<T | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [value, setValue_] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Load initial value
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
     AsyncStorage.getItem(key)
       .then((json) => {
         if (cancelled) return;
-        if (json !== null) {
-          setValueState(JSON.parse(json) as T);
-        }
-        setIsLoading(false);
+        setValue_(json !== null ? (JSON.parse(json) as T) : null);
       })
       .catch((err) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err : new Error(String(err)));
-        setIsLoading(false);
+        if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -42,13 +35,10 @@ export function useAsyncStorage<T>(key: string): UseAsyncStorageResult<T> {
   const setValue = useCallback(
     async (newValue: T) => {
       try {
-        const json = JSON.stringify(newValue);
-        await AsyncStorage.setItem(key, json);
-        setValueState(newValue);
+        await AsyncStorage.setItem(key, JSON.stringify(newValue));
+        setValue_(newValue);
       } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
-        setError(e);
-        throw e;
+        setError(err instanceof Error ? err : new Error(String(err)));
       }
     },
     [key],
@@ -57,13 +47,11 @@ export function useAsyncStorage<T>(key: string): UseAsyncStorageResult<T> {
   const removeValue = useCallback(async () => {
     try {
       await AsyncStorage.removeItem(key);
-      setValueState(null);
+      setValue_(null);
     } catch (err) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      setError(e);
-      throw e;
+      setError(err instanceof Error ? err : new Error(String(err)));
     }
   }, [key]);
 
-  return { value, isLoading, error, setValue, removeValue };
+  return { value, loading, error, setValue, removeValue };
 }

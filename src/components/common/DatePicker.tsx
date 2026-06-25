@@ -3,120 +3,87 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   Platform,
+  StyleSheet,
   Modal,
+  ViewStyle,
 } from 'react-native';
-import RNDateTimePicker, {
-  DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 interface DatePickerProps {
   label: string;
   value: Date;
+  onChange: (date: Date) => void;
   minimumDate?: Date;
   maximumDate?: Date;
-  onChange: (date: Date) => void;
 }
 
-export function DatePicker({
-  label,
-  value,
-  minimumDate,
-  maximumDate,
-  onChange,
-}: DatePickerProps) {
+export function DatePicker({ label, value, onChange, minimumDate, maximumDate }: DatePickerProps) {
   const [show, setShow] = useState(false);
-  const [tempDate, setTempDate] = useState(value);
 
-  const formatted = value.toLocaleDateString('en-US', {
+  const handleChange = (_: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShow(false);
+    }
+    if (selectedDate) {
+      onChange(selectedDate);
+    }
+  };
+
+  const formattedDate = value.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 
-  const handleChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShow(false);
-      if (selectedDate) {
-        onChange(selectedDate);
-      }
-    } else {
-      if (selectedDate) {
-        setTempDate(selectedDate);
-      }
-    }
-  };
-
-  const handleIOSConfirm = () => {
-    setShow(false);
-    onChange(tempDate);
-  };
-
-  const handleIOSCancel = () => {
-    setShow(false);
-    setTempDate(value);
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => {
-          setTempDate(value);
-          setShow(true);
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${formatted}`}
-      >
-        <Text style={styles.dateText}>{formatted}</Text>
-        <Text style={styles.calendarIcon}>📅</Text>
-      </TouchableOpacity>
-
-      {/* Android: inline picker */}
-      {Platform.OS === 'android' && show && (
-        <RNDateTimePicker
-          value={value}
-          mode="date"
-          display="default"
-          minimumDate={minimumDate}
-          maximumDate={maximumDate}
-          onChange={handleChange}
-        />
-      )}
-
-      {/* iOS: modal with picker */}
-      {Platform.OS === 'ios' && (
-        <Modal
-          visible={show}
-          transparent
-          animationType="slide"
-          onRequestClose={handleIOSCancel}
-        >
+  if (Platform.OS === 'ios') {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.label}>{label}</Text>
+        <TouchableOpacity style={styles.button} onPress={() => setShow(true)}>
+          <Text style={styles.buttonText}>{formattedDate}</Text>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+        <Modal visible={show} transparent animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={handleIOSCancel}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
                 <Text style={styles.modalTitle}>{label}</Text>
-                <TouchableOpacity onPress={handleIOSConfirm}>
-                  <Text style={styles.confirmText}>Done</Text>
+                <TouchableOpacity onPress={() => setShow(false)}>
+                  <Text style={styles.doneButton}>Done</Text>
                 </TouchableOpacity>
               </View>
-              <RNDateTimePicker
-                value={tempDate}
+              <DateTimePicker
+                value={value}
                 mode="date"
                 display="spinner"
+                onChange={handleChange}
                 minimumDate={minimumDate}
                 maximumDate={maximumDate}
-                onChange={handleChange}
-                style={styles.iosPicker}
               />
             </View>
           </View>
         </Modal>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity style={styles.button} onPress={() => setShow(true)}>
+        <Text style={styles.buttonText}>{formattedDate}</Text>
+        <Text style={styles.chevron}>›</Text>
+      </TouchableOpacity>
+      {show && (
+        <DateTimePicker
+          value={value}
+          mode="date"
+          display="default"
+          onChange={handleChange}
+          minimumDate={minimumDate}
+          maximumDate={maximumDate}
+        />
       )}
     </View>
   );
@@ -125,66 +92,63 @@ export function DatePicker({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
-  },
+  } as ViewStyle,
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#374151',
+    color: '#6B7280',
     marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  dateText: {
+  } as ViewStyle,
+  buttonText: {
     fontSize: 16,
     color: '#111827',
   },
-  calendarIcon: {
-    fontSize: 18,
+  chevron: {
+    fontSize: 20,
+    color: '#9CA3AF',
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.4)',
-  },
+  } as ViewStyle,
   modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 34,
-  },
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
+  } as ViewStyle,
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
+    borderBottomColor: '#F3F4F6',
+  } as ViewStyle,
   modalTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#111827',
   },
-  cancelText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  confirmText: {
-    fontSize: 16,
-    color: '#4F46E5',
+  doneButton: {
+    fontSize: 17,
     fontWeight: '600',
-  },
-  iosPicker: {
-    height: 200,
+    color: '#6366F1',
   },
 });

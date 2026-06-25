@@ -1,34 +1,26 @@
 import React, { useCallback } from 'react';
 import {
   View,
+  Text,
   FlatList,
   StyleSheet,
-  ActivityIndicator,
-  Text,
   SafeAreaView,
-  StatusBar,
+  ActivityIndicator,
+  ViewStyle,
+  TextStyle,
+  ListRenderItem,
 } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTrips } from '../hooks/useTrips';
+import { Trip } from '../types';
 import { TripCard } from '../components/trips/TripCard';
 import { EmptyTripsState } from '../components/trips/EmptyTripsState';
 import { FAB } from '../components/common/FAB';
-import { Trip } from '../types';
 
-// You may want to use your actual navigation types here
-type RootStackParamList = {
-  TripsList: undefined;
-  CreateTrip: undefined;
-  TripDetail: { tripId: string };
-};
-
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'TripsList'>;
-};
-
-export function TripsListScreen({ navigation }: Props) {
-  const { trips, isLoaded, deleteTrip } = useTrips();
+export function TripsListScreen() {
+  const navigation = useNavigation<any>();
+  const { trips, loaded, deleteTrip } = useTrips();
 
   const handleTripPress = useCallback(
     (trip: Trip) => {
@@ -37,66 +29,48 @@ export function TripsListScreen({ navigation }: Props) {
     [navigation],
   );
 
-  const handleDelete = useCallback(
-    (id: string) => {
-      deleteTrip(id);
-    },
-    [deleteTrip],
-  );
-
-  const handleCreatePress = useCallback(() => {
+  const handleCreateTrip = useCallback(() => {
     navigation.navigate('CreateTrip');
   }, [navigation]);
 
-  const renderItem = useCallback(
-    ({ item }: { item: Trip }) => (
-      <TripCard
-        trip={item}
-        onPress={() => handleTripPress(item)}
-        onDelete={() => handleDelete(item.id)}
-      />
+  const renderItem: ListRenderItem<Trip> = useCallback(
+    ({ item }) => (
+      <TripCard trip={item} onPress={handleTripPress} onDelete={deleteTrip} />
     ),
-    [handleTripPress, handleDelete],
+    [handleTripPress, deleteTrip],
   );
 
   const keyExtractor = useCallback((item: Trip) => item.id, []);
 
-  if (!isLoaded) {
+  if (!loaded) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4F46E5" />
-        <Text style={styles.loadingText}>Loading trips…</Text>
-      </View>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6366F1" />
+      </SafeAreaView>
     );
   }
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaView style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F9FAFB" />
+      <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Trips</Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={styles.title}>My Trips</Text>
+          <Text style={styles.count}>
             {trips.length} {trips.length === 1 ? 'trip' : 'trips'}
           </Text>
         </View>
 
         <FlatList
           data={trips}
-          renderItem={renderItem}
           keyExtractor={keyExtractor}
-          contentContainerStyle={[
-            styles.listContent,
-            trips.length === 0 && styles.listContentEmpty,
-          ]}
-          ListEmptyComponent={
-            <EmptyTripsState onCreatePress={handleCreatePress} />
-          }
+          renderItem={renderItem}
+          contentContainerStyle={trips.length === 0 ? styles.emptyContent : styles.listContent}
+          ListEmptyComponent={<EmptyTripsState onCreateTrip={handleCreateTrip} />}
           showsVerticalScrollIndicator={false}
         />
 
         <FAB
-          onPress={handleCreatePress}
+          onPress={handleCreateTrip}
           icon="+"
           accessibilityLabel="Create new trip"
         />
@@ -108,42 +82,40 @@ export function TripsListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  } as ViewStyle,
+  container: {
+    flex: 1,
     backgroundColor: '#F9FAFB',
-  },
+  } as ViewStyle,
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
     backgroundColor: '#F9FAFB',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
+  } as ViewStyle,
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  headerTitle: {
+    paddingBottom: 8,
+  } as ViewStyle,
+  title: {
     fontSize: 28,
     fontWeight: '800',
     color: '#111827',
-  },
-  headerSubtitle: {
+  } as TextStyle,
+  count: {
     fontSize: 14,
-    color: '#6B7280',
-    marginTop: 2,
-  },
+    color: '#9CA3AF',
+    fontWeight: '500',
+  } as TextStyle,
   listContent: {
-    paddingTop: 8,
-    paddingBottom: 96,
-  },
-  listContentEmpty: {
-    flex: 1,
-  },
+    paddingTop: 4,
+    paddingBottom: 100,
+  } as ViewStyle,
+  emptyContent: {
+    flexGrow: 1,
+  } as ViewStyle,
 });

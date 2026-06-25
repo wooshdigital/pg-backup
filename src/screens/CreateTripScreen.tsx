@@ -4,125 +4,94 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   ScrollView,
-  Alert,
+  StyleSheet,
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ViewStyle,
+  TextStyle,
   ActivityIndicator,
 } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import { useTrips } from '../hooks/useTrips';
-import { DatePicker } from '../components/common/DatePicker';
 import { CurrencyPicker } from '../components/trips/CurrencyPicker';
+import { DatePicker } from '../components/common/DatePicker';
+import { DEFAULT_CURRENCY } from '../constants/currencies';
 
-type RootStackParamList = {
-  TripsList: undefined;
-  CreateTrip: undefined;
-  TripDetail: { tripId: string };
-};
-
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'CreateTrip'>;
-};
-
-function toDateOnly(date: Date): string {
-  // Return YYYY-MM-DD without timezone offset issues
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-export function CreateTripScreen({ navigation }: Props) {
+export function CreateTripScreen() {
+  const navigation = useNavigation<any>();
   const { createTrip } = useTrips();
 
-  const today = new Date();
-  const nextWeek = new Date(today);
-  nextWeek.setDate(today.getDate() + 7);
-
   const [name, setName] = useState('');
-  const [currency, setCurrency] = useState('USD');
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(nextWeek);
-  const [isSaving, setIsSaving] = useState(false);
+  const [currency, setCurrency] = useState(DEFAULT_CURRENCY.code);
+  const [startDate, setStartDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d;
+  });
+  const [saving, setSaving] = useState(false);
   const [nameError, setNameError] = useState('');
-
-  const validateName = (value: string): boolean => {
-    if (!value.trim()) {
-      setNameError('Trip name is required');
-      return false;
-    }
-    if (value.trim().length < 2) {
-      setNameError('Trip name must be at least 2 characters');
-      return false;
-    }
-    setNameError('');
-    return true;
-  };
 
   const handleStartDateChange = useCallback((date: Date) => {
     setStartDate(date);
-    // Ensure end date is never before start date
     if (date > endDate) {
       const newEnd = new Date(date);
-      newEnd.setDate(date.getDate() + 1);
+      newEnd.setDate(newEnd.getDate() + 1);
       setEndDate(newEnd);
     }
   }, [endDate]);
 
-  const handleSave = async () => {
-    if (!validateName(name)) return;
-
+  const handleSave = useCallback(async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setNameError('Trip name is required.');
+      return;
+    }
     if (endDate < startDate) {
-      Alert.alert('Invalid dates', 'End date must be on or after start date.');
+      Alert.alert('Invalid Dates', 'End date must be on or after start date.');
       return;
     }
 
-    setIsSaving(true);
+    setSaving(true);
     try {
       createTrip({
-        name: name.trim(),
+        name: trimmedName,
         currency,
-        startDate: toDateOnly(startDate),
-        endDate: toDateOnly(endDate),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
       });
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', 'Failed to save the trip. Please try again.');
-      console.error('[CreateTripScreen] Failed to create trip:', error);
+      Alert.alert('Error', 'Failed to create trip. Please try again.');
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
-  };
+  }, [name, currency, startDate, endDate, createTrip, navigation]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.cancelButton}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.cancelButton}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>New Trip</Text>
           <TouchableOpacity
             onPress={handleSave}
-            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-            disabled={isSaving}
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Save trip"
           >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
             ) : (
               <Text style={styles.saveText}>Save</Text>
             )}
@@ -135,93 +104,66 @@ export function CreateTripScreen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Trip Name */}
+          {/* Trip name */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Trip Details</Text>
-
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Trip Name *</Text>
-              <TextInput
-                style={[styles.textInput, nameError ? styles.textInputError : null]}
-                placeholder="e.g. Summer Europe Trip"
-                placeholderTextColor="#9CA3AF"
-                value={name}
-                onChangeText={(text) => {
-                  setName(text);
-                  if (nameError) validateName(text);
-                }}
-                onBlur={() => validateName(name)}
-                maxLength={100}
-                returnKeyType="done"
-                autoCorrect={false}
-              />
-              {nameError ? (
-                <Text style={styles.errorText}>{nameError}</Text>
-              ) : null}
-              <Text style={styles.charCount}>{name.length}/100</Text>
-            </View>
-
-            {/* Currency Picker */}
-            <CurrencyPicker
-              label="Currency"
-              value={currency}
-              onChange={setCurrency}
+            <Text style={styles.sectionLabel}>TRIP NAME</Text>
+            <TextInput
+              style={[styles.textInput, nameError ? styles.textInputError : undefined]}
+              placeholder="e.g. Summer in Europe"
+              placeholderTextColor="#9CA3AF"
+              value={name}
+              onChangeText={(v) => {
+                setName(v);
+                if (v.trim()) setNameError('');
+              }}
+              maxLength={60}
+              returnKeyType="done"
+              autoFocus
             />
+            {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+          </View>
+
+          {/* Currency */}
+          <View style={styles.section}>
+            <CurrencyPicker value={currency} onChange={setCurrency} />
           </View>
 
           {/* Dates */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Dates</Text>
-
+            <Text style={styles.sectionLabel}>DATES</Text>
             <DatePicker
               label="Start Date"
               value={startDate}
-              maximumDate={endDate}
               onChange={handleStartDateChange}
             />
-
             <DatePicker
               label="End Date"
               value={endDate}
-              minimumDate={startDate}
               onChange={setEndDate}
+              minimumDate={startDate}
             />
           </View>
 
-          {/* Summary Card */}
-          {name.trim().length > 0 && (
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Preview</Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Trip:</Text>
-                <Text style={styles.summaryValue}>{name.trim()}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Currency:</Text>
-                <Text style={styles.summaryValue}>{currency}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>From:</Text>
-                <Text style={styles.summaryValue}>
-                  {startDate.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>To:</Text>
-                <Text style={styles.summaryValue}>
-                  {endDate.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-              </View>
-            </View>
-          )}
+          {/* Summary card */}
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>📋 Summary</Text>
+            <Text style={styles.summaryText}>
+              <Text style={styles.summaryLabel}>Trip: </Text>
+              {name.trim() || '—'}
+            </Text>
+            <Text style={styles.summaryText}>
+              <Text style={styles.summaryLabel}>Currency: </Text>
+              {currency}
+            </Text>
+            <Text style={styles.summaryText}>
+              <Text style={styles.summaryLabel}>From: </Text>
+              {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </Text>
+            <Text style={styles.summaryText}>
+              <Text style={styles.summaryLabel}>To: </Text>
+              {endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </Text>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -229,148 +171,109 @@ export function CreateTripScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-  },
+  } as ViewStyle,
   flex: {
     flex: 1,
-  },
+  } as ViewStyle,
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
+    borderBottomColor: '#F3F4F6',
+  } as ViewStyle,
   headerTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#111827',
-  },
+  } as TextStyle,
   cancelButton: {
-    paddingVertical: 4,
+    paddingVertical: 6,
     paddingHorizontal: 4,
-  },
+    minWidth: 60,
+  } as ViewStyle,
   cancelText: {
     fontSize: 16,
     color: '#6B7280',
-  },
+  } as TextStyle,
   saveButton: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#6366F1',
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingHorizontal: 18,
+    borderRadius: 20,
     minWidth: 60,
     alignItems: 'center',
-  },
+  } as ViewStyle,
   saveButtonDisabled: {
-    backgroundColor: '#A5B4FC',
-  },
+    opacity: 0.6,
+  } as ViewStyle,
   saveText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  } as TextStyle,
   scroll: {
     flex: 1,
-  },
+  } as ViewStyle,
   scrollContent: {
-    padding: 16,
+    padding: 20,
     paddingBottom: 40,
-  },
+  } as ViewStyle,
   section: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  sectionTitle: {
+    marginBottom: 24,
+  } as ViewStyle,
+  sectionLabel: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 14,
-  },
-  fieldContainer: {
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 6,
-  },
+    color: '#6B7280',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  } as TextStyle,
   textInput: {
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
     color: '#111827',
-    backgroundColor: '#FFFFFF',
-  },
+  } as TextStyle,
   textInputError: {
     borderColor: '#EF4444',
-  },
+  } as ViewStyle,
   errorText: {
-    fontSize: 12,
     color: '#EF4444',
+    fontSize: 13,
     marginTop: 4,
-  },
-  charCount: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    textAlign: 'right',
-    marginTop: 4,
-  },
+  } as TextStyle,
   summaryCard: {
     backgroundColor: '#EEF2FF',
     borderRadius: 12,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
-  },
+    borderLeftWidth: 4,
+    borderLeftColor: '#6366F1',
+  } as ViewStyle,
   summaryTitle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#4F46E5',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    color: '#4338CA',
     marginBottom: 10,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
+  } as TextStyle,
+  summaryText: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 4,
+  } as TextStyle,
   summaryLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 14,
-    color: '#111827',
     fontWeight: '600',
-    flex: 1,
-    textAlign: 'right',
-  },
+    color: '#111827',
+  } as TextStyle,
 });

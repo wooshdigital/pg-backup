@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { useTripContext } from '../context/TripContext';
 import { Trip } from '../types';
@@ -12,24 +13,19 @@ interface CreateTripInput {
 
 interface UseTripsResult {
   trips: Trip[];
-  isLoaded: boolean;
+  loaded: boolean;
   createTrip: (input: CreateTripInput) => Trip;
   deleteTrip: (id: string) => void;
-  getTripById: (id: string) => Trip | undefined;
 }
 
-/**
- * Convenience hook that returns the trips array and action creators.
- * All state lives in TripContext (backed by AsyncStorage).
- */
 export function useTrips(): UseTripsResult {
-  const { trips, isLoaded, addTrip, deleteTrip } = useTripContext();
+  const { trips, loaded, addTrip, deleteTrip } = useTripContext();
 
   const createTrip = useCallback(
     (input: CreateTripInput): Trip => {
       const trip: Trip = {
         id: uuidv4(),
-        name: input.name.trim(),
+        name: input.name,
         currency: input.currency,
         startDate: input.startDate,
         endDate: input.endDate,
@@ -43,16 +39,5 @@ export function useTrips(): UseTripsResult {
     [addTrip],
   );
 
-  const getTripById = useCallback(
-    (id: string): Trip | undefined => trips.find((t) => t.id === id),
-    [trips],
-  );
-
-  return {
-    trips,
-    isLoaded,
-    createTrip,
-    deleteTrip,
-    getTripById,
-  };
+  return { trips, loaded, createTrip, deleteTrip };
 }

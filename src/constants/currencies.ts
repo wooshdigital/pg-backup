@@ -1,9 +1,4 @@
-export interface Currency {
-  code: string;
-  symbol: string;
-  name: string;
-  flag: string;
-}
+import { Currency } from '../types';
 
 export const CURRENCIES: Currency[] = [
   { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
@@ -31,5 +26,4 @@ export const CURRENCIES: Currency[] = [
 export const getCurrencyByCode = (code: string): Currency | undefined =>
   CURRENCIES.find((c) => c.code === code);
 
-export const getCurrencySymbol = (code: string): string =>
-  getCurrencyByCode(code)?.symbol ?? code;
+export const DEFAULT_CURRENCY = CURRENCIES[0];
