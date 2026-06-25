@@ -1,40 +1,32 @@
 .label {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-1, 0.25rem);
-  font-size: var(--font-size-sm, 0.875rem);
-  font-weight: var(--font-weight-medium, 500);
-  line-height: var(--line-height-tight, 1.25);
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
   color: var(--color-label, #111827);
   cursor: pointer;
   user-select: none;
 }
 
-.labelText {
-  flex: 1 1 auto;
-}
-
-.required {
-  color: var(--color-error, #ef4444);
-  font-size: var(--font-size-sm, 0.875rem);
-  font-weight: var(--font-weight-bold, 700);
-  line-height: 1;
-  margin-left: var(--spacing-0-5, 0.125rem);
-}
-
-.disabled {
+.label.disabled {
   color: var(--color-label-disabled, #9ca3af);
   cursor: not-allowed;
 }
 
-.tooltip {
-  display: inline-flex;
-  align-items: center;
-  margin-left: var(--spacing-1, 0.25rem);
-  color: var(--color-icon-muted, #6b7280);
-  cursor: help;
+.labelText {
+  /* allow natural inline flow */
 }
 
-.tooltip:hover {
-  color: var(--color-icon, #374151);
+.required {
+  color: var(--color-required, #dc2626);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tooltipTrigger {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
 }

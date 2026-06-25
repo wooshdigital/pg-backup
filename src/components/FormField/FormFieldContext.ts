@@ -6,8 +6,8 @@ export interface FormFieldContextValue {
   helperId: string;
   errorId: string;
   hasError: boolean;
-  disabled?: boolean;
-  required?: boolean;
+  disabled: boolean;
+  required: boolean;
 }
 
 export const FormFieldContext = createContext<FormFieldContextValue | null>(null);

@@ -3,11 +3,8 @@ import { useFormField } from '../FormField/useFormField';
 import styles from './HelperText.module.css';
 
 export interface HelperTextProps {
-  /** Helper text content */
   children: React.ReactNode;
-  /** Additional CSS class names */
   className?: string;
-  /** Inline styles */
   style?: React.CSSProperties;
 }
 
@@ -18,19 +15,21 @@ export const HelperText: React.FC<HelperTextProps> = ({
 }) => {
   const { helperId, hasError } = useFormField();
 
-  const classes = [styles.helperText, className].filter(Boolean).join(' ');
+  // Hide helper text when an error message is displayed to avoid redundant descriptions
+  if (hasError) {
+    return null;
+  }
 
   return (
     <span
       id={helperId}
       role="note"
-      className={classes}
+      className={[styles.helperText, className].filter(Boolean).join(' ')}
       style={style}
-      aria-hidden={hasError ? 'true' : undefined}
     >
       {children}
     </span>
   );
 };
 
-HelperText.displayName = 'HelperText';
+export default HelperText;

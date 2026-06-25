@@ -2,36 +2,32 @@ import React, { useMemo } from 'react';
 import { FormFieldContext, FormFieldContextValue } from './FormFieldContext';
 import styles from './FormField.module.css';
 
-export interface FormFieldProps {
-  /** Base ID used to namespace all child IDs */
-  id?: string;
-  /** Whether the field is in an error state */
-  hasError?: boolean;
-  /** Whether the field is required */
-  required?: boolean;
-  /** Whether the field is disabled */
-  disabled?: boolean;
-  /** Additional CSS class names */
-  className?: string;
-  /** Inline styles */
-  style?: React.CSSProperties;
-  children: React.ReactNode;
+let idCounter = 0;
+function generateId(prefix: string): string {
+  return `${prefix}-${++idCounter}`;
 }
 
-let autoIdCounter = 0;
+export interface FormFieldProps {
+  /** Override the auto-generated base ID */
+  id?: string;
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+  hasError?: boolean;
+  disabled?: boolean;
+  required?: boolean;
+}
 
 export const FormField: React.FC<FormFieldProps> = ({
   id,
-  hasError = false,
-  required = false,
-  disabled = false,
+  children,
   className,
   style,
-  children,
+  hasError = false,
+  disabled = false,
+  required = false,
 }) => {
-  const baseId = useMemo(() => {
-    return id ?? `form-field-${++autoIdCounter}`;
-  }, [id]);
+  const baseId = useMemo(() => id ?? generateId('field'), [id]);
 
   const contextValue = useMemo<FormFieldContextValue>(
     () => ({
@@ -46,15 +42,18 @@ export const FormField: React.FC<FormFieldProps> = ({
     [baseId, hasError, disabled, required]
   );
 
-  const classes = [styles.formField, className].filter(Boolean).join(' ');
-
   return (
     <FormFieldContext.Provider value={contextValue}>
-      <div className={classes} style={style} data-disabled={disabled || undefined} data-error={hasError || undefined}>
+      <div
+        className={[styles.formField, className].filter(Boolean).join(' ')}
+        style={style}
+        data-disabled={disabled || undefined}
+        data-error={hasError || undefined}
+      >
         {children}
       </div>
     </FormFieldContext.Provider>
   );
 };
 
-FormField.displayName = 'FormField';
+export default FormField;

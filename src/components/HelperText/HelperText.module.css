@@ -1,11 +1,7 @@
 .helperText {
   display: block;
-  font-size: var(--font-size-xs, 0.75rem);
-  line-height: var(--line-height-normal, 1.5);
-  color: var(--color-text-muted, #6b7280);
-  margin-top: var(--spacing-0-5, 0.125rem);
-}
-
-.helperText[aria-hidden='true'] {
-  display: none;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-helper-text, #6b7280);
+  margin-top: 0.125rem;
 }

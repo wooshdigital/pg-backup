@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { FormField } from './FormField';
 import { Label } from '../Label/Label';
@@ -10,120 +10,162 @@ const meta: Meta<typeof FormField> = {
   component: FormField,
   tags: ['autodocs'],
   parameters: {
-    layout: 'centered',
+    layout: 'padded',
   },
 };
 
 export default meta;
 type Story = StoryObj<typeof FormField>;
 
-const InputField: React.FC<{ id: string; type?: string; disabled?: boolean }> = ({
-  id,
-  type = 'text',
-  disabled,
-}) => (
-  <input
-    id={id}
-    type={type}
-    disabled={disabled}
-    style={{
-      width: '100%',
-      padding: '0.5rem 0.75rem',
-      border: '1px solid #d1d5db',
-      borderRadius: '0.375rem',
-      fontSize: '0.875rem',
-      outline: 'none',
-    }}
-  />
-);
+// ---------------------------------------------------------------------------
+// Shared input style
+// ---------------------------------------------------------------------------
+const inputStyle: React.CSSProperties = {
+  padding: '0.5rem 0.75rem',
+  borderRadius: '0.375rem',
+  border: '1px solid #d1d5db',
+  fontSize: '0.875rem',
+  width: '100%',
+  boxSizing: 'border-box',
+  outline: 'none',
+};
 
+const errorInputStyle: React.CSSProperties = {
+  ...inputStyle,
+  border: '1px solid #dc2626',
+};
+
+// ---------------------------------------------------------------------------
+// Default
+// ---------------------------------------------------------------------------
 export const Default: Story = {
   render: () => (
-    <div style={{ width: 320 }}>
-      <FormField id="default-field">
-        <Label>Email Address</Label>
-        <InputField id="default-field" type="email" />
-      </FormField>
-    </div>
+    <FormField id="story-default" style={{ maxWidth: '24rem' }}>
+      <Label>Email address</Label>
+      <input
+        id="story-default"
+        type="email"
+        placeholder="you@example.com"
+        style={inputStyle}
+        aria-labelledby="story-default-label"
+        aria-describedby="story-default-helper"
+      />
+      <HelperText>We'll never share your email with anyone.</HelperText>
+    </FormField>
   ),
 };
 
+// ---------------------------------------------------------------------------
+// WithHelper
+// ---------------------------------------------------------------------------
 export const WithHelper: Story = {
   render: () => (
-    <div style={{ width: 320 }}>
-      <FormField id="helper-field">
-        <Label>Username</Label>
-        <InputField id="helper-field" />
-        <HelperText>Must be 3–20 characters. Letters, numbers, and underscores only.</HelperText>
-      </FormField>
-    </div>
+    <FormField id="story-helper" style={{ maxWidth: '24rem' }}>
+      <Label>Username</Label>
+      <input
+        id="story-helper"
+        type="text"
+        placeholder="john_doe"
+        style={inputStyle}
+        aria-labelledby="story-helper-label"
+        aria-describedby="story-helper-helper"
+      />
+      <HelperText>
+        3–20 characters. Letters, numbers, and underscores only.
+      </HelperText>
+    </FormField>
   ),
 };
 
+// ---------------------------------------------------------------------------
+// WithError
+// ---------------------------------------------------------------------------
 export const WithError: Story = {
   render: () => (
-    <div style={{ width: 320 }}>
-      <FormField id="error-field" hasError>
-        <Label>Password</Label>
-        <InputField id="error-field" type="password" />
-        <HelperText>Must be at least 8 characters.</HelperText>
-        <ErrorMessage>Password must be at least 8 characters long.</ErrorMessage>
-      </FormField>
-    </div>
+    <FormField id="story-error" hasError style={{ maxWidth: '24rem' }}>
+      <Label>Email address</Label>
+      <input
+        id="story-error"
+        type="email"
+        defaultValue="not-an-email"
+        style={errorInputStyle}
+        aria-labelledby="story-error-label"
+        aria-describedby="story-error-error"
+        aria-invalid="true"
+      />
+      <HelperText>We'll never share your email with anyone.</HelperText>
+      <ErrorMessage>Please enter a valid email address.</ErrorMessage>
+    </FormField>
   ),
 };
 
+// ---------------------------------------------------------------------------
+// Required
+// ---------------------------------------------------------------------------
 export const Required: Story = {
   render: () => (
-    <div style={{ width: 320 }}>
-      <FormField id="required-field" required>
-        <Label>Full Name</Label>
-        <InputField id="required-field" />
-        <HelperText>Enter your first and last name.</HelperText>
-      </FormField>
-    </div>
+    <FormField id="story-required" required style={{ maxWidth: '24rem' }}>
+      <Label>Full name</Label>
+      <input
+        id="story-required"
+        type="text"
+        placeholder="Jane Doe"
+        style={inputStyle}
+        aria-labelledby="story-required-label"
+        aria-describedby="story-required-helper"
+        aria-required="true"
+      />
+      <HelperText>As it appears on your government-issued ID.</HelperText>
+    </FormField>
   ),
 };
 
+// ---------------------------------------------------------------------------
+// Disabled
+// ---------------------------------------------------------------------------
 export const Disabled: Story = {
   render: () => (
-    <div style={{ width: 320 }}>
-      <FormField id="disabled-field" disabled>
-        <Label>Account ID</Label>
-        <InputField id="disabled-field" disabled />
-        <HelperText>Your account ID cannot be changed.</HelperText>
-      </FormField>
-    </div>
+    <FormField id="story-disabled" disabled style={{ maxWidth: '24rem' }}>
+      <Label>Email address</Label>
+      <input
+        id="story-disabled"
+        type="email"
+        defaultValue="locked@example.com"
+        style={{ ...inputStyle, backgroundColor: '#f3f4f6' }}
+        aria-labelledby="story-disabled-label"
+        aria-describedby="story-disabled-helper"
+        aria-disabled="true"
+        readOnly
+      />
+      <HelperText>This field cannot be changed.</HelperText>
+    </FormField>
   ),
 };
 
-export const Interactive: Story = {
-  render: () => {
-    const [value, setValue] = useState('');
-    const hasError = value.length > 0 && value.length < 3;
-
-    return (
-      <div style={{ width: 320 }}>
-        <FormField id="interactive-field" hasError={hasError} required>
-          <Label>Display Name</Label>
-          <input
-            id="interactive-field"
-            type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            aria-invalid={hasError}
-            style={{
-              width: '100%',
-              padding: '0.5rem 0.75rem',
-              border: `1px solid ${hasError ? '#ef4444' : '#d1d5db'}`,
-              borderRadius: '0.375rem',
-              fontSize: '0.875rem',
-            }}
-          />
-          <HelperText>Must be at least 3 characters.</HelperText>
-          {hasError && <ErrorMessage>Display name is too short.</ErrorMessage>}
-        </FormField>
-      </div>
-    );
-  },
+// ---------------------------------------------------------------------------
+// RequiredWithError
+// ---------------------------------------------------------------------------
+export const RequiredWithError: Story = {
+  name: 'Required + Error',
+  render: () => (
+    <FormField
+      id="story-req-err"
+      required
+      hasError
+      style={{ maxWidth: '24rem' }}
+    >
+      <Label>Password</Label>
+      <input
+        id="story-req-err"
+        type="password"
+        style={errorInputStyle}
+        aria-labelledby="story-req-err-label"
+        aria-describedby="story-req-err-error"
+        aria-invalid="true"
+        aria-required="true"
+      />
+      <HelperText>Must be at least 8 characters.</HelperText>
+      <ErrorMessage>Password is required.</ErrorMessage>
+    </FormField>
+  ),
 };
