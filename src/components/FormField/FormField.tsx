@@ -1,64 +1,60 @@
-import React, { HTMLAttributes, ReactNode, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { FormFieldContext, FormFieldContextValue } from './FormFieldContext';
 import styles from './FormField.module.css';
 
-export interface FormFieldProps extends HTMLAttributes<HTMLDivElement> {
-  /** Base ID used to namespace all child element IDs */
+export interface FormFieldProps {
+  /** Base ID used to namespace all child IDs */
   id?: string;
-  /** Whether the field has a validation error */
+  /** Whether the field is in an error state */
   hasError?: boolean;
   /** Whether the field is required */
   required?: boolean;
   /** Whether the field is disabled */
   disabled?: boolean;
-  children: ReactNode;
+  /** Additional CSS class names */
   className?: string;
+  /** Inline styles */
   style?: React.CSSProperties;
+  children: React.ReactNode;
 }
 
-let idCounter = 0;
-function generateId(prefix: string): string {
-  return `${prefix}-${++idCounter}`;
-}
+let autoIdCounter = 0;
 
 export const FormField: React.FC<FormFieldProps> = ({
   id,
   hasError = false,
   required = false,
   disabled = false,
-  children,
   className,
   style,
-  ...rest
+  children,
 }) => {
-  const fieldId = useMemo(() => id || generateId('field'), [id]);
+  const baseId = useMemo(() => {
+    return id ?? `form-field-${++autoIdCounter}`;
+  }, [id]);
 
   const contextValue = useMemo<FormFieldContextValue>(
     () => ({
-      fieldId,
-      labelId: `${fieldId}-label`,
-      helperId: `${fieldId}-helper`,
-      errorId: `${fieldId}-error`,
+      fieldId: baseId,
+      labelId: `${baseId}-label`,
+      helperId: `${baseId}-helper`,
+      errorId: `${baseId}-error`,
       hasError,
-      required,
       disabled,
+      required,
     }),
-    [fieldId, hasError, required, disabled]
+    [baseId, hasError, disabled, required]
   );
+
+  const classes = [styles.formField, className].filter(Boolean).join(' ');
 
   return (
     <FormFieldContext.Provider value={contextValue}>
-      <div
-        className={[styles.formField, className].filter(Boolean).join(' ')}
-        style={style}
-        data-has-error={hasError || undefined}
-        data-disabled={disabled || undefined}
-        {...rest}
-      >
+      <div className={classes} style={style} data-disabled={disabled || undefined} data-error={hasError || undefined}>
         {children}
       </div>
     </FormFieldContext.Provider>
   );
 };
 
-export default FormField;
+FormField.displayName = 'FormField';

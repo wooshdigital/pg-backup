@@ -2,16 +2,10 @@
   display: block;
   font-size: var(--font-size-xs, 0.75rem);
   line-height: var(--line-height-normal, 1.5);
-  color: var(--color-muted, #6b7280);
+  color: var(--color-text-muted, #6b7280);
+  margin-top: var(--spacing-0-5, 0.125rem);
 }
 
-.hidden {
-  /* Visually hidden but still takes up space to prevent layout shift.
-     aria-hidden="true" is set on the element itself to hide from AT. */
-  visibility: hidden;
-  /* Collapse height so it doesn't leave a gap */
-  height: 0;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
+.helperText[aria-hidden='true'] {
+  display: none;
 }

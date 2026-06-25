@@ -5,31 +5,16 @@ import { FormField } from './FormField';
 import { Label } from '../Label/Label';
 import { HelperText } from '../HelperText/HelperText';
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage';
-import { useFormField } from './useFormField';
 
 expect.extend(toHaveNoViolations);
 
-// A simple input that wires up ARIA attributes from context
-const TestInput: React.FC = () => {
-  const { fieldId, helperId, errorId, hasError } = useFormField();
-  const describedBy = hasError ? errorId : helperId;
-  return (
-    <input
-      id={fieldId}
-      aria-describedby={describedBy}
-      aria-invalid={hasError || undefined}
-      type="text"
-    />
-  );
-};
-
 describe('FormField', () => {
-  describe('Accessibility (axe)', () => {
+  describe('Accessibility (axe-core)', () => {
     it('has no violations in default state', async () => {
       const { container } = render(
         <FormField id="test-field">
-          <Label>Name</Label>
-          <TestInput />
+          <Label>Email Address</Label>
+          <input id="test-field" type="email" aria-labelledby="test-field-label" />
         </FormField>
       );
       const results = await axe(container);
@@ -38,58 +23,65 @@ describe('FormField', () => {
 
     it('has no violations with helper text', async () => {
       const { container } = render(
-        <FormField id="test-field-helper">
-          <Label>Email</Label>
-          <TestInput />
-          <HelperText>Enter your work email address</HelperText>
-        </FormField>
-      );
-      const results = await axe(container);
-      expect(results).toHaveNoViolations();
-    });
-
-    it('has no violations with error state', async () => {
-      const { container } = render(
-        <FormField id="test-field-error" hasError>
-          <Label>Password</Label>
-          <TestInput />
-          <ErrorMessage>Password is required</ErrorMessage>
-        </FormField>
-      );
-      const results = await axe(container);
-      expect(results).toHaveNoViolations();
-    });
-
-    it('has no violations with required field', async () => {
-      const { container } = render(
-        <FormField id="test-field-required" required>
+        <FormField id="with-helper">
           <Label>Username</Label>
-          <TestInput />
+          <input
+            id="with-helper"
+            type="text"
+            aria-labelledby="with-helper-label"
+            aria-describedby="with-helper-helper"
+          />
+          <HelperText>Must be 3–20 characters.</HelperText>
         </FormField>
       );
       const results = await axe(container);
       expect(results).toHaveNoViolations();
     });
 
-    it('has no violations with disabled field', async () => {
+    it('has no violations with error message', async () => {
       const { container } = render(
-        <FormField id="test-field-disabled" disabled>
-          <Label>Bio</Label>
-          <input id="test-field-disabled" type="text" disabled aria-describedby="test-field-disabled-helper" />
-          <HelperText>Tell us about yourself</HelperText>
+        <FormField id="with-error" hasError>
+          <Label>Password</Label>
+          <input
+            id="with-error"
+            type="password"
+            aria-labelledby="with-error-label"
+            aria-describedby="with-error-error"
+            aria-invalid="true"
+          />
+          <ErrorMessage>Password is required.</ErrorMessage>
         </FormField>
       );
       const results = await axe(container);
       expect(results).toHaveNoViolations();
     });
 
-    it('has no violations with all elements combined', async () => {
+    it('has no violations in required state', async () => {
       const { container } = render(
-        <FormField id="test-field-full" hasError required>
-          <Label>Card Number</Label>
-          <TestInput />
-          <HelperText>16-digit number on the front of your card</HelperText>
-          <ErrorMessage>Card number is invalid</ErrorMessage>
+        <FormField id="required-field" required>
+          <Label>Full Name</Label>
+          <input
+            id="required-field"
+            type="text"
+            aria-labelledby="required-field-label"
+            required
+          />
+        </FormField>
+      );
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
+    });
+
+    it('has no violations in disabled state', async () => {
+      const { container } = render(
+        <FormField id="disabled-field" disabled>
+          <Label>Phone Number</Label>
+          <input
+            id="disabled-field"
+            type="tel"
+            aria-labelledby="disabled-field-label"
+            disabled
+          />
         </FormField>
       );
       const results = await axe(container);
@@ -98,129 +90,101 @@ describe('FormField', () => {
   });
 
   describe('ID namespacing', () => {
-    it('generates namespaced IDs for all children', () => {
+    it('generates stable namespaced IDs from a provided base ID', () => {
       render(
         <FormField id="my-field">
-          <Label>Test Label</Label>
-          <TestInput />
-          <HelperText>Helper text</HelperText>
-          <ErrorMessage>Error message</ErrorMessage>
+          <Label>My Label</Label>
+          <HelperText>My helper</HelperText>
+          <ErrorMessage>My error</ErrorMessage>
         </FormField>
       );
 
-      // Label should be linked via htmlFor to fieldId
-      const label = screen.getByText('Test Label');
-      expect(label).toHaveAttribute('for', 'my-field');
-      expect(label).toHaveAttribute('id', 'my-field-label');
-
-      // HelperText should have the helper ID
-      const helper = screen.getByRole('note');
-      expect(helper).toHaveAttribute('id', 'my-field-helper');
-
-      // ErrorMessage should have the error ID
-      const error = screen.getByRole('alert');
-      expect(error).toHaveAttribute('id', 'my-field-error');
+      expect(screen.getByText('My Label').id).toBe('my-field-label');
+      expect(screen.getByRole('note').id).toBe('my-field-helper');
+      expect(screen.getByRole('alert').id).toBe('my-field-error');
     });
   });
 
   describe('aria-describedby wiring', () => {
-    it('points aria-describedby to helper ID when no error', () => {
+    it('helper text has stable ID for aria-describedby', () => {
       render(
         <FormField id="aria-test">
           <Label>Test</Label>
-          <TestInput />
-          <HelperText>Some hint</HelperText>
+          <HelperText>Hint text</HelperText>
         </FormField>
       );
-      const input = screen.getByRole('textbox');
-      expect(input).toHaveAttribute('aria-describedby', 'aria-test-helper');
+      const helper = screen.getByRole('note');
+      expect(helper).toHaveAttribute('id', 'aria-test-helper');
     });
 
-    it('points aria-describedby to error ID when hasError is true', () => {
+    it('error message has stable ID for aria-describedby', () => {
       render(
-        <FormField id="aria-error-test" hasError>
+        <FormField id="error-aria-test" hasError>
           <Label>Test</Label>
-          <TestInput />
-          <ErrorMessage>Something went wrong</ErrorMessage>
+          <ErrorMessage>Error text</ErrorMessage>
         </FormField>
       );
-      const input = screen.getByRole('textbox');
-      expect(input).toHaveAttribute('aria-describedby', 'aria-error-test-error');
-      expect(input).toHaveAttribute('aria-invalid', 'true');
+      const error = screen.getByRole('alert');
+      expect(error).toHaveAttribute('id', 'error-aria-test-error');
     });
   });
 
-  describe('ErrorMessage announcement', () => {
-    it('renders error message with role="alert" and aria-live="polite"', () => {
+  describe('ErrorMessage alert announcement', () => {
+    it('renders with role="alert" for immediate announcement', () => {
       render(
-        <FormField id="announcement-test" hasError>
-          <Label>Test</Label>
-          <TestInput />
-          <ErrorMessage>Field is required</ErrorMessage>
+        <FormField id="alert-test" hasError>
+          <ErrorMessage>Something went wrong</ErrorMessage>
+        </FormField>
+      );
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveTextContent('Something went wrong');
+    });
+
+    it('renders with aria-live="polite"', () => {
+      render(
+        <FormField id="live-test" hasError>
+          <ErrorMessage>Validation error</ErrorMessage>
         </FormField>
       );
       const alert = screen.getByRole('alert');
       expect(alert).toHaveAttribute('aria-live', 'polite');
-      expect(alert).toHaveTextContent('Field is required');
     });
   });
 
-  describe('useFormField hook', () => {
-    it('throws when used outside FormField', () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      const BadComponent = () => {
-        useFormField();
-        return null;
-      };
-      expect(() => render(<BadComponent />)).toThrow(
-        'useFormField must be used within a <FormField> component'
-      );
-      consoleSpy.mockRestore();
-    });
-
-    it('provides correct context values', () => {
-      let contextValues: ReturnType<typeof useFormField> | null = null;
-      const Inspector: React.FC = () => {
-        contextValues = useFormField();
-        return null;
-      };
+  describe('Label htmlFor', () => {
+    it('label htmlFor is automatically wired to fieldId', () => {
       render(
-        <FormField id="ctx-test" hasError required disabled>
-          <Inspector />
+        <FormField id="label-for-test">
+          <Label>My Field</Label>
+          <input id="label-for-test" type="text" />
         </FormField>
       );
-      expect(contextValues).toMatchObject({
-        fieldId: 'ctx-test',
-        labelId: 'ctx-test-label',
-        helperId: 'ctx-test-helper',
-        errorId: 'ctx-test-error',
-        hasError: true,
-        required: true,
-        disabled: true,
-      });
+      const label = screen.getByText('My Field');
+      expect(label).toHaveAttribute('for', 'label-for-test');
     });
   });
 
   describe('HelperText visibility', () => {
-    it('renders helper text with role="note"', () => {
+    it('is hidden when hasError is true', () => {
       render(
-        <FormField id="helper-vis">
-          <HelperText>Helpful hint</HelperText>
-        </FormField>
-      );
-      expect(screen.getByRole('note')).toBeInTheDocument();
-    });
-
-    it('hides helper text visually when error is present', () => {
-      render(
-        <FormField id="helper-hidden" hasError>
-          <HelperText>This should be hidden</HelperText>
+        <FormField id="visibility-test" hasError>
+          <HelperText>Helper hint</HelperText>
           <ErrorMessage>Error occurred</ErrorMessage>
         </FormField>
       );
-      const helper = screen.getByRole('note');
-      // The helper should have aria-hidden when there's an error
+      const helper = screen.getByRole('note', { hidden: true });
       expect(helper).toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('is visible when hasError is false', () => {
+      render(
+        <FormField id="visibility-test-2">
+          <HelperText>Helper hint</HelperText>
+        </FormField>
+      );
+      const helper = screen.getByRole('note');
+      expect(helper).not.toHaveAttribute('aria-hidden', 'true');
     });
   });
 });

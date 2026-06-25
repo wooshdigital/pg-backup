@@ -4,29 +4,34 @@
   gap: var(--spacing-1, 0.25rem);
   font-size: var(--font-size-xs, 0.75rem);
   line-height: var(--line-height-normal, 1.5);
-  color: var(--color-error, #dc2626);
+  color: var(--color-error, #ef4444);
+  margin-top: var(--spacing-0-5, 0.125rem);
   animation: errorAppear 0.15s ease-out;
 }
 
 .errorText {
-  /* Allow text to wrap naturally */
-  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .icon {
   flex-shrink: 0;
-  /* Slight optical alignment */
-  margin-top: 0.05em;
-  color: var(--color-error, #dc2626);
+  margin-top: 1px;
+  color: var(--color-error, #ef4444);
 }
 
 @keyframes errorAppear {
   from {
     opacity: 0;
-    transform: translateY(-0.25rem);
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .errorMessage {
+    animation: none;
   }
 }

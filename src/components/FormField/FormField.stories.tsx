@@ -1,106 +1,129 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { FormField } from './FormField';
 import { Label } from '../Label/Label';
 import { HelperText } from '../HelperText/HelperText';
 import { ErrorMessage } from '../ErrorMessage/ErrorMessage';
-import { useFormField } from './useFormField';
 
 const meta: Meta<typeof FormField> = {
   title: 'Components/FormField',
   component: FormField,
-  parameters: {
-    layout: 'padded',
-  },
   tags: ['autodocs'],
+  parameters: {
+    layout: 'centered',
+  },
 };
 
 export default meta;
 type Story = StoryObj<typeof FormField>;
 
-// Reusable wired input for stories
-const WiredInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => {
-  const { fieldId, helperId, errorId, hasError, disabled } = useFormField();
-  const describedBy = hasError ? errorId : helperId;
-  return (
-    <input
-      id={fieldId}
-      aria-describedby={describedBy}
-      aria-invalid={hasError || undefined}
-      disabled={disabled}
-      type="text"
-      style={{
-        width: '100%',
-        padding: '0.5rem 0.75rem',
-        border: `1px solid ${hasError ? 'var(--color-error, #dc2626)' : 'var(--color-border, #d1d5db)'}`,
-        borderRadius: '0.375rem',
-        fontSize: '1rem',
-        lineHeight: '1.5',
-        outline: 'none',
-        boxSizing: 'border-box',
-      }}
-      {...props}
-    />
-  );
-};
+const InputField: React.FC<{ id: string; type?: string; disabled?: boolean }> = ({
+  id,
+  type = 'text',
+  disabled,
+}) => (
+  <input
+    id={id}
+    type={type}
+    disabled={disabled}
+    style={{
+      width: '100%',
+      padding: '0.5rem 0.75rem',
+      border: '1px solid #d1d5db',
+      borderRadius: '0.375rem',
+      fontSize: '0.875rem',
+      outline: 'none',
+    }}
+  />
+);
 
 export const Default: Story = {
   render: () => (
-    <FormField id="story-default">
-      <Label>Full Name</Label>
-      <WiredInput placeholder="Jane Doe" />
-    </FormField>
+    <div style={{ width: 320 }}>
+      <FormField id="default-field">
+        <Label>Email Address</Label>
+        <InputField id="default-field" type="email" />
+      </FormField>
+    </div>
   ),
 };
 
 export const WithHelper: Story = {
   render: () => (
-    <FormField id="story-helper">
-      <Label>Email Address</Label>
-      <WiredInput placeholder="jane@example.com" type="email" />
-      <HelperText>We'll never share your email with anyone else.</HelperText>
-    </FormField>
+    <div style={{ width: 320 }}>
+      <FormField id="helper-field">
+        <Label>Username</Label>
+        <InputField id="helper-field" />
+        <HelperText>Must be 3–20 characters. Letters, numbers, and underscores only.</HelperText>
+      </FormField>
+    </div>
   ),
 };
 
 export const WithError: Story = {
   render: () => (
-    <FormField id="story-error" hasError>
-      <Label>Password</Label>
-      <WiredInput type="password" defaultValue="abc" />
-      <HelperText>Must be at least 8 characters.</HelperText>
-      <ErrorMessage>Password must be at least 8 characters.</ErrorMessage>
-    </FormField>
+    <div style={{ width: 320 }}>
+      <FormField id="error-field" hasError>
+        <Label>Password</Label>
+        <InputField id="error-field" type="password" />
+        <HelperText>Must be at least 8 characters.</HelperText>
+        <ErrorMessage>Password must be at least 8 characters long.</ErrorMessage>
+      </FormField>
+    </div>
   ),
 };
 
 export const Required: Story = {
   render: () => (
-    <FormField id="story-required" required>
-      <Label>Username</Label>
-      <WiredInput placeholder="johndoe" />
-      <HelperText>Only letters, numbers, and underscores.</HelperText>
-    </FormField>
+    <div style={{ width: 320 }}>
+      <FormField id="required-field" required>
+        <Label>Full Name</Label>
+        <InputField id="required-field" />
+        <HelperText>Enter your first and last name.</HelperText>
+      </FormField>
+    </div>
   ),
 };
 
 export const Disabled: Story = {
   render: () => (
-    <FormField id="story-disabled" disabled>
-      <Label>Account ID</Label>
-      <WiredInput defaultValue="ACC-00421" />
-      <HelperText>This field cannot be changed.</HelperText>
-    </FormField>
+    <div style={{ width: 320 }}>
+      <FormField id="disabled-field" disabled>
+        <Label>Account ID</Label>
+        <InputField id="disabled-field" disabled />
+        <HelperText>Your account ID cannot be changed.</HelperText>
+      </FormField>
+    </div>
   ),
 };
 
-export const RequiredWithError: Story = {
-  render: () => (
-    <FormField id="story-required-error" required hasError>
-      <Label>Credit Card Number</Label>
-      <WiredInput placeholder="1234 5678 9012 3456" />
-      <HelperText>16-digit number on the front of your card.</HelperText>
-      <ErrorMessage>Please enter a valid card number.</ErrorMessage>
-    </FormField>
-  ),
+export const Interactive: Story = {
+  render: () => {
+    const [value, setValue] = useState('');
+    const hasError = value.length > 0 && value.length < 3;
+
+    return (
+      <div style={{ width: 320 }}>
+        <FormField id="interactive-field" hasError={hasError} required>
+          <Label>Display Name</Label>
+          <input
+            id="interactive-field"
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            aria-invalid={hasError}
+            style={{
+              width: '100%',
+              padding: '0.5rem 0.75rem',
+              border: `1px solid ${hasError ? '#ef4444' : '#d1d5db'}`,
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+            }}
+          />
+          <HelperText>Must be at least 3 characters.</HelperText>
+          {hasError && <ErrorMessage>Display name is too short.</ErrorMessage>}
+        </FormField>
+      </div>
+    );
+  },
 };

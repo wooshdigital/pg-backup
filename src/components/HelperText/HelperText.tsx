@@ -1,10 +1,13 @@
-import React, { HTMLAttributes } from 'react';
+import React from 'react';
 import { useFormField } from '../FormField/useFormField';
 import styles from './HelperText.module.css';
 
-export interface HelperTextProps extends HTMLAttributes<HTMLSpanElement> {
+export interface HelperTextProps {
+  /** Helper text content */
   children: React.ReactNode;
+  /** Additional CSS class names */
   className?: string;
+  /** Inline styles */
   style?: React.CSSProperties;
 }
 
@@ -12,34 +15,22 @@ export const HelperText: React.FC<HelperTextProps> = ({
   children,
   className,
   style,
-  ...rest
 }) => {
-  const context = (() => {
-    try {
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      return useFormField();
-    } catch {
-      return null;
-    }
-  })();
+  const { helperId, hasError } = useFormField();
 
-  const id = context?.helperId;
-  const hasError = context?.hasError ?? false;
+  const classes = [styles.helperText, className].filter(Boolean).join(' ');
 
   return (
     <span
-      id={id}
+      id={helperId}
       role="note"
-      aria-hidden={hasError ? 'true' : undefined}
-      className={[styles.helperText, hasError ? styles.hidden : '', className]
-        .filter(Boolean)
-        .join(' ')}
+      className={classes}
       style={style}
-      {...rest}
+      aria-hidden={hasError ? 'true' : undefined}
     >
       {children}
     </span>
   );
 };
 
-export default HelperText;
+HelperText.displayName = 'HelperText';
