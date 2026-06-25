@@ -1,0 +1,16 @@
+.helperText {
+  display: block;
+  font-family: var(--font-family-base, inherit);
+  font-size: var(--font-size-xs, 0.75rem);
+  line-height: var(--line-height-relaxed, 1.5);
+  color: var(--color-text-secondary, #6b7280);
+}
+
+/* When aria-hidden is set (i.e. when there's an error), visually hide */
+.helperText[aria-hidden='true'] {
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}

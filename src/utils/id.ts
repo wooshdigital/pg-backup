@@ -1,35 +1,18 @@
+let counter = 0;
+
 /**
- * Generate a simple unique ID using Math.random and timestamp.
- * For production, consider using a proper UUID library.
+ * Generates a stable, unique ID string with an optional prefix.
+ * Uses an incrementing counter for SSR-safe ID generation.
+ * In React 18+, prefer useId() hook instead when inside components.
  */
-export function generateId(prefix = ''): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 9);
-  const id = `${timestamp}-${random}`;
-  return prefix ? `${prefix}-${id}` : id;
+export function generateId(prefix = 'id'): string {
+  counter += 1;
+  return `${prefix}-${counter}`;
 }
 
 /**
- * Generate a trip ID.
+ * Resets the counter — for use in tests only.
  */
-export const generateTripId = () => generateId('trip');
-
-/**
- * Generate a participant ID.
- */
-export const generateParticipantId = () => generateId('participant');
-
-/**
- * Generate an expense ID.
- */
-export const generateExpenseId = () => generateId('expense');
-
-/**
- * Generate a split ID.
- */
-export const generateSplitId = () => generateId('split');
-
-/**
- * Generate a settlement ID.
- */
-export const generateSettlementId = () => generateId('settlement');
+export function resetIdCounter(): void {
+  counter = 0;
+}
