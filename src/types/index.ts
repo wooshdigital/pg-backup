@@ -1,35 +1,30 @@
-export interface Trip {
-  id: string;
-  name: string;
-  currency: string;
-  startDate: string;
-  endDate: string;
-  createdAt: string;
-  participantIds: string[];
-  expenseIds: string[];
-}
-
 export interface Participant {
   id: string;
   name: string;
+  avatarColor: string;
+  tripId: string;
 }
 
-export interface Expense {
+export interface Trip {
   id: string;
-  tripId: string;
-  description: string;
-  amount: number;
+  name: string;
+  description?: string;
   currency: string;
-  paidBy: string;
-  splitAmong: string[];
-  date: string;
+  startDate?: string;
+  endDate?: string;
   createdAt: string;
+  participants: Participant[];
 }
 
 export type RootStackParamList = {
   Home: undefined;
   TripsList: undefined;
+  TripDetail: { tripId: string; tripName: string };
   CreateTrip: undefined;
-  TripDetail: { tripId: string };
   Settings: undefined;
+};
+
+export type TripDetailTabParamList = {
+  Participants: { tripId: string };
+  Expenses: { tripId: string };
 };

@@ -1,112 +1,149 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useReducer,
-} from 'react';
-import { Trip } from '../types';
-import { loadTrips, saveTrips } from '../utils/storage';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Trip, Participant } from '../types';
+import { getRandomAvatarColor } from '../utils/avatarColors';
 import { generateId } from '../utils/id';
 
-// ─── Action Types ────────────────────────────────────────────────────────────
+const STORAGE_KEY = '@trips';
 
-type Action =
-  | { type: 'LOAD_TRIPS'; payload: Trip[] }
-  | { type: 'ADD_TRIP'; payload: Trip }
-  | { type: 'DELETE_TRIP'; payload: string };
+// ─── State ────────────────────────────────────────────────────────────────────
 
-// ─── State ───────────────────────────────────────────────────────────────────
-
-interface TripState {
+export interface TripState {
   trips: Trip[];
-  loaded: boolean;
+  loading: boolean;
 }
 
 const initialState: TripState = {
   trips: [],
-  loaded: false,
+  loading: true,
 };
 
-// ─── Reducer ─────────────────────────────────────────────────────────────────
+// ─── Actions ──────────────────────────────────────────────────────────────────
 
-function tripReducer(state: TripState, action: Action): TripState {
+export type TripAction =
+  | { type: 'TRIPS_LOADED'; payload: Trip[] }
+  | { type: 'TRIP_CREATE'; payload: Omit<Trip, 'id' | 'createdAt' | 'participants'> }
+  | { type: 'TRIP_UPDATE'; payload: { id: string } & Partial<Trip> }
+  | { type: 'TRIP_DELETE'; payload: { id: string } }
+  | { type: 'TRIP_ADD_PARTICIPANT'; payload: { tripId: string; name: string } }
+  | { type: 'TRIP_REMOVE_PARTICIPANT'; payload: { tripId: string; participantId: string } };
+
+// ─── Reducer ──────────────────────────────────────────────────────────────────
+
+function tripReducer(state: TripState, action: TripAction): TripState {
   switch (action.type) {
-    case 'LOAD_TRIPS':
-      return { ...state, trips: action.payload, loaded: true };
-    case 'ADD_TRIP':
-      return { ...state, trips: [action.payload, ...state.trips] };
-    case 'DELETE_TRIP':
+    case 'TRIPS_LOADED':
+      return { ...state, trips: action.payload, loading: false };
+
+    case 'TRIP_CREATE': {
+      const newTrip: Trip = {
+        ...action.payload,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        participants: [],
+      };
+      return { ...state, trips: [...state.trips, newTrip] };
+    }
+
+    case 'TRIP_UPDATE': {
+      const { id, ...updates } = action.payload;
       return {
         ...state,
-        trips: state.trips.filter((t) => t.id !== action.payload),
+        trips: state.trips.map((t) => (t.id === id ? { ...t, ...updates } : t)),
       };
+    }
+
+    case 'TRIP_DELETE':
+      return {
+        ...state,
+        trips: state.trips.filter((t) => t.id !== action.payload.id),
+      };
+
+    case 'TRIP_ADD_PARTICIPANT': {
+      const { tripId, name } = action.payload;
+      const newParticipant: Participant = {
+        id: generateId(),
+        name: name.trim(),
+        avatarColor: getRandomAvatarColor(),
+        tripId,
+      };
+      return {
+        ...state,
+        trips: state.trips.map((t) =>
+          t.id === tripId
+            ? { ...t, participants: [...(t.participants ?? []), newParticipant] }
+            : t
+        ),
+      };
+    }
+
+    case 'TRIP_REMOVE_PARTICIPANT': {
+      const { tripId, participantId } = action.payload;
+      return {
+        ...state,
+        trips: state.trips.map((t) =>
+          t.id === tripId
+            ? {
+                ...t,
+                participants: (t.participants ?? []).filter((p) => p.id !== participantId),
+              }
+            : t
+        ),
+      };
+    }
+
     default:
       return state;
   }
 }
 
-// ─── Context ─────────────────────────────────────────────────────────────────
+// ─── Context ──────────────────────────────────────────────────────────────────
 
 interface TripContextValue {
-  trips: Trip[];
-  loaded: boolean;
-  addTrip: (params: Omit<Trip, 'id' | 'createdAt' | 'participantIds' | 'expenseIds'>) => void;
-  deleteTrip: (id: string) => void;
+  state: TripState;
+  dispatch: React.Dispatch<TripAction>;
 }
 
 const TripContext = createContext<TripContextValue | undefined>(undefined);
 
-// ─── Provider ────────────────────────────────────────────────────────────────
+// ─── Provider ─────────────────────────────────────────────────────────────────
 
-export const TripProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+interface TripProviderProps {
+  children: ReactNode;
+}
+
+export function TripProvider({ children }: TripProviderProps) {
   const [state, dispatch] = useReducer(tripReducer, initialState);
 
-  // Load trips from storage on mount
+  // Load from storage on mount
   useEffect(() => {
-    loadTrips().then((trips) => {
-      dispatch({ type: 'LOAD_TRIPS', payload: trips });
-    });
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        const trips: Trip[] = stored ? JSON.parse(stored) : [];
+        // Ensure each trip has a participants array (migration safety)
+        const normalized = trips.map((t) => ({ ...t, participants: t.participants ?? [] }));
+        dispatch({ type: 'TRIPS_LOADED', payload: normalized });
+      } catch {
+        dispatch({ type: 'TRIPS_LOADED', payload: [] });
+      }
+    })();
   }, []);
 
-  // Persist trips to storage whenever they change (after initial load)
+  // Persist to storage whenever trips change
   useEffect(() => {
-    if (state.loaded) {
-      saveTrips(state.trips);
+    if (!state.loading) {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state.trips)).catch(() => {});
     }
-  }, [state.trips, state.loaded]);
+  }, [state.trips, state.loading]);
 
-  const addTrip = useCallback(
-    (params: Omit<Trip, 'id' | 'createdAt' | 'participantIds' | 'expenseIds'>) => {
-      const newTrip: Trip = {
-        ...params,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        participantIds: [],
-        expenseIds: [],
-      };
-      dispatch({ type: 'ADD_TRIP', payload: newTrip });
-    },
-    []
-  );
-
-  const deleteTrip = useCallback((id: string) => {
-    dispatch({ type: 'DELETE_TRIP', payload: id });
-  }, []);
-
-  return (
-    <TripContext.Provider value={{ trips: state.trips, loaded: state.loaded, addTrip, deleteTrip }}>
-      {children}
-    </TripContext.Provider>
-  );
-};
+  return <TripContext.Provider value={{ state, dispatch }}>{children}</TripContext.Provider>;
+}
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export const useTripContext = (): TripContextValue => {
+export function useTripContext(): TripContextValue {
   const ctx = useContext(TripContext);
-  if (!ctx) {
-    throw new Error('useTripContext must be used within a TripProvider');
-  }
+  if (!ctx) throw new Error('useTripContext must be used within a TripProvider');
   return ctx;
-};
+}
