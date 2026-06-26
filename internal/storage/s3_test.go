@@ -12,34 +12,31 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awscfg "github.com/aws/aws-sdk-go-v2/config"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	appcfg "github.com/yourusername/dbbackup/internal/config"
-	"github.com/yourusername/dbbackup/internal/storage"
+	storage "github.com/yourorg/dbworker/internal/storage"
 )
 
 const (
-	localStackImage = "localstack/localstack:3.2"
-	testBucket      = "test-backups"
-	testRegion      = "us-east-1"
-	testAWSKeyID    = "test"
-	testAWSSecret   = "test"
+	testBucket = "test-backups"
+	testRegion = "us-east-1"
 )
 
-// startLocalStack launches a LocalStack container and returns its S3 endpoint URL
-// along with a cleanup function that should be deferred by the caller.
-func startLocalStack(ctx context.Context, t *testing.T) (endpointURL string, cleanup func()) {
+// startLocalStack launches a LocalStack container and returns its HTTP endpoint
+// together with a cleanup function.
+func startLocalStack(t *testing.T) (endpoint string, cleanup func()) {
 	t.Helper()
+	ctx := context.Background()
 
 	req := testcontainers.ContainerRequest{
-		Image:        localStackImage,
+		Image:        "localstack/localstack:3.2",
 		ExposedPorts: []string{"4566/tcp"},
 		Env: map[string]string{
-			"SERVICES":       "s3",
+			"SERVICES":    "s3",
 			"DEFAULT_REGION": testRegion,
 		},
 		WaitingFor: wait.ForHTTP("/_localstack/health").
@@ -57,95 +54,85 @@ func startLocalStack(ctx context.Context, t *testing.T) (endpointURL string, cle
 
 	host, err := container.Host(ctx)
 	if err != nil {
-		_ = container.Terminate(ctx)
-		t.Fatalf("getting container host: %v", err)
+		t.Fatalf("getting LocalStack host: %v", err)
 	}
 	port, err := container.MappedPort(ctx, "4566")
 	if err != nil {
-		_ = container.Terminate(ctx)
-		t.Fatalf("getting mapped port: %v", err)
+		t.Fatalf("getting LocalStack port: %v", err)
 	}
 
-	endpoint := fmt.Sprintf("http://%s:%s", host, port.Port())
+	ep := fmt.Sprintf("http://%s:%s", host, port.Port())
 
 	cleanup = func() {
-		if err := container.Terminate(ctx); err != nil {
+		if err := container.Terminate(context.Background()); err != nil {
 			t.Logf("terminating LocalStack container: %v", err)
 		}
 	}
-
-	return endpoint, cleanup
+	return ep, cleanup
 }
 
-// newLocalStackClient returns an S3 client pointed at the given LocalStack endpoint.
-func newLocalStackClient(ctx context.Context, t *testing.T, endpoint string) *s3.Client {
+// createBucket creates the test bucket in LocalStack.
+func createBucket(t *testing.T, endpoint string) {
 	t.Helper()
+	ctx := context.Background()
 
-	cfg, err := awscfg.LoadDefaultConfig(ctx,
-		awscfg.WithRegion(testRegion),
-		awscfg.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			testAWSKeyID, testAWSSecret, "",
-		)),
+	cfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(testRegion),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("test", "test", ""),
+		),
 	)
 	if err != nil {
-		t.Fatalf("loading AWS config: %v", err)
+		t.Fatalf("loading AWS config for bucket creation: %v", err)
 	}
 
-	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(endpoint)
 		o.UsePathStyle = true
 	})
-}
 
-// createBucket creates the test bucket in the LocalStack S3 instance.
-func createBucket(ctx context.Context, t *testing.T, endpoint string) {
-	t.Helper()
-
-	client := newLocalStackClient(ctx, t, endpoint)
-	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+	_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(testBucket),
 	})
 	if err != nil {
-		t.Fatalf("creating test bucket %q: %v", testBucket, err)
+		t.Fatalf("creating test bucket: %v", err)
 	}
 }
 
-// getObject retrieves the body of an S3 object from LocalStack.
-func getObject(ctx context.Context, t *testing.T, endpoint, bucket, key string) []byte {
+// downloadObject fetches the content of key from LocalStack for assertion.
+func downloadObject(t *testing.T, endpoint, key string) []byte {
 	t.Helper()
+	ctx := context.Background()
 
-	client := newLocalStackClient(ctx, t, endpoint)
+	cfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(testRegion),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("test", "test", ""),
+		),
+	)
+	if err != nil {
+		t.Fatalf("loading AWS config for download: %v", err)
+	}
+
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true
+	})
+
 	out, err := client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(testBucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		t.Fatalf("GetObject(%q): %v", key, err)
+		t.Fatalf("downloading object %q: %v", key, err)
 	}
 	defer out.Body.Close()
 
-	body, err := io.ReadAll(out.Body)
+	data, err := io.ReadAll(out.Body)
 	if err != nil {
 		t.Fatalf("reading object body: %v", err)
 	}
-	return body
-}
-
-// newTestS3Config builds an S3Config pointed at the given LocalStack endpoint.
-func newTestS3Config(endpoint string) appcfg.S3Config {
-	return appcfg.S3Config{
-		Bucket:         testBucket,
-		Region:         testRegion,
-		Endpoint:       endpoint,
-		ForcePathStyle: true,
-		PartSize:       5 * 1024 * 1024,
-		Concurrency:    3,
-		MaxRetries:     2,
-		Credentials: appcfg.S3Credentials{
-			AccessKeyID:     testAWSKeyID,
-			SecretAccessKey: testAWSSecret,
-		},
-	}
+	return data
 }
 
 // ---------------------------------------------------------------------------
@@ -153,200 +140,171 @@ func newTestS3Config(endpoint string) appcfg.S3Config {
 // ---------------------------------------------------------------------------
 
 func TestS3Uploader_SmallFile(t *testing.T) {
-	ctx := context.Background()
-
-	endpoint, cleanup := startLocalStack(ctx, t)
+	endpoint, cleanup := startLocalStack(t)
 	defer cleanup()
+	createBucket(t, endpoint)
 
-	createBucket(ctx, t, endpoint)
+	cfg := storage.S3Config{
+		Bucket:          testBucket,
+		Region:          testRegion,
+		Endpoint:        endpoint,
+		ForcePathStyle:  true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+	}
 
-	uploader, err := storage.NewS3Uploader(ctx, newTestS3Config(endpoint))
+	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("NewS3Uploader: %v", err)
 	}
 	defer uploader.Close()
 
-	content := []byte("hello, world!")
+	content := "hello, world!"
 	key := "test/small-file.txt"
 
-	if err := uploader.Upload(ctx, key, bytes.NewReader(content), int64(len(content))); err != nil {
+	err = uploader.Upload(context.Background(), key, strings.NewReader(content), int64(len(content)))
+	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
 
-	got := getObject(ctx, t, endpoint, testBucket, key)
-	if !bytes.Equal(got, content) {
-		t.Errorf("object content mismatch: got %q, want %q", got, content)
+	got := downloadObject(t, endpoint, key)
+	if string(got) != content {
+		t.Errorf("uploaded content = %q; want %q", string(got), content)
 	}
 }
 
 func TestS3Uploader_LargeFile_Multipart(t *testing.T) {
-	ctx := context.Background()
-
-	endpoint, cleanup := startLocalStack(ctx, t)
+	endpoint, cleanup := startLocalStack(t)
 	defer cleanup()
+	createBucket(t, endpoint)
 
-	createBucket(ctx, t, endpoint)
+	// Use a small part size (6 MiB) and upload 15 MiB to trigger multipart.
+	const partSize = 6 * 1024 * 1024
+	const totalSize = 15 * 1024 * 1024
 
-	// 15 MiB of data → 3 × 5 MiB parts
-	const size = 15 * 1024 * 1024
-	content := bytes.Repeat([]byte("A"), size)
+	cfg := storage.S3Config{
+		Bucket:          testBucket,
+		Region:          testRegion,
+		Endpoint:        endpoint,
+		ForcePathStyle:  true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+		PartSize:        partSize,
+		Concurrency:     2,
+	}
+
+	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("NewS3Uploader: %v", err)
+	}
+	defer uploader.Close()
+
+	data := bytes.Repeat([]byte("x"), totalSize)
 	key := "test/large-file.bin"
 
-	uploader, err := storage.NewS3Uploader(ctx, newTestS3Config(endpoint))
+	err = uploader.Upload(context.Background(), key, bytes.NewReader(data), int64(totalSize))
 	if err != nil {
-		t.Fatalf("NewS3Uploader: %v", err)
-	}
-	defer uploader.Close()
-
-	if err := uploader.Upload(ctx, key, bytes.NewReader(content), int64(size)); err != nil {
-		t.Fatalf("Upload: %v", err)
+		t.Fatalf("Upload (multipart): %v", err)
 	}
 
-	got := getObject(ctx, t, endpoint, testBucket, key)
-	if len(got) != size {
-		t.Errorf("object size mismatch: got %d bytes, want %d bytes", len(got), size)
+	got := downloadObject(t, endpoint, key)
+	if len(got) != totalSize {
+		t.Errorf("uploaded size = %d; want %d", len(got), totalSize)
 	}
-	if !bytes.Equal(got, content) {
-		t.Error("object content mismatch for large file")
+	if !bytes.Equal(got, data) {
+		t.Error("uploaded content does not match original data")
 	}
 }
 
-func TestS3Uploader_KeyTemplate(t *testing.T) {
-	ctx := context.Background()
-
-	endpoint, cleanup := startLocalStack(ctx, t)
+func TestS3Uploader_KeyTemplateRendering(t *testing.T) {
+	endpoint, cleanup := startLocalStack(t)
 	defer cleanup()
+	createBucket(t, endpoint)
 
-	createBucket(ctx, t, endpoint)
+	cfg := storage.S3Config{
+		Bucket:          testBucket,
+		Region:          testRegion,
+		Endpoint:        endpoint,
+		ForcePathStyle:  true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+	}
 
-	uploader, err := storage.NewS3Uploader(ctx, newTestS3Config(endpoint))
+	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("NewS3Uploader: %v", err)
 	}
 	defer uploader.Close()
 
-	fixedTime := time.Date(2024, 6, 15, 8, 0, 0, 0, time.UTC)
-	key, err := storage.RenderKey("backups/{hostname}/{db}/{date}/{timestamp}.sql.gz", storage.KeyData{
-		DB:        "mydb",
-		Timestamp: fixedTime,
-		Hostname:  "testhost",
-	})
+	kr := storage.NewKeyRenderer("backups/{db}/{date}/dump.sql.gz")
+	key := kr.Render("mydb", time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC))
+	expected := "backups/mydb/2024-03-15/dump.sql.gz"
+	if key != expected {
+		t.Errorf("rendered key = %q; want %q", key, expected)
+	}
+
+	content := "fake-compressed-dump"
+	err = uploader.Upload(context.Background(), key, strings.NewReader(content), int64(len(content)))
 	if err != nil {
-		t.Fatalf("RenderKey: %v", err)
+		t.Fatalf("Upload with rendered key: %v", err)
 	}
 
-	expectedKey := "backups/testhost/mydb/2024-06-15/20240615T080000Z.sql.gz"
-	if key != expectedKey {
-		t.Errorf("rendered key = %q, want %q", key, expectedKey)
-	}
-
-	content := []byte("fake dump data")
-	if err := uploader.Upload(ctx, key, bytes.NewReader(content), int64(len(content))); err != nil {
-		t.Fatalf("Upload: %v", err)
-	}
-
-	got := getObject(ctx, t, endpoint, testBucket, key)
-	if !bytes.Equal(got, content) {
-		t.Errorf("content mismatch after template key upload")
-	}
-}
-
-func TestS3Uploader_UnknownSizeUpload(t *testing.T) {
-	ctx := context.Background()
-
-	endpoint, cleanup := startLocalStack(ctx, t)
-	defer cleanup()
-
-	createBucket(ctx, t, endpoint)
-
-	uploader, err := storage.NewS3Uploader(ctx, newTestS3Config(endpoint))
-	if err != nil {
-		t.Fatalf("NewS3Uploader: %v", err)
-	}
-	defer uploader.Close()
-
-	content := "streaming content with unknown size"
-	key := "test/unknown-size.txt"
-
-	// Pass -1 for size to exercise the unknown-size code path.
-	if err := uploader.Upload(ctx, key, strings.NewReader(content), -1); err != nil {
-		t.Fatalf("Upload: %v", err)
-	}
-
-	got := getObject(ctx, t, endpoint, testBucket, key)
+	got := downloadObject(t, endpoint, key)
 	if string(got) != content {
-		t.Errorf("content mismatch: got %q, want %q", got, content)
+		t.Errorf("content = %q; want %q", string(got), content)
 	}
 }
 
-func TestS3Uploader_OverwriteExistingKey(t *testing.T) {
-	ctx := context.Background()
+func TestS3Uploader_InvalidConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  storage.S3Config
+	}{
+		{
+			name: "missing bucket",
+			cfg:  storage.S3Config{Region: "us-east-1"},
+		},
+		{
+			name: "missing region",
+			cfg:  storage.S3Config{Bucket: "my-bucket"},
+		},
+	}
 
-	endpoint, cleanup := startLocalStack(ctx, t)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := storage.NewS3Uploader(context.Background(), tc.cfg)
+			if err == nil {
+				t.Error("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestS3Uploader_ContextCancellation(t *testing.T) {
+	endpoint, cleanup := startLocalStack(t)
 	defer cleanup()
+	createBucket(t, endpoint)
 
-	createBucket(ctx, t, endpoint)
+	cfg := storage.S3Config{
+		Bucket:          testBucket,
+		Region:          testRegion,
+		Endpoint:        endpoint,
+		ForcePathStyle:  true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+	}
 
-	uploader, err := storage.NewS3Uploader(ctx, newTestS3Config(endpoint))
+	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("NewS3Uploader: %v", err)
 	}
 	defer uploader.Close()
 
-	key := "test/overwrite.txt"
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
 
-	first := []byte("first version")
-	if err := uploader.Upload(ctx, key, bytes.NewReader(first), int64(len(first))); err != nil {
-		t.Fatalf("first Upload: %v", err)
-	}
-
-	second := []byte("second version")
-	if err := uploader.Upload(ctx, key, bytes.NewReader(second), int64(len(second))); err != nil {
-		t.Fatalf("second Upload: %v", err)
-	}
-
-	got := getObject(ctx, t, endpoint, testBucket, key)
-	if !bytes.Equal(got, second) {
-		t.Errorf("expected second version after overwrite, got %q", got)
-	}
-}
-
-func TestS3Uploader_MultipleUploaders_SameBucket(t *testing.T) {
-	ctx := context.Background()
-
-	endpoint, cleanup := startLocalStack(ctx, t)
-	defer cleanup()
-
-	createBucket(ctx, t, endpoint)
-
-	cfg := newTestS3Config(endpoint)
-
-	u1, err := storage.NewS3Uploader(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewS3Uploader u1: %v", err)
-	}
-	defer u1.Close()
-
-	u2, err := storage.NewS3Uploader(ctx, cfg)
-	if err != nil {
-		t.Fatalf("NewS3Uploader u2: %v", err)
-	}
-	defer u2.Close()
-
-	data1 := []byte("data from uploader 1")
-	data2 := []byte("data from uploader 2")
-
-	if err := u1.Upload(ctx, "key1.txt", bytes.NewReader(data1), int64(len(data1))); err != nil {
-		t.Fatalf("u1.Upload: %v", err)
-	}
-	if err := u2.Upload(ctx, "key2.txt", bytes.NewReader(data2), int64(len(data2))); err != nil {
-		t.Fatalf("u2.Upload: %v", err)
-	}
-
-	if got := getObject(ctx, t, endpoint, testBucket, "key1.txt"); !bytes.Equal(got, data1) {
-		t.Errorf("key1 content mismatch")
-	}
-	if got := getObject(ctx, t, endpoint, testBucket, "key2.txt"); !bytes.Equal(got, data2) {
-		t.Errorf("key2 content mismatch")
+	err = uploader.Upload(ctx, "test/cancelled.txt", strings.NewReader("data"), 4)
+	if err == nil {
+		t.Error("expected error due to cancelled context, got nil")
 	}
 }

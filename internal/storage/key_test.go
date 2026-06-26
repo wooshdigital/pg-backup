@@ -1,167 +1,102 @@
 package storage
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
 
-func TestRenderKey(t *testing.T) {
-	fixedTime := time.Date(2024, 3, 15, 10, 30, 45, 0, time.UTC)
+// fixed reference time: 2024-03-15 10:30:00 UTC  →  Unix 1710498600
+var refTime = time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC)
 
+func TestKeyRenderer_Render(t *testing.T) {
 	tests := []struct {
 		name     string
 		template string
-		data     KeyData
+		db       string
 		want     string
-		wantErr  bool
 	}{
 		{
 			name:     "all placeholders",
-			template: "backups/{hostname}/{db}/{date}/{timestamp}.sql.gz",
-			data: KeyData{
-				DB:        "mydb",
-				Timestamp: fixedTime,
-				Hostname:  "web-01",
-			},
-			want: "backups/web-01/mydb/2024-03-15/20240315T103045Z.sql.gz",
-		},
-		{
-			name:     "only date",
-			template: "{date}/backup.sql.gz",
-			data: KeyData{
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			want: "2024-03-15/backup.sql.gz",
-		},
-		{
-			name:     "only timestamp",
-			template: "dumps/{timestamp}.tar.gz",
-			data: KeyData{
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			want: "dumps/20240315T103045Z.tar.gz",
+			template: "backups/{db}/{date}/{timestamp}.sql.gz",
+			db:       "mydb",
+			want:     "backups/mydb/2024-03-15/1710498600.sql.gz",
 		},
 		{
 			name:     "no placeholders",
-			template: "static/key/backup.sql.gz",
-			data: KeyData{
-				DB:        "mydb",
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			want: "static/key/backup.sql.gz",
+			template: "static/key.sql.gz",
+			db:       "mydb",
+			want:     "static/key.sql.gz",
 		},
 		{
-			name:     "unknown placeholder preserved",
-			template: "backups/{unknown}/file.gz",
-			data: KeyData{
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			want: "backups/{unknown}/file.gz",
+			name:     "empty template",
+			template: "",
+			db:       "mydb",
+			want:     "",
 		},
 		{
-			name:     "db with special chars sanitized",
+			name:     "only db placeholder",
+			template: "{db}.dump",
+			db:       "production",
+			want:     "production.dump",
+		},
+		{
+			name:     "db with special chars is sanitized",
 			template: "{db}/backup.gz",
-			data: KeyData{
-				DB:        "my database!",
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			want: "my_database_/backup.gz",
+			db:       "my/db:name",
+			want:     "my_db_name/backup.gz",
 		},
 		{
-			name:     "hostname with special chars sanitized",
-			template: "{hostname}/backup.gz",
-			data: KeyData{
-				DB:        "db",
-				Timestamp: fixedTime,
-				Hostname:  "my host:8080",
-			},
-			want: "my_host_8080/backup.gz",
+			name:     "multiple occurrences of same placeholder",
+			template: "{db}/{db}/{date}",
+			db:       "testdb",
+			want:     "testdb/testdb/2024-03-15",
 		},
 		{
-			name:     "empty db placeholder",
-			template: "{db}/{timestamp}.gz",
-			data: KeyData{
-				DB:        "",
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			// empty db produces empty segment
-			want: "/20240315T103045Z.gz",
+			name:     "unknown placeholder left as-is",
+			template: "{db}/{unknown}/file.gz",
+			db:       "mydb",
+			want:     "mydb/{unknown}/file.gz",
 		},
 		{
-			name:     "repeated placeholder",
-			template: "{db}/{db}-{timestamp}.gz",
-			data: KeyData{
-				DB:        "mydb",
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			want: "mydb/mydb-20240315T103045Z.gz",
+			name:     "date placeholder only",
+			template: "dumps/{date}/backup.gz",
+			db:       "",
+			want:     "dumps/2024-03-15/backup.gz",
 		},
 		{
-			name:     "timestamp uses UTC",
-			template: "{timestamp}",
-			data: KeyData{
-				// Provide a time in a non-UTC zone; output must be UTC.
-				Timestamp: time.Date(2024, 1, 2, 12, 0, 0, 0, time.FixedZone("EST", -5*3600)),
-				Hostname:  "host",
-			},
-			// 12:00 EST = 17:00 UTC
-			want: "20240102T170000Z",
+			name:     "timestamp placeholder only",
+			template: "dumps/{timestamp}.gz",
+			db:       "x",
+			want:     "dumps/1710498600.gz",
 		},
 		{
-			name:     "db with allowed special chars",
-			template: "{db}.gz",
-			data: KeyData{
-				DB:        "my-db_v2.0",
-				Timestamp: fixedTime,
-				Hostname:  "host",
-			},
-			want: "my-db_v2.0.gz",
+			name:     "empty db is sanitized to empty string",
+			template: "prefix/{db}/file",
+			db:       "",
+			want:     "prefix//file",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := RenderKey(tc.template, tc.data)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("RenderKey() error = %v, wantErr %v", err, tc.wantErr)
-			}
+			kr := NewKeyRenderer(tc.template)
+			got := kr.Render(tc.db, refTime)
 			if got != tc.want {
-				t.Errorf("RenderKey() = %q, want %q", got, tc.want)
+				t.Errorf("Render(%q, %q) = %q; want %q", tc.db, tc.template, got, tc.want)
 			}
 		})
 	}
 }
 
-// TestRenderKeyDefaultTimestamp verifies that a zero Timestamp is replaced
-// with time.Now() without error, and that the output contains a date segment.
-func TestRenderKeyDefaultTimestamp(t *testing.T) {
-	got, err := RenderKey("{date}/{db}.gz", KeyData{
-		DB:       "mydb",
-		Hostname: "host",
-		// Timestamp is zero — should default to now
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// We cannot know the exact date, but it must end with /mydb.gz
-	if !strings.HasSuffix(got, "/mydb.gz") {
-		t.Errorf("unexpected key %q: expected suffix /mydb.gz", got)
-	}
-	parts := strings.SplitN(got, "/", 2)
-	if len(parts) != 2 || len(parts[0]) != 10 {
-		t.Errorf("unexpected date segment in %q (expected YYYY-MM-DD)", got)
+func TestKeyRenderer_Template(t *testing.T) {
+	tmpl := "some/{db}/template"
+	kr := NewKeyRenderer(tmpl)
+	if kr.Template() != tmpl {
+		t.Errorf("Template() = %q; want %q", kr.Template(), tmpl)
 	}
 }
 
-func TestSanitizeSegment(t *testing.T) {
+func TestSanitize(t *testing.T) {
 	tests := []struct {
 		input string
 		want  string
@@ -170,21 +105,17 @@ func TestSanitizeSegment(t *testing.T) {
 		{"hello-world", "hello-world"},
 		{"hello_world", "hello_world"},
 		{"hello.world", "hello.world"},
-		{"hello world", "hello_world"},
 		{"hello/world", "hello_world"},
-		{"hello:world", "hello_world"},
-		{"UPPER", "UPPER"},
-		{"123", "123"},
+		{"hello world", "hello_world"},
+		{"my:db@host", "my_db_host"},
 		{"", ""},
-		{"a!b@c#d", "a_b_c_d"},
+		{"ABC123", "ABC123"},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.input, func(t *testing.T) {
-			got := sanitizeSegment(tc.input)
-			if got != tc.want {
-				t.Errorf("sanitizeSegment(%q) = %q, want %q", tc.input, got, tc.want)
-			}
-		})
+		got := sanitize(tc.input)
+		if got != tc.want {
+			t.Errorf("sanitize(%q) = %q; want %q", tc.input, got, tc.want)
+		}
 	}
 }
