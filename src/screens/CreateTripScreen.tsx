@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,175 +6,171 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useTrips } from '../hooks/useTrips';
 import { CURRENCIES } from '../constants/currencies';
 
-interface CreateTripScreenProps {
-  navigation: any;
-}
-
-export function CreateTripScreen({ navigation }: CreateTripScreenProps) {
+export function CreateTripScreen() {
+  const navigation = useNavigation();
   const { addTrip } = useTrips();
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState('USD');
 
-  const handleCreate = useCallback(() => {
-    if (!name.trim()) {
-      Alert.alert('Validation Error', 'Please enter a trip name.');
-      return;
-    }
-    const trip = addTrip({
-      name: name.trim(),
-      description: description.trim(),
-      currency,
-    });
+  const handleCreate = () => {
+    if (!name.trim()) return;
+    addTrip({ name: name.trim(), description: description.trim(), currency });
     navigation.goBack();
-  }, [name, description, currency, addTrip, navigation]);
+  };
+
+  const canSubmit = name.trim().length > 0;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.field}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.label}>Trip Name *</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Summer in Europe"
-          placeholderTextColor="#9CA3AF"
+          placeholder="e.g. Summer Vacation 2025"
+          placeholderTextColor="#8E8E93"
           value={name}
           onChangeText={setName}
           autoCapitalize="words"
           returnKeyType="next"
         />
-      </View>
 
-      <View style={styles.field}>
         <Text style={styles.label}>Description</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Optional description..."
-          placeholderTextColor="#9CA3AF"
+          placeholder="Optional description"
+          placeholderTextColor="#8E8E93"
           value={description}
           onChangeText={setDescription}
           multiline
           numberOfLines={3}
-          textAlignVertical="top"
+          returnKeyType="done"
         />
-      </View>
 
-      <View style={styles.field}>
         <Text style={styles.label}>Currency</Text>
-        <View style={styles.currencyRow}>
-          {['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'].map((c) => (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.currencyRow}
+        >
+          {CURRENCIES.slice(0, 8).map((c) => (
             <TouchableOpacity
-              key={c}
+              key={c.code}
               style={[
                 styles.currencyChip,
-                currency === c && styles.currencyChipActive,
+                currency === c.code && styles.currencyChipSelected,
               ]}
-              onPress={() => setCurrency(c)}
+              onPress={() => setCurrency(c.code)}
             >
               <Text
                 style={[
                   styles.currencyChipText,
-                  currency === c && styles.currencyChipTextActive,
+                  currency === c.code && styles.currencyChipTextSelected,
                 ]}
               >
-                {c}
+                {c.code}
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-      </View>
+        </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.button, !name.trim() && styles.buttonDisabled]}
-        onPress={handleCreate}
-        disabled={!name.trim()}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.buttonText}>Create Trip</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity
+          style={[styles.createButton, !canSubmit && styles.createButtonDisabled]}
+          onPress={handleCreate}
+          disabled={!canSubmit}
+        >
+          <Text style={styles.createButtonText}>Create Trip</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  scroll: { flex: 1, backgroundColor: '#F2F2F7' },
   container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  content: {
     padding: 20,
-    gap: 20,
-  },
-  field: {
-    gap: 6,
+    gap: 8,
   },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#6C6C70',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 4,
   },
   input: {
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111827',
     backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#1C1C1E',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
   textArea: {
-    height: 88,
-    paddingTop: 12,
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   currencyRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    paddingVertical: 4,
   },
   currencyChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E5E5EA',
   },
-  currencyChipActive: {
-    backgroundColor: '#EEF2FF',
-    borderColor: '#6366F1',
+  currencyChipSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
   },
   currencyChipText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#1C1C1E',
   },
-  currencyChipTextActive: {
-    color: '#6366F1',
-  },
-  button: {
-    backgroundColor: '#6366F1',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    backgroundColor: '#C7D2FE',
-  },
-  buttonText: {
+  currencyChipTextSelected: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+  },
+  createButton: {
+    marginTop: 32,
+    height: 52,
+    backgroundColor: '#007AFF',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createButtonDisabled: {
+    backgroundColor: '#C7C7CC',
+  },
+  createButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
   },
 });
+
+export default CreateTripScreen;

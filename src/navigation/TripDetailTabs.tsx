@@ -1,52 +1,65 @@
 import React from 'react';
+import { StyleSheet, View } from 'react-native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { ParticipantsScreen } from '../screens/ParticipantsScreen';
 import { ExpensesPlaceholderScreen } from '../screens/ExpensesPlaceholderScreen';
-import { TripDetailTabParamList } from '../types';
 
-const Tab = createMaterialTopTabNavigator<TripDetailTabParamList>();
+const Tab = createMaterialTopTabNavigator();
 
 interface TripDetailTabsProps {
   tripId: string;
+  tripName: string;
 }
 
-export function TripDetailTabs({ tripId }: TripDetailTabsProps) {
+// Wrapper components to inject tripId prop
+function ParticipantsTab({ route }: any) {
+  const tripId = route.params?.tripId;
+  return <ParticipantsScreen tripId={tripId} />;
+}
+
+function ExpensesTab() {
+  return <ExpensesPlaceholderScreen />;
+}
+
+export function TripDetailTabs({ tripId, tripName }: TripDetailTabsProps) {
   return (
     <Tab.Navigator
+      initialRouteName="Participants"
       screenOptions={{
-        tabBarActiveTintColor: '#6366F1',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#8E8E93',
         tabBarIndicatorStyle: {
-          backgroundColor: '#6366F1',
+          backgroundColor: '#007AFF',
           height: 3,
           borderRadius: 2,
-        },
-        tabBarLabelStyle: {
-          fontSize: 14,
-          fontWeight: '700',
-          textTransform: 'none',
         },
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           elevation: 0,
           shadowOpacity: 0,
           borderBottomWidth: 1,
-          borderBottomColor: '#E5E7EB',
+          borderBottomColor: '#E5E5EA',
+        },
+        tabBarLabelStyle: {
+          fontWeight: '600',
+          fontSize: 14,
+          textTransform: 'none',
         },
       }}
     >
       <Tab.Screen
         name="Participants"
-        component={ParticipantsScreen}
+        component={ParticipantsTab}
         initialParams={{ tripId }}
         options={{ title: 'Participants' }}
       />
       <Tab.Screen
         name="Expenses"
-        component={ExpensesPlaceholderScreen}
-        initialParams={{ tripId }}
+        component={ExpensesTab}
         options={{ title: 'Expenses' }}
       />
     </Tab.Navigator>
   );
 }
+
+export default TripDetailTabs;

@@ -7,8 +7,7 @@ export function ExpensesPlaceholderScreen() {
       <Text style={styles.icon}>💸</Text>
       <Text style={styles.title}>Expenses Coming Soon</Text>
       <Text style={styles.subtitle}>
-        In the next phase you'll be able to add and split expenses between
-        participants. Stay tuned!
+        Phase 4 will bring full expense tracking, splitting, and settlement features.
       </Text>
       <View style={styles.badge}>
         <Text style={styles.badgeText}>Phase 4</Text>
@@ -20,39 +19,40 @@ export function ExpensesPlaceholderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 32,
+    gap: 12,
   },
   icon: {
     fontSize: 56,
-    marginBottom: 20,
+    marginBottom: 8,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 10,
+    color: '#1C1C1E',
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B7280',
+    color: '#8E8E93',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
+    lineHeight: 22,
   },
   badge: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 14,
     paddingVertical: 6,
+    backgroundColor: '#007AFF',
+    borderRadius: 20,
   },
   badgeText: {
-    color: '#6366F1',
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontWeight: '600',
     fontSize: 13,
-    letterSpacing: 0.5,
   },
 });
+
+export default ExpensesPlaceholderScreen;

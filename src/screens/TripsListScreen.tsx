@@ -1,79 +1,69 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   FlatList,
-  StyleSheet,
   TouchableOpacity,
-  ListRenderItem,
+  StyleSheet,
+  SafeAreaView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTrips } from '../hooks/useTrips';
 import { Trip } from '../types';
+import type { TripStackParamList } from '../navigation/TripStackNavigator';
 
-interface TripsListScreenProps {
-  navigation: any;
-}
+type TripsListNavProp = NativeStackNavigationProp<TripStackParamList, 'TripsList'>;
 
-function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
-  const participantCount = trip.participants?.length ?? 0;
+function TripCard({
+  trip,
+  onPress,
+}: {
+  trip: Trip;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
-      <View style={styles.cardContent}>
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.cardHeader}>
         <Text style={styles.cardTitle} numberOfLines={1}>
           {trip.name}
         </Text>
-        {trip.description ? (
-          <Text style={styles.cardDescription} numberOfLines={2}>
-            {trip.description}
-          </Text>
-        ) : null}
-        <View style={styles.cardMeta}>
-          <Text style={styles.metaText}>{trip.currency}</Text>
-          <Text style={styles.metaDot}>·</Text>
-          <Text style={styles.metaText}>
-            {participantCount} participant{participantCount !== 1 ? 's' : ''}
-          </Text>
-        </View>
+        <Text style={styles.cardCurrency}>{trip.currency}</Text>
       </View>
-      <Text style={styles.chevron}>›</Text>
+      {trip.description ? (
+        <Text style={styles.cardDescription} numberOfLines={2}>
+          {trip.description}
+        </Text>
+      ) : null}
+      <Text style={styles.cardMeta}>
+        {trip.participants?.length ?? 0} participant
+        {(trip.participants?.length ?? 0) !== 1 ? 's' : ''}
+      </Text>
     </TouchableOpacity>
   );
 }
 
-export function TripsListScreen({ navigation }: TripsListScreenProps) {
-  const { trips, isLoading } = useTrips();
+export function TripsListScreen() {
+  const navigation = useNavigation<TripsListNavProp>();
+  const { trips, loading } = useTrips();
 
-  const handleTripPress = useCallback(
-    (tripId: string) => {
-      navigation.navigate('TripDetail', { tripId });
-    },
-    [navigation]
-  );
+  const handleTripPress = (trip: Trip) => {
+    navigation.navigate('TripDetail', { tripId: trip.id, tripName: trip.name });
+  };
 
-  const handleCreateTrip = useCallback(() => {
+  const handleCreateTrip = () => {
     navigation.navigate('CreateTrip');
-  }, [navigation]);
+  };
 
-  const renderItem: ListRenderItem<Trip> = useCallback(
-    ({ item }) => (
-      <TripCard trip={item} onPress={() => handleTripPress(item.id)} />
-    ),
-    [handleTripPress]
-  );
-
-  const keyExtractor = useCallback((item: Trip) => item.id, []);
-
-  const ListEmpty = () => (
+  const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyIcon}>✈️</Text>
       <Text style={styles.emptyTitle}>No trips yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Create your first trip to get started tracking expenses.
-      </Text>
+      <Text style={styles.emptySubtitle}>Tap + to create your first trip</Text>
     </View>
   );
 
-  if (isLoading) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Loading...</Text>
@@ -82,32 +72,46 @@ export function TripsListScreen({ navigation }: TripsListScreenProps) {
   }
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={trips}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        ListEmptyComponent={ListEmpty}
-        contentContainerStyle={
-          trips.length === 0 ? styles.emptyList : styles.list
-        }
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-      />
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleCreateTrip}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
-    </View>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <View style={styles.container}>
+        <FlatList
+          data={trips}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TripCard trip={item} onPress={() => handleTripPress(item)} />
+          )}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={trips.length === 0 ? styles.emptyList : styles.list}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        />
+
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={handleCreateTrip}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.fabIcon}>+</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F2F2F7',
+  },
+  list: {
+    padding: 16,
+  },
+  emptyList: {
+    flex: 1,
+    padding: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -115,108 +119,93 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
+    color: '#8E8E93',
     fontSize: 16,
-    color: '#6B7280',
-  },
-  list: {
-    padding: 16,
-  },
-  emptyList: {
-    flexGrow: 1,
-    padding: 16,
-  },
-  separator: {
-    height: 12,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  cardContent: {
-    flex: 1,
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   cardTitle: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    flex: 1,
+    marginRight: 8,
+  },
+  cardCurrency: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#007AFF',
+    backgroundColor: '#EAF3FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   cardDescription: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#8E8E93',
     marginBottom: 8,
     lineHeight: 20,
   },
   cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaText: {
     fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-  metaDot: {
-    fontSize: 13,
-    color: '#D1D5DB',
-  },
-  chevron: {
-    fontSize: 22,
-    color: '#D1D5DB',
-    marginLeft: 8,
+    color: '#AEAEB2',
+    marginTop: 4,
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
+    gap: 8,
   },
   emptyIcon: {
-    fontSize: 56,
-    marginBottom: 16,
+    fontSize: 48,
+    marginBottom: 8,
   },
   emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   emptySubtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 22,
+    fontSize: 14,
+    color: '#8E8E93',
   },
   fab: {
     position: 'absolute',
+    bottom: 28,
     right: 24,
-    bottom: 32,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#6366F1',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 8,
   },
   fabIcon: {
-    fontSize: 28,
     color: '#FFFFFF',
-    lineHeight: 32,
+    fontSize: 28,
     fontWeight: '300',
+    lineHeight: 32,
   },
 });
+
+export default TripsListScreen;

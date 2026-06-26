@@ -1,10 +1,10 @@
-import React, { useCallback, useRef, useMemo, useState } from 'react';
+import React, { useRef, useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -22,6 +22,7 @@ interface AddParticipantSheetProps {
 export function AddParticipantSheet({ sheetRef, onAdd }: AddParticipantSheetProps) {
   const [name, setName] = useState('');
   const inputRef = useRef<TextInput>(null);
+
   const snapPoints = useMemo(() => ['40%'], []);
 
   const renderBackdrop = useCallback(
@@ -44,10 +45,13 @@ export function AddParticipantSheet({ sheetRef, onAdd }: AddParticipantSheetProp
     sheetRef.current?.close();
   };
 
-  const handleClose = () => {
-    setName('');
-    sheetRef.current?.close();
-  };
+  const handleSheetChange = useCallback((index: number) => {
+    if (index === 0) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } else if (index === -1) {
+      setName('');
+    }
+  }, []);
 
   return (
     <BottomSheet
@@ -56,42 +60,29 @@ export function AddParticipantSheet({ sheetRef, onAdd }: AddParticipantSheetProp
       snapPoints={snapPoints}
       enablePanDownToClose
       backdropComponent={renderBackdrop}
-      keyboardBehavior="extend"
+      onChange={handleSheetChange}
+      keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
     >
       <BottomSheetView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Add Participant</Text>
-          <TouchableOpacity onPress={handleClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder="Enter participant name"
-            placeholderTextColor="#9CA3AF"
-            value={name}
-            onChangeText={setName}
-            onSubmitEditing={handleAdd}
-            returnKeyType="done"
-            autoFocus={false}
-            autoCapitalize="words"
-            autoCorrect={false}
-          />
-        </View>
-
+        <Text style={styles.title}>Add Participant</Text>
+        <TextInput
+          ref={inputRef}
+          style={styles.input}
+          placeholder="Participant name"
+          placeholderTextColor="#8E8E93"
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+          returnKeyType="done"
+          onSubmitEditing={handleAdd}
+        />
         <TouchableOpacity
           style={[styles.addButton, !name.trim() && styles.addButtonDisabled]}
           onPress={handleAdd}
           disabled={!name.trim()}
-          activeOpacity={0.8}
         >
-          <Text style={styles.addButtonText}>Add Participant</Text>
+          <Text style={styles.addButtonText}>Add</Text>
         </TouchableOpacity>
       </BottomSheetView>
     </BottomSheet>
@@ -101,58 +92,43 @@ export function AddParticipantSheet({ sheetRef, onAdd }: AddParticipantSheetProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 32,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
+    paddingBottom: 24,
+    gap: 16,
   },
   title: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  cancelText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  label: {
-    fontSize: 13,
     fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  inputContainer: {
-    marginBottom: 20,
+    color: '#1C1C1E',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   input: {
+    height: 50,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderColor: '#E5E5EA',
+    borderRadius: 12,
+    paddingHorizontal: 16,
     fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
+    color: '#1C1C1E',
+    backgroundColor: '#F9F9F9',
   },
   addButton: {
-    backgroundColor: '#6366F1',
+    height: 50,
+    backgroundColor: '#007AFF',
     borderRadius: 12,
-    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   addButtonDisabled: {
-    backgroundColor: '#C7D2FE',
+    backgroundColor: '#C7C7CC',
   },
   addButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });
+
+export default AddParticipantSheet;

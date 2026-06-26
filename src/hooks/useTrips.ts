@@ -1,52 +1,24 @@
-import { useCallback } from 'react';
 import { useTripContext } from '../context/TripContext';
 import { Trip } from '../types';
-import { generateId } from '../utils/id';
 
-export function useTrips() {
-  const { state, dispatch } = useTripContext();
+interface UseTripsReturn {
+  trips: Trip[];
+  loading: boolean;
+  addTrip: (data: Omit<Trip, 'id' | 'createdAt' | 'participants'>) => void;
+  updateTrip: (trip: Trip) => void;
+  deleteTrip: (id: string) => void;
+}
 
-  const addTrip = useCallback(
-    (data: Omit<Trip, 'id' | 'createdAt' | 'participants'>) => {
-      const trip: Trip = {
-        ...data,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        participants: [],
-      };
-      dispatch({ type: 'TRIP_ADD', payload: trip });
-      return trip;
-    },
-    [dispatch]
-  );
-
-  const updateTrip = useCallback(
-    (trip: Trip) => {
-      dispatch({ type: 'TRIP_UPDATE', payload: trip });
-    },
-    [dispatch]
-  );
-
-  const deleteTrip = useCallback(
-    (id: string) => {
-      dispatch({ type: 'TRIP_DELETE', payload: { id } });
-    },
-    [dispatch]
-  );
-
-  const getTripById = useCallback(
-    (id: string): Trip | undefined => {
-      return state.trips.find((t) => t.id === id);
-    },
-    [state.trips]
-  );
+export function useTrips(): UseTripsReturn {
+  const { state, addTrip, updateTrip, deleteTrip } = useTripContext();
 
   return {
     trips: state.trips,
-    isLoading: state.isLoading,
+    loading: state.loading,
     addTrip,
     updateTrip,
     deleteTrip,
-    getTripById,
   };
 }
+
+export default useTrips;

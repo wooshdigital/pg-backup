@@ -1,11 +1,11 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
   FlatList,
-  StyleSheet,
   TouchableOpacity,
-  ListRenderItem,
+  StyleSheet,
+  SafeAreaView,
 } from 'react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
 import { useParticipants } from '../hooks/useParticipants';
@@ -14,132 +14,126 @@ import { AddParticipantSheet } from '../components/participants/AddParticipantSh
 import { Participant } from '../types';
 
 interface ParticipantsScreenProps {
-  route: {
-    params: {
-      tripId: string;
-    };
-  };
+  tripId: string;
 }
 
-export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
-  const { tripId } = route.params;
+export function ParticipantsScreen({ tripId }: ParticipantsScreenProps) {
   const { participants, addParticipant, removeParticipant } = useParticipants(tripId);
-  const sheetRef = useRef<BottomSheet>(null);
+  const bottomSheetRef = useRef<BottomSheet>(null);
 
-  const openSheet = useCallback(() => {
-    sheetRef.current?.snapToIndex(0);
-  }, []);
+  const openSheet = () => {
+    bottomSheetRef.current?.expand();
+  };
 
-  const renderItem: ListRenderItem<Participant> = useCallback(
-    ({ item }) => (
-      <ParticipantRow
-        participant={item}
-        onRemove={removeParticipant}
-      />
-    ),
-    [removeParticipant]
+  const handleAdd = (name: string) => {
+    addParticipant(name);
+  };
+
+  const handleRemove = (participantId: string) => {
+    // In a future phase, pass hasExpenses based on actual expense data
+    removeParticipant(participantId, false);
+  };
+
+  const renderItem = ({ item }: { item: Participant }) => (
+    <ParticipantRow participant={item} onRemove={handleRemove} />
   );
 
-  const keyExtractor = useCallback((item: Participant) => item.id, []);
-
-  const ListEmpty = () => (
+  const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyIcon}>👥</Text>
       <Text style={styles.emptyTitle}>No participants yet</Text>
       <Text style={styles.emptySubtitle}>
-        Tap the + button to add friends to this trip.
+        Tap the + button to add people to this trip
       </Text>
     </View>
   );
 
-  const ItemSeparator = () => <View style={styles.separator} />;
+  const renderSeparator = () => <View style={styles.separator} />;
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={participants}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        ListEmptyComponent={ListEmpty}
-        ItemSeparatorComponent={ItemSeparator}
-        contentContainerStyle={
-          participants.length === 0 ? styles.emptyList : styles.list
-        }
-      />
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <View style={styles.container}>
+        <FlatList
+          data={participants}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ListEmptyComponent={renderEmpty}
+          ItemSeparatorComponent={renderSeparator}
+          contentContainerStyle={participants.length === 0 ? styles.emptyList : undefined}
+        />
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={openSheet}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
+        {/* FAB */}
+        <TouchableOpacity style={styles.fab} onPress={openSheet} activeOpacity={0.85}>
+          <Text style={styles.fabIcon}>+</Text>
+        </TouchableOpacity>
 
-      <AddParticipantSheet sheetRef={sheetRef} onAdd={addParticipant} />
-    </View>
+        <AddParticipantSheet sheetRef={bottomSheetRef} onAdd={handleAdd} />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  list: {
-    paddingVertical: 8,
-  },
-  emptyList: {
-    flexGrow: 1,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-    marginLeft: 72,
+    backgroundColor: '#F2F2F7',
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 32,
+    gap: 8,
+  },
+  emptyList: {
+    flex: 1,
   },
   emptyIcon: {
     fontSize: 48,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   emptySubtitle: {
-    fontSize: 15,
-    color: '#6B7280',
+    fontSize: 14,
+    color: '#8E8E93',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#E5E5EA',
+    marginLeft: 72,
   },
   fab: {
     position: 'absolute',
+    bottom: 28,
     right: 24,
-    bottom: 32,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#6366F1',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 8,
   },
   fabIcon: {
-    fontSize: 28,
     color: '#FFFFFF',
-    lineHeight: 32,
+    fontSize: 28,
     fontWeight: '300',
+    lineHeight: 32,
   },
 });
+
+export default ParticipantsScreen;
