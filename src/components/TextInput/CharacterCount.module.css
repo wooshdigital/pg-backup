@@ -1,38 +1,19 @@
 .count {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1, 0.25rem);
+  display: block;
   font-size: var(--font-size-sm, 0.875rem);
-  font-variant-numeric: tabular-nums;
-  transition: color 0.15s ease;
-}
-
-.normal {
+  line-height: var(--line-height-tight, 1.25);
   color: var(--color-text-muted, #6b7280);
+  margin-top: var(--spacing-1, 4px);
+  text-align: right;
+  transition: color 0.15s ease;
 }
 
 .warning {
   color: var(--color-warning, #d97706);
+  font-weight: 500;
 }
 
-.critical {
-  color: var(--color-error-light, #ef4444);
-}
-
-.exceeded {
+.error {
   color: var(--color-error, #dc2626);
   font-weight: 600;
-}
-
-/* Screen reader only utility */
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }

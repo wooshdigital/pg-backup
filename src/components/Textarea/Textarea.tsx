@@ -1,4 +1,4 @@
-import React, { forwardRef, useContext, useEffect, useId, useRef, useCallback } from 'react';
+import React, { forwardRef, useCallback, useContext, useEffect, useId, useRef } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
 import styles from './Textarea.module.css';
 
@@ -11,7 +11,7 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
   minHeight?: number;
   /** Maximum height in pixels when autoResize is enabled (scrolls beyond this) */
   maxHeight?: number;
-  /** Additional className for the wrapper */
+  /** Additional className for the wrapper div */
   wrapperClassName?: string;
 }
 
@@ -22,30 +22,59 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       autoResize = false,
       minHeight = 80,
       maxHeight,
-      wrapperClassName,
       className,
+      wrapperClassName,
       'aria-describedby': ariaDescribedBy,
       'aria-invalid': ariaInvalid,
       'aria-required': ariaRequired,
-      id: idProp,
       disabled,
-      readOnly,
-      onChange,
+      required,
+      id: idProp,
       style,
+      onChange,
       ...rest
     },
     forwardedRef
   ) => {
-    const ctx = useContext(FormFieldContext);
-    const generatedId = useId();
-    const textareaId = idProp ?? ctx?.inputId ?? generatedId;
+    const fallbackId = useId();
+    const fieldCtx = useContext(FormFieldContext);
+    const internalRef = useRef<HTMLTextAreaElement | null>(null);
+    const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-    const internalRef = useRef<HTMLTextAreaElement>(null);
+    const id = idProp ?? fieldCtx?.inputId ?? fallbackId;
 
-    // Sync forwardedRef with internalRef
-    const setRefs = useCallback(
+    const describedByParts: string[] = [];
+    if (fieldCtx?.helperId) describedByParts.push(fieldCtx.helperId);
+    if (fieldCtx?.errorId) describedByParts.push(fieldCtx.errorId);
+    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
+    const mergedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
+
+    const isInvalid =
+      ariaInvalid !== undefined
+        ? ariaInvalid
+        : validationState === 'error' || fieldCtx?.hasError
+        ? true
+        : undefined;
+
+    const isRequired = ariaRequired !== undefined ? ariaRequired : required ?? fieldCtx?.required;
+
+    // Auto-resize logic
+    const syncHeight = useCallback(
+      (el: HTMLTextAreaElement) => {
+        if (!autoResize) return;
+        el.style.height = 'auto';
+        const scrollHeight = el.scrollHeight;
+        const newHeight = maxHeight ? Math.min(scrollHeight, maxHeight) : scrollHeight;
+        el.style.height = `${Math.max(newHeight, minHeight)}px`;
+        el.style.overflowY = maxHeight && scrollHeight > maxHeight ? 'auto' : 'hidden';
+      },
+      [autoResize, minHeight, maxHeight]
+    );
+
+    // Assign both the forwarded ref and our internal ref
+    const setRef = useCallback(
       (node: HTMLTextAreaElement | null) => {
-        (internalRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+        internalRef.current = node;
         if (typeof forwardedRef === 'function') {
           forwardedRef(node);
         } else if (forwardedRef) {
@@ -55,96 +84,63 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       [forwardedRef]
     );
 
-    // Build aria-describedby from context + caller
-    const describedByParts: string[] = [];
-    if (ctx?.helperId) describedByParts.push(ctx.helperId);
-    if (ctx?.errorId) describedByParts.push(ctx.errorId);
-    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
-    const computedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
-
-    const isInvalid =
-      ariaInvalid !== undefined
-        ? ariaInvalid
-        : ctx?.hasError ?? validationState === 'error'
-        ? true
-        : undefined;
-
-    const isRequired = ariaRequired !== undefined ? ariaRequired : ctx?.required;
-
-    const resolvedState = validationState ?? (ctx?.hasError ? 'error' : undefined);
-
-    // Auto-resize logic
-    const adjustHeight = useCallback(() => {
-      const el = internalRef.current;
-      if (!el || !autoResize) return;
-
-      el.style.height = 'auto';
-      const scrollH = el.scrollHeight;
-      const clamped = maxHeight ? Math.min(scrollH, maxHeight) : scrollH;
-      const final = Math.max(clamped, minHeight);
-      el.style.height = `${final}px`;
-      el.style.overflowY = maxHeight && scrollH > maxHeight ? 'auto' : 'hidden';
-    }, [autoResize, minHeight, maxHeight]);
-
-    // Adjust on mount
+    // Set up ResizeObserver to sync height when content changes externally
     useEffect(() => {
-      if (autoResize) {
-        adjustHeight();
-      }
-    }, [autoResize, adjustHeight]);
+      if (!autoResize || !internalRef.current) return;
 
-    // Observe resize (e.g. browser zoom, container changes)
-    useEffect(() => {
-      if (!autoResize) return;
       const el = internalRef.current;
-      if (!el) return;
+      syncHeight(el);
 
-      const observer = new ResizeObserver(() => {
-        adjustHeight();
+      resizeObserverRef.current = new ResizeObserver(() => {
+        syncHeight(el);
       });
-      observer.observe(el);
-      return () => observer.disconnect();
-    }, [autoResize, adjustHeight]);
+      resizeObserverRef.current.observe(el);
 
-    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      if (autoResize) adjustHeight();
-      onChange?.(e);
-    };
+      return () => {
+        resizeObserverRef.current?.disconnect();
+      };
+    }, [autoResize, syncHeight]);
+
+    const handleChange = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        if (autoResize) syncHeight(e.target);
+        onChange?.(e);
+      },
+      [autoResize, syncHeight, onChange]
+    );
 
     const wrapperClasses = [
       styles.wrapper,
-      resolvedState === 'error' && styles.error,
-      resolvedState === 'success' && styles.success,
-      resolvedState === 'warning' && styles.warning,
-      disabled && styles.disabled,
-      readOnly && styles.readonly,
-      autoResize && styles.autoResize,
-      wrapperClassName,
+      validationState === 'error' || fieldCtx?.hasError ? styles.stateError : '',
+      validationState === 'success' ? styles.stateSuccess : '',
+      validationState === 'warning' ? styles.stateWarning : '',
+      disabled ? styles.disabled : '',
+      autoResize ? styles.autoResize : '',
+      wrapperClassName ?? '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const textareaClasses = [styles.textarea, className].filter(Boolean).join(' ');
+    const textareaClasses = [styles.textarea, className ?? ''].filter(Boolean).join(' ');
 
     const computedStyle: React.CSSProperties = {
-      ...(autoResize ? { minHeight, overflow: 'hidden' } : {}),
-      ...(maxHeight && !autoResize ? { maxHeight, overflowY: 'auto' } : {}),
+      ...(autoResize ? { minHeight, ...(maxHeight ? { maxHeight } : {}), overflowY: 'hidden' } : {}),
       ...style,
     };
 
     return (
       <div className={wrapperClasses}>
         <textarea
-          ref={setRefs}
-          id={textareaId}
+          ref={setRef}
+          id={id}
           className={textareaClasses}
           disabled={disabled}
-          readOnly={readOnly}
-          aria-describedby={computedDescribedBy}
+          required={required}
+          aria-describedby={mergedDescribedBy}
           aria-invalid={isInvalid}
           aria-required={isRequired}
-          onChange={handleChange}
           style={computedStyle}
+          onChange={handleChange}
           {...rest}
         />
       </div>

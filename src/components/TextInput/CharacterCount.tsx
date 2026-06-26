@@ -2,51 +2,50 @@ import React from 'react';
 import styles from './CharacterCount.module.css';
 
 export interface CharacterCountProps {
-  /** Current character count */
+  /** Current number of characters typed */
   current: number;
   /** Maximum allowed characters */
   max: number;
-  /** ID for external aria-describedby wiring */
+  /** id to associate with the input via aria-describedby */
   id?: string;
-  /** Class name override */
+  /** Percentage threshold at which to show a warning colour (default 80) */
+  warningThreshold?: number;
+  /** Percentage threshold at which to show an error colour (default 100) */
+  errorThreshold?: number;
   className?: string;
 }
 
-export const CharacterCount: React.FC<CharacterCountProps> = ({ current, max, id, className }) => {
+export const CharacterCount: React.FC<CharacterCountProps> = ({
+  current,
+  max,
+  id,
+  warningThreshold = 80,
+  errorThreshold = 100,
+  className,
+}) => {
   const remaining = max - current;
-  const percentage = max > 0 ? current / max : 0;
+  const percentUsed = (current / max) * 100;
 
-  const thresholdClass =
-    percentage >= 1
-      ? styles.exceeded
-      : percentage >= 0.9
-      ? styles.critical
-      : percentage >= 0.75
-      ? styles.warning
-      : styles.normal;
+  let stateClass = '';
+  if (percentUsed >= errorThreshold || remaining < 0) {
+    stateClass = styles.error;
+  } else if (percentUsed >= warningThreshold) {
+    stateClass = styles.warning;
+  }
 
-  const classes = [styles.count, thresholdClass, className].filter(Boolean).join(' ');
-
-  // Accessible message for screen readers
-  const srMessage =
+  const message =
     remaining < 0
-      ? `${Math.abs(remaining)} characters over the limit of ${max}`
-      : `${remaining} of ${max} characters remaining`;
+      ? `${Math.abs(remaining)} character${Math.abs(remaining) !== 1 ? 's' : ''} over limit`
+      : `${remaining} of ${max} character${max !== 1 ? 's' : ''} remaining`;
 
   return (
     <span
       id={id}
-      className={classes}
+      className={[styles.count, stateClass, className ?? ''].filter(Boolean).join(' ')}
       aria-live="polite"
       aria-atomic="true"
-      role="status"
     >
-      {/* Visible numeric display */}
-      <span aria-hidden="true">
-        {current}/{max}
-      </span>
-      {/* Screen reader only text */}
-      <span className={styles.srOnly}>{srMessage}</span>
+      {message}
     </span>
   );
 };

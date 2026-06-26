@@ -1,109 +1,95 @@
+/* ── Wrapper ─────────────────────────────────────────────── */
 .wrapper {
   position: relative;
   display: flex;
   align-items: center;
   width: 100%;
-  background-color: var(--color-surface, #ffffff);
+  background: var(--color-surface, #ffffff);
   border: 1.5px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md, 6px);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .wrapper:focus-within {
-  border-color: var(--color-primary, #2563eb);
+  border-color: var(--color-focus, #2563eb);
   box-shadow: 0 0 0 3px var(--color-focus-ring, rgba(37, 99, 235, 0.25));
   outline: none;
 }
 
-/* Validation states */
-.wrapper.error {
+/* ── Validation states ───────────────────────────────────── */
+.stateError {
   border-color: var(--color-error, #dc2626);
 }
-
-.wrapper.error:focus-within {
+.stateError:focus-within {
   border-color: var(--color-error, #dc2626);
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
 }
 
-.wrapper.success {
+.stateSuccess {
   border-color: var(--color-success, #16a34a);
 }
-
-.wrapper.success:focus-within {
+.stateSuccess:focus-within {
   border-color: var(--color-success, #16a34a);
   box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
 }
 
-.wrapper.warning {
+.stateWarning {
   border-color: var(--color-warning, #d97706);
 }
-
-.wrapper.warning:focus-within {
+.stateWarning:focus-within {
   border-color: var(--color-warning, #d97706);
   box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2);
 }
 
-/* Disabled / Readonly */
-.wrapper.disabled {
-  background-color: var(--color-surface-disabled, #f3f4f6);
+/* ── Disabled state ──────────────────────────────────────── */
+.disabled {
+  background: var(--color-surface-disabled, #f3f4f6);
   border-color: var(--color-border-disabled, #e5e7eb);
   cursor: not-allowed;
-  opacity: 0.6;
 }
 
-.wrapper.readonly {
-  background-color: var(--color-surface-readonly, #f9fafb);
-}
-
-/* Input element */
+/* ── Native input ────────────────────────────────────────── */
 .input {
   flex: 1;
   min-width: 0;
-  padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+  padding: var(--spacing-2, 8px) var(--spacing-3, 12px);
   font-size: var(--font-size-base, 1rem);
-  font-family: inherit;
-  line-height: 1.5;
+  line-height: var(--line-height-normal, 1.5);
   color: var(--color-text, #111827);
   background: transparent;
   border: none;
   outline: none;
-  width: 100%;
+  appearance: none;
 }
 
 .input::placeholder {
-  color: var(--color-text-placeholder, #9ca3af);
+  color: var(--color-placeholder, #9ca3af);
 }
 
 .input:disabled {
+  color: var(--color-text-disabled, #9ca3af);
   cursor: not-allowed;
-  color: var(--color-text-disabled, #6b7280);
 }
 
-/* Prefix / Suffix */
+/* ── Prefix / Suffix adjustment ──────────────────────────── */
+.hasPrefix .input {
+  padding-left: var(--spacing-1, 4px);
+}
+
+.hasSuffix .input {
+  padding-right: var(--spacing-1, 4px);
+}
+
 .prefix,
 .suffix {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  padding: 0 var(--spacing-3, 12px);
   color: var(--color-text-muted, #6b7280);
-  padding: 0 var(--space-2, 0.5rem);
-}
-
-.prefix {
-  padding-left: var(--space-3, 0.75rem);
-  padding-right: 0;
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 .suffix {
-  padding-right: var(--space-3, 0.75rem);
-  padding-left: 0;
-}
-
-.hasPrefix .input {
-  padding-left: var(--space-2, 0.5rem);
-}
-
-.hasSuffix .input {
-  padding-right: var(--space-2, 0.5rem);
+  pointer-events: auto;
 }
