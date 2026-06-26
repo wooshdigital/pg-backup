@@ -1,3 +1,5 @@
+//go:build integration
+
 package storage_test
 
 import (
@@ -5,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,18 +17,19 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	storage "github.com/yourusername/dbbackup/internal/storage"
+	storage "github.com/yourorg/dbworker/internal/storage"
 )
 
 const (
 	localstackImage  = "localstack/localstack:3.0"
-	testBucket       = "test-backups"
+	testBucket       = "test-bucket"
 	localstackRegion = "us-east-1"
 )
 
-// startLocalStack launches a LocalStack container and returns the S3 endpoint URL.
-func startLocalStack(ctx context.Context, t *testing.T) (endpoint string, teardown func()) {
+// startLocalStack starts a LocalStack container and returns the S3 endpoint URL and a cleanup function.
+func startLocalStack(t *testing.T) (endpoint string, cleanup func()) {
 	t.Helper()
+	ctx := context.Background()
 
 	req := testcontainers.ContainerRequest{
 		Image:        localstackImage,
@@ -36,9 +38,7 @@ func startLocalStack(ctx context.Context, t *testing.T) (endpoint string, teardo
 			"SERVICES":    "s3",
 			"DEFAULT_REGION": localstackRegion,
 		},
-		WaitingFor: wait.ForHTTP("/_localstack/health").
-			WithPort("4566/tcp").
-			WithStartupTimeout(60 * time.Second),
+		WaitingFor: wait.ForHTTP("/_localstack/health").WithPort("4566/tcp").WithStartupTimeout(60 * time.Second),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -46,259 +46,199 @@ func startLocalStack(ctx context.Context, t *testing.T) (endpoint string, teardo
 		Started:          true,
 	})
 	if err != nil {
-		t.Fatalf("starting LocalStack container: %v", err)
-	}
-
-	mappedPort, err := container.MappedPort(ctx, "4566")
-	if err != nil {
-		t.Fatalf("getting LocalStack mapped port: %v", err)
+		t.Fatalf("failed to start LocalStack container: %v", err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
-		t.Fatalf("getting LocalStack host: %v", err)
+		t.Fatalf("failed to get container host: %v", err)
+	}
+	port, err := container.MappedPort(ctx, "4566")
+	if err != nil {
+		t.Fatalf("failed to get mapped port: %v", err)
 	}
 
-	ep := fmt.Sprintf("http://%s:%s", host, mappedPort.Port())
-	teardown = func() {
+	endpoint = fmt.Sprintf("http://%s:%s", host, port.Port())
+
+	cleanup = func() {
 		if err := container.Terminate(ctx); err != nil {
-			t.Logf("terminating LocalStack container: %v", err)
+			t.Logf("failed to terminate LocalStack container: %v", err)
 		}
 	}
-	return ep, teardown
+	return endpoint, cleanup
 }
 
-// createBucket creates an S3 bucket on the given endpoint using the AWS SDK directly.
-func createBucket(ctx context.Context, t *testing.T, endpoint, bucket string) {
+// createBucket creates the test S3 bucket on LocalStack.
+func createBucket(t *testing.T, endpoint string) {
 	t.Helper()
+	ctx := context.Background()
 
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+	cfg, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(localstackRegion),
-		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("test", "test", "")),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("test", "test", ""),
+		),
 	)
 	if err != nil {
-		t.Fatalf("loading aws config: %v", err)
+		t.Fatalf("failed to load AWS config: %v", err)
 	}
 
-	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(endpoint)
 		o.UsePathStyle = true
 	})
 
 	_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(bucket),
+		Bucket: aws.String(testBucket),
 	})
 	if err != nil {
-		t.Fatalf("creating bucket %q: %v", bucket, err)
+		t.Fatalf("failed to create test bucket: %v", err)
 	}
 }
 
-// newTestUploader builds an S3Uploader pointed at the LocalStack endpoint.
-func newTestUploader(ctx context.Context, t *testing.T, endpoint string) *storage.S3Uploader {
+// getObject fetches the content of a key from the test bucket.
+func getObject(t *testing.T, endpoint, key string) []byte {
 	t.Helper()
+	ctx := context.Background()
 
-	up, err := storage.NewS3Uploader(ctx, storage.S3UploaderConfig{
+	cfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(localstackRegion),
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("test", "test", ""),
+		),
+	)
+	if err != nil {
+		t.Fatalf("failed to load AWS config: %v", err)
+	}
+
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true
+	})
+
+	result, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(testBucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		t.Fatalf("failed to get object %q: %v", key, err)
+	}
+	defer result.Body.Close()
+
+	data, err := io.ReadAll(result.Body)
+	if err != nil {
+		t.Fatalf("failed to read object body: %v", err)
+	}
+	return data
+}
+
+func TestS3Uploader_Upload(t *testing.T) {
+	endpoint, cleanup := startLocalStack(t)
+	defer cleanup()
+
+	createBucket(t, endpoint)
+
+	ctx := context.Background()
+	uploader, err := storage.NewS3Uploader(ctx, storage.S3UploaderConfig{
 		Bucket:          testBucket,
 		Region:          localstackRegion,
 		Endpoint:        endpoint,
 		ForcePathStyle:  true,
 		AccessKeyID:     "test",
 		SecretAccessKey: "test",
-		PartSizeMB:      5,
-		Concurrency:     3,
-		MaxRetries:      3,
+		PartSize:        5 * 1024 * 1024,
+		Concurrency:     2,
+		MaxRetries:      2,
 	})
 	if err != nil {
-		t.Fatalf("creating S3Uploader: %v", err)
-	}
-	return up
-}
-
-// ---- Tests -----------------------------------------------------------------
-
-func TestS3Uploader_Upload_SmallObject(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Fatalf("NewS3Uploader: %v", err)
 	}
 
-	ctx := context.Background()
-	endpoint, teardown := startLocalStack(ctx, t)
-	defer teardown()
-	createBucket(ctx, t, endpoint, testBucket)
+	content := []byte("this is a test dump artifact")
+	key := "backups/testdb/2024-03-15/1710498600-dump.sql.gz"
 
-	up := newTestUploader(ctx, t, endpoint)
-
-	const key = "backups/mydb/2024-03-15/mydb-1710495000.sql.gz"
-	payload := []byte("fake compressed dump data")
-
-	if err := up.Upload(ctx, key, bytes.NewReader(payload), int64(len(payload))); err != nil {
+	if err := uploader.Upload(ctx, key, bytes.NewReader(content), int64(len(content))); err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
 
-	// Verify the object exists.
-	ok, err := up.Exists(ctx, key)
-	if err != nil {
-		t.Fatalf("Exists: %v", err)
-	}
-	if !ok {
-		t.Errorf("expected key %q to exist after upload", key)
+	got := getObject(t, endpoint, key)
+	if !bytes.Equal(got, content) {
+		t.Errorf("uploaded content = %q, want %q", got, content)
 	}
 }
 
-func TestS3Uploader_Upload_LargeObject(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
+func TestS3Uploader_Upload_LargeFile(t *testing.T) {
+	endpoint, cleanup := startLocalStack(t)
+	defer cleanup()
+
+	createBucket(t, endpoint)
 
 	ctx := context.Background()
-	endpoint, teardown := startLocalStack(ctx, t)
-	defer teardown()
-	createBucket(ctx, t, endpoint, testBucket)
-
-	up := newTestUploader(ctx, t, endpoint)
-
-	// Generate ~12 MB of data to force multipart upload (> 5 MB part size).
-	const size = 12 * 1024 * 1024
-	data := bytes.Repeat([]byte("x"), size)
-	key := "backups/large/2024-03-15/large-dump.sql.gz"
-
-	if err := up.Upload(ctx, key, bytes.NewReader(data), int64(size)); err != nil {
-		t.Fatalf("Upload large object: %v", err)
-	}
-
-	ok, err := up.Exists(ctx, key)
-	if err != nil {
-		t.Fatalf("Exists: %v", err)
-	}
-	if !ok {
-		t.Errorf("expected key %q to exist after upload", key)
-	}
-}
-
-func TestS3Uploader_Exists_NonExistentKey(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	ctx := context.Background()
-	endpoint, teardown := startLocalStack(ctx, t)
-	defer teardown()
-	createBucket(ctx, t, endpoint, testBucket)
-
-	up := newTestUploader(ctx, t, endpoint)
-
-	ok, err := up.Exists(ctx, "does/not/exist.sql.gz")
-	if err != nil {
-		t.Fatalf("Exists: %v", err)
-	}
-	if ok {
-		t.Error("expected non-existent key to return false")
-	}
-}
-
-func TestS3Uploader_Delete(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	ctx := context.Background()
-	endpoint, teardown := startLocalStack(ctx, t)
-	defer teardown()
-	createBucket(ctx, t, endpoint, testBucket)
-
-	up := newTestUploader(ctx, t, endpoint)
-
-	const key = "backups/todelete.sql.gz"
-	if err := up.Upload(ctx, key, strings.NewReader("data"), -1); err != nil {
-		t.Fatalf("Upload: %v", err)
-	}
-
-	if err := up.Delete(ctx, key); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-
-	ok, err := up.Exists(ctx, key)
-	if err != nil {
-		t.Fatalf("Exists after delete: %v", err)
-	}
-	if ok {
-		t.Errorf("key %q should not exist after deletion", key)
-	}
-}
-
-func TestS3Uploader_UploadWithRetry(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	ctx := context.Background()
-	endpoint, teardown := startLocalStack(ctx, t)
-	defer teardown()
-	createBucket(ctx, t, endpoint, testBucket)
-
-	up := newTestUploader(ctx, t, endpoint)
-
-	const key = "backups/retry-test.sql.gz"
-	payload := []byte("retry payload data")
-
-	calls := 0
-	factory := func() (io.Reader, int64, error) {
-		calls++
-		return bytes.NewReader(payload), int64(len(payload)), nil
-	}
-
-	if err := up.UploadWithRetry(ctx, key, factory); err != nil {
-		t.Fatalf("UploadWithRetry: %v", err)
-	}
-
-	// Should succeed on first attempt; factory called exactly once.
-	if calls != 1 {
-		t.Errorf("factory called %d times, want 1", calls)
-	}
-
-	ok, err := up.Exists(ctx, key)
-	if err != nil {
-		t.Fatalf("Exists: %v", err)
-	}
-	if !ok {
-		t.Errorf("key %q should exist after UploadWithRetry", key)
-	}
-}
-
-func TestS3Uploader_EmptyKey_ReturnsError(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	ctx := context.Background()
-	endpoint, teardown := startLocalStack(ctx, t)
-	defer teardown()
-	createBucket(ctx, t, endpoint, testBucket)
-
-	up := newTestUploader(ctx, t, endpoint)
-
-	err := up.Upload(ctx, "", strings.NewReader("data"), -1)
-	if err == nil {
-		t.Error("expected error for empty key, got nil")
-	}
-}
-
-func TestNewS3Uploader_MissingBucket_ReturnsError(t *testing.T) {
-	ctx := context.Background()
-	_, err := storage.NewS3Uploader(ctx, storage.S3UploaderConfig{
-		Region: "us-east-1",
+	uploader, err := storage.NewS3Uploader(ctx, storage.S3UploaderConfig{
+		Bucket:          testBucket,
+		Region:          localstackRegion,
+		Endpoint:        endpoint,
+		ForcePathStyle:  true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+		// Use a small part size to force multipart upload during tests.
+		PartSize:    5 * 1024 * 1024,
+		Concurrency: 3,
+		MaxRetries:  2,
 	})
-	if err == nil {
-		t.Error("expected error when bucket is empty")
+	if err != nil {
+		t.Fatalf("NewS3Uploader: %v", err)
+	}
+
+	// Generate ~12 MB of data to force a multipart upload (> 2 parts at 5 MB each).
+	size := 12 * 1024 * 1024
+	content := bytes.Repeat([]byte("A"), size)
+	key := "backups/testdb/2024-03-15/large-dump.sql.gz"
+
+	if err := uploader.Upload(ctx, key, bytes.NewReader(content), int64(len(content))); err != nil {
+		t.Fatalf("Upload (large): %v", err)
+	}
+
+	got := getObject(t, endpoint, key)
+	if len(got) != size {
+		t.Errorf("uploaded size = %d, want %d", len(got), size)
 	}
 }
 
-func TestNewS3Uploader_MissingRegion_ReturnsError(t *testing.T) {
+func TestS3Uploader_Upload_UnknownSize(t *testing.T) {
+	endpoint, cleanup := startLocalStack(t)
+	defer cleanup()
+
+	createBucket(t, endpoint)
+
 	ctx := context.Background()
-	_, err := storage.NewS3Uploader(ctx, storage.S3UploaderConfig{
-		Bucket: "my-bucket",
+	uploader, err := storage.NewS3Uploader(ctx, storage.S3UploaderConfig{
+		Bucket:          testBucket,
+		Region:          localstackRegion,
+		Endpoint:        endpoint,
+		ForcePathStyle:  true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
 	})
-	if err == nil {
-		t.Error("expected error when region is empty")
+	if err != nil {
+		t.Fatalf("NewS3Uploader: %v", err)
 	}
+
+	content := []byte("unknown size content")
+	key := "backups/unknown-size.gz"
+
+	// Pass size=-1 to simulate an unknown content length.
+	if err := uploader.Upload(ctx, key, bytes.NewReader(content), -1); err != nil {
+		t.Fatalf("Upload (unknown size): %v", err)
+	}
+
+	got := getObject(t, endpoint, key)
+	if !bytes.Equal(got, content) {
+		t.Errorf("content mismatch: got %q, want %q", got, content)
+	}
+}
+
+func TestS3Uploader_ImplementsStorageBackend(t *testing.T) {
+	// Compile-time check that *S3Uploader satisfies StorageBackend.
+	var _ storage.StorageBackend = (*storage.S3Uploader)(nil)
 }

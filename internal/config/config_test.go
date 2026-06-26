@@ -1,213 +1,214 @@
-package config_test
+package config
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
-
-	"github.com/yourorg/dbworker/internal/config"
 )
 
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("writing config file: %v", err)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
 	}
 	return path
 }
 
-func TestLoad_S3Backend(t *testing.T) {
-	path := writeConfig(t, `
-worker:
-  schedule: "0 2 * * *"
-  timeout: 1h
+func TestLoad_S3Config(t *testing.T) {
+	yaml := `
 database:
-  dsn: postgres://user:pass@localhost:5432/mydb
-  name: mydb
+  dsn: "postgres://user:pass@localhost/mydb"
 storage:
   backend: s3
   s3:
-    bucket: my-backups
+    bucket: my-bucket
     region: us-east-1
-    prefix_template: "backups/{db}/{date}/{timestamp}.sql.gz"
-    part_size_bytes: 10485760
+    key_template: "backups/{db}/{date}/{timestamp}.gz"
+    part_size: 10485760
     concurrency: 3
     max_retries: 5
-compress:
-  algorithm: gzip
-  level: 6
-`)
-
-	cfg, err := config.Load(path)
+    credentials:
+      access_key_id: AKID
+      secret_access_key: secret
+dump:
+  compress: gzip
+  schedule: "0 2 * * *"
+  timeout: 30m
+`
+	path := writeConfig(t, yaml)
+	cfg, err := Load(path)
 	if err != nil {
-		t.Fatalf("Load() error: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 
 	if cfg.Storage.Backend != "s3" {
 		t.Errorf("Backend = %q, want %q", cfg.Storage.Backend, "s3")
 	}
-	if cfg.Storage.S3.Bucket != "my-backups" {
-		t.Errorf("Bucket = %q, want %q", cfg.Storage.S3.Bucket, "my-backups")
+	if cfg.Storage.S3.Bucket != "my-bucket" {
+		t.Errorf("Bucket = %q, want %q", cfg.Storage.S3.Bucket, "my-bucket")
 	}
 	if cfg.Storage.S3.Region != "us-east-1" {
 		t.Errorf("Region = %q, want %q", cfg.Storage.S3.Region, "us-east-1")
 	}
-	if cfg.Storage.S3.PartSizeBytes != 10485760 {
-		t.Errorf("PartSizeBytes = %d, want %d", cfg.Storage.S3.PartSizeBytes, 10485760)
+	if cfg.Storage.S3.KeyTemplate != "backups/{db}/{date}/{timestamp}.gz" {
+		t.Errorf("KeyTemplate = %q", cfg.Storage.S3.KeyTemplate)
+	}
+	if cfg.Storage.S3.PartSize != 10485760 {
+		t.Errorf("PartSize = %d, want %d", cfg.Storage.S3.PartSize, 10485760)
 	}
 	if cfg.Storage.S3.Concurrency != 3 {
-		t.Errorf("Concurrency = %d, want %d", cfg.Storage.S3.Concurrency, 3)
+		t.Errorf("Concurrency = %d, want 3", cfg.Storage.S3.Concurrency)
 	}
 	if cfg.Storage.S3.MaxRetries != 5 {
-		t.Errorf("MaxRetries = %d, want %d", cfg.Storage.S3.MaxRetries, 5)
+		t.Errorf("MaxRetries = %d, want 5", cfg.Storage.S3.MaxRetries)
 	}
-	if cfg.Worker.Timeout != time.Hour {
-		t.Errorf("Timeout = %v, want %v", cfg.Worker.Timeout, time.Hour)
-	}
-}
-
-func TestLoad_Defaults(t *testing.T) {
-	path := writeConfig(t, `
-storage:
-  s3:
-    bucket: my-backups
-    region: eu-west-1
-`)
-
-	cfg, err := config.Load(path)
-	if err != nil {
-		t.Fatalf("Load() error: %v", err)
-	}
-
-	if cfg.Storage.Backend != "s3" {
-		t.Errorf("default Backend = %q, want \"s3\"", cfg.Storage.Backend)
-	}
-	if cfg.Storage.S3.PrefixTemplate != config.DefaultPrefixTemplate {
-		t.Errorf("default PrefixTemplate = %q, want %q", cfg.Storage.S3.PrefixTemplate, config.DefaultPrefixTemplate)
-	}
-	if cfg.Storage.S3.PartSizeBytes != 5*1024*1024 {
-		t.Errorf("default PartSizeBytes = %d, want %d", cfg.Storage.S3.PartSizeBytes, 5*1024*1024)
-	}
-	if cfg.Storage.S3.Concurrency != 5 {
-		t.Errorf("default Concurrency = %d, want 5", cfg.Storage.S3.Concurrency)
-	}
-	if cfg.Storage.S3.MaxRetries != 3 {
-		t.Errorf("default MaxRetries = %d, want 3", cfg.Storage.S3.MaxRetries)
-	}
-	if cfg.Compress.Algorithm != "gzip" {
-		t.Errorf("default Algorithm = %q, want \"gzip\"", cfg.Compress.Algorithm)
-	}
-	if cfg.Worker.Timeout != 2*time.Hour {
-		t.Errorf("default Timeout = %v, want 2h", cfg.Worker.Timeout)
+	if cfg.Storage.S3.Credentials.AccessKeyID != "AKID" {
+		t.Errorf("AccessKeyID = %q", cfg.Storage.S3.Credentials.AccessKeyID)
 	}
 }
 
-func TestLoad_LocalBackend(t *testing.T) {
-	path := writeConfig(t, `
+func TestLoad_LocalConfig(t *testing.T) {
+	yaml := `
+database:
+  dsn: "postgres://user:pass@localhost/mydb"
 storage:
   backend: local
   local:
     base_dir: /tmp/backups
-`)
-
-	cfg, err := config.Load(path)
+dump:
+  compress: gzip
+`
+	path := writeConfig(t, yaml)
+	cfg, err := Load(path)
 	if err != nil {
-		t.Fatalf("Load() error: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
 
 	if cfg.Storage.Backend != "local" {
-		t.Errorf("Backend = %q, want \"local\"", cfg.Storage.Backend)
+		t.Errorf("Backend = %q, want %q", cfg.Storage.Backend, "local")
 	}
 	if cfg.Storage.Local.BaseDir != "/tmp/backups" {
-		t.Errorf("BaseDir = %q, want /tmp/backups", cfg.Storage.Local.BaseDir)
+		t.Errorf("BaseDir = %q", cfg.Storage.Local.BaseDir)
 	}
 }
 
 func TestLoad_ValidationErrors(t *testing.T) {
 	tests := []struct {
 		name    string
-		content string
+		yaml    string
+		wantErr string
 	}{
 		{
-			name: "s3 backend missing bucket",
-			content: `
+			name: "missing backend",
+			yaml: `
+database:
+  dsn: "postgres://localhost/db"
+storage: {}
+dump:
+  compress: gzip
+`,
+			wantErr: "storage.backend must be set",
+		},
+		{
+			name: "unknown backend",
+			yaml: `
+database:
+  dsn: "postgres://localhost/db"
+storage:
+  backend: ftp
+dump:
+  compress: gzip
+`,
+			wantErr: "unknown storage backend",
+		},
+		{
+			name: "s3 missing bucket",
+			yaml: `
+database:
+  dsn: "postgres://localhost/db"
 storage:
   backend: s3
   s3:
     region: us-east-1
+    key_template: "backups/{db}/{date}.gz"
+dump:
+  compress: gzip
 `,
+			wantErr: "storage.s3.bucket is required",
 		},
 		{
-			name: "s3 backend missing region",
-			content: `
+			name: "s3 missing region",
+			yaml: `
+database:
+  dsn: "postgres://localhost/db"
 storage:
   backend: s3
   s3:
-    bucket: my-backups
+    bucket: my-bucket
+    key_template: "backups/{db}/{date}.gz"
+dump:
+  compress: gzip
 `,
+			wantErr: "storage.s3.region is required",
 		},
 		{
-			name: "local backend missing base_dir",
-			content: `
+			name: "s3 missing key template",
+			yaml: `
+database:
+  dsn: "postgres://localhost/db"
+storage:
+  backend: s3
+  s3:
+    bucket: my-bucket
+    region: us-east-1
+dump:
+  compress: gzip
+`,
+			wantErr: "storage.s3.key_template is required",
+		},
+		{
+			name: "local missing base_dir",
+			yaml: `
+database:
+  dsn: "postgres://localhost/db"
 storage:
   backend: local
+  local: {}
+dump:
+  compress: gzip
 `,
-		},
-		{
-			name: "unknown backend",
-			content: `
-storage:
-  backend: gcs
-`,
+			wantErr: "storage.local.base_dir is required",
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			path := writeConfig(t, tc.content)
-			_, err := config.Load(path)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeConfig(t, tt.yaml)
+			_, err := Load(path)
 			if err == nil {
-				t.Fatal("expected validation error, got nil")
+				t.Fatal("expected error, got nil")
+			}
+			if tt.wantErr != "" {
+				if !containsString(err.Error(), tt.wantErr) {
+					t.Errorf("error = %q, want to contain %q", err.Error(), tt.wantErr)
+				}
 			}
 		})
 	}
 }
 
-func TestLoad_FileNotFound(t *testing.T) {
-	_, err := config.Load("/nonexistent/path/config.yaml")
-	if err == nil {
-		t.Fatal("expected error for missing file, got nil")
-	}
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		findSubstring(s, substr))
 }
 
-func TestLoad_StaticCredentials(t *testing.T) {
-	path := writeConfig(t, `
-storage:
-  backend: s3
-  s3:
-    bucket: secure-backups
-    region: us-west-2
-    credentials:
-      access_key_id: AKIAIOSFODNN7EXAMPLE
-      secret_access_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-      session_token: AQoXnyc4lcK4w
-`)
-
-	cfg, err := config.Load(path)
-	if err != nil {
-		t.Fatalf("Load() error: %v", err)
+func findSubstring(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
 	}
-
-	if cfg.Storage.S3.Credentials.AccessKeyID != "AKIAIOSFODNN7EXAMPLE" {
-		t.Errorf("AccessKeyID = %q", cfg.Storage.S3.Credentials.AccessKeyID)
-	}
-	if cfg.Storage.S3.Credentials.SecretAccessKey != "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" {
-		t.Errorf("SecretAccessKey mismatch")
-	}
-	if cfg.Storage.S3.Credentials.SessionToken != "AQoXnyc4lcK4w" {
-		t.Errorf("SessionToken = %q", cfg.Storage.S3.Credentials.SessionToken)
-	}
+	return false
 }

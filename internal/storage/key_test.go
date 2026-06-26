@@ -6,130 +6,128 @@ import (
 )
 
 func TestRenderKey(t *testing.T) {
-	// Fixed reference time for deterministic tests.
-	ref := time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC)
+	fixedTime := time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
-		template string
-		params   KeyParams
-		want     string
-		wantErr  bool
+		tmpl     string
+		kd       KeyData
+		expected string
 	}{
 		{
-			name:     "all placeholders",
-			template: "backups/{db}/{date}/{db}-{timestamp}.sql.gz",
-			params:   KeyParams{DB: "mydb", T: ref, Hostname: "web-01"},
-			want:     "backups/mydb/2024-03-15/mydb-1710495000.sql.gz",
+			name: "all placeholders",
+			tmpl: "backups/{db}/{date}/{timestamp}-dump.sql.gz",
+			kd: KeyData{
+				DB:        "mydb",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "web-01",
+			},
+			expected: "backups/mydb/2024-03-15/1710498600-dump.sql.gz",
 		},
 		{
-			name:     "hostname placeholder",
-			template: "{hostname}/{db}-{date}.sql.gz",
-			params:   KeyParams{DB: "testdb", T: ref, Hostname: "host-1"},
-			want:     "host-1/testdb-2024-03-15.sql.gz",
+			name: "hostname placeholder",
+			tmpl: "{hostname}/{db}/{date}.gz",
+			kd: KeyData{
+				DB:        "production",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "db-host",
+			},
+			expected: "db-host/production/2024-03-15.gz",
 		},
 		{
-			name:     "no placeholders – literal key",
-			template: "static/backup.sql.gz",
-			params:   KeyParams{DB: "db", T: ref, Hostname: "h"},
-			want:     "static/backup.sql.gz",
+			name: "no placeholders – static key",
+			tmpl: "static/path/backup.sql.gz",
+			kd: KeyData{
+				DB:        "mydb",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "web-01",
+			},
+			expected: "static/path/backup.sql.gz",
 		},
 		{
-			name:     "leading slash stripped",
-			template: "/backups/{db}.sql.gz",
-			params:   KeyParams{DB: "db", T: ref, Hostname: "h"},
-			want:     "backups/db.sql.gz",
+			name: "unknown placeholder is preserved",
+			tmpl: "backups/{db}/{unknown}/dump.gz",
+			kd: KeyData{
+				DB:        "mydb",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "web-01",
+			},
+			expected: "backups/mydb/{unknown}/dump.gz",
 		},
 		{
-			name:     "db name with special chars sanitised",
-			template: "backups/{db}/{date}.sql.gz",
-			params:   KeyParams{DB: "my db@prod!", T: ref, Hostname: "h"},
-			want:     "backups/my_db_prod_/2024-03-15.sql.gz",
+			name: "empty template",
+			tmpl: "",
+			kd: KeyData{
+				DB:        "mydb",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "web-01",
+			},
+			expected: "",
 		},
 		{
-			name:     "hostname with special chars sanitised",
-			template: "{hostname}/{db}.sql.gz",
-			params:   KeyParams{DB: "db", T: ref, Hostname: "my host!"},
-			want:     "my_host_/db.sql.gz",
+			name: "repeated placeholders",
+			tmpl: "{db}/{db}/{date}",
+			kd: KeyData{
+				DB:        "mydb",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "web-01",
+			},
+			expected: "mydb/mydb/2024-03-15",
 		},
 		{
-			name:     "empty template returns error",
-			template: "",
-			params:   KeyParams{DB: "db", T: ref, Hostname: "h"},
-			wantErr:  true,
+			name: "timestamp only",
+			tmpl: "{timestamp}.sql.gz",
+			kd: KeyData{
+				DB:        "mydb",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "web-01",
+			},
+			expected: "1710498600.sql.gz",
 		},
 		{
-			name:     "template renders to empty after trimming",
-			template: "   ",
-			params:   KeyParams{DB: "db", T: ref, Hostname: "h"},
-			wantErr:  true,
-		},
-		{
-			name:     "zero time uses current time (non-empty)",
-			template: "backups/{db}/{date}.sql.gz",
-			params:   KeyParams{DB: "db", T: time.Time{}, Hostname: "h"},
-			wantErr:  false,
-			// We cannot assert the exact value since it uses time.Now(),
-			// but we verify no error is returned.
-			want: "", // checked separately below
-		},
-		{
-			name:     "only timestamp placeholder",
-			template: "{timestamp}.sql.gz",
-			params:   KeyParams{DB: "db", T: ref, Hostname: "h"},
-			want:     "1710495000.sql.gz",
-		},
-		{
-			name:     "nested path with all placeholders",
-			template: "{hostname}/db/{db}/year/{date}/{timestamp}.tar.gz",
-			params:   KeyParams{DB: "orders", T: ref, Hostname: "prod-db-1"},
-			want:     "prod-db-1/db/orders/year/2024-03-15/1710495000.tar.gz",
+			name: "db with special characters",
+			tmpl: "backups/{db}/{date}.gz",
+			kd: KeyData{
+				DB:        "my-special_db.v2",
+				Date:      "2024-03-15",
+				Timestamp: "1710498600",
+				Hostname:  "web-01",
+			},
+			expected: "backups/my-special_db.v2/2024-03-15.gz",
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := RenderKey(tc.template, tc.params)
-			if tc.wantErr {
-				if err == nil {
-					t.Errorf("expected error but got nil (key=%q)", got)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			// Skip exact assertion for zero-time test.
-			if tc.want == "" {
-				if got == "" {
-					t.Errorf("expected non-empty key but got empty string")
-				}
-				return
-			}
-			if got != tc.want {
-				t.Errorf("RenderKey(%q, ...) = %q, want %q", tc.template, got, tc.want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RenderKey(tt.tmpl, tt.kd)
+			if got != tt.expected {
+				t.Errorf("RenderKey(%q, ...) = %q, want %q", tt.tmpl, got, tt.expected)
 			}
 		})
 	}
 }
 
-func TestSanitise(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"simple", "simple"},
-		{"my-db_1.0", "my-db_1.0"},
-		{"db name", "db_name"},
-		{"db@host!prod", "db_host_prod"},
-		{"path/to/key", "path/to/key"},
-		{"", ""},
-		{"ALL_CAPS-123", "ALL_CAPS-123"},
+func TestNewKeyData(t *testing.T) {
+	fixedTime := time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC)
+	kd := NewKeyData("testdb", fixedTime)
+
+	if kd.DB != "testdb" {
+		t.Errorf("DB = %q, want %q", kd.DB, "testdb")
 	}
-	for _, tc := range tests {
-		got := sanitise(tc.input)
-		if got != tc.want {
-			t.Errorf("sanitise(%q) = %q, want %q", tc.input, got, tc.want)
-		}
+	if kd.Date != "2024-03-15" {
+		t.Errorf("Date = %q, want %q", kd.Date, "2024-03-15")
+	}
+	if kd.Timestamp != "1710498600" {
+		t.Errorf("Timestamp = %q, want %q", kd.Timestamp, "1710498600")
+	}
+	if kd.Hostname == "" {
+		t.Error("Hostname should not be empty")
 	}
 }
