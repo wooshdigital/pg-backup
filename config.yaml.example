@@ -1,17 +1,57 @@
-# pg-dump-worker example configuration
+# Example configuration file for dbbackup.
+# Copy to config.yaml and adjust values as needed.
 
-# PostgreSQL connection string.
-database_url: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+database:
+  # Full DSN (takes precedence over individual fields).
+  # dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
-# Directory where dump files will be written.
-output_dir: "/var/backups/pg-dumps"
+  host: "localhost"
+  port: 5432
+  name: "mydb"
+  user: "backup_user"
+  password: "secret"
 
-# Compression algorithm to use: none | gzip | zstd
-# Defaults to "gzip" when omitted.
-compression_format: "gzip"
+storage:
+  # Backend to use: "s3" or "local"
+  backend: "s3"
 
-# Algorithm-specific compression level.
-#   gzip: 1 (BestSpeed) – 9 (BestCompression); 0 → default (-1, equivalent to 6)
-#   zstd: 1 (Fastest)   – 4 (BestCompression);  0 → default (3)
-#   none: ignored
-compression_level: 6
+  s3:
+    bucket: "my-db-backups"
+    region: "us-east-1"
+
+    # Key template. Supported placeholders: {db}, {date}, {timestamp}, {hostname}
+    key_prefix: "backups/{hostname}/{db}/{date}/{timestamp}.sql.gz"
+
+    # Multipart upload part size in bytes (default: 5242880 = 5 MiB).
+    part_size: 5242880
+
+    # Number of concurrent goroutines for multipart upload (default: 5).
+    concurrency: 5
+
+    # Maximum number of upload attempts before giving up (default: 3).
+    max_retries: 3
+
+    # Maximum backoff duration between retries (Go duration string).
+    retry_max_backoff: "30s"
+
+    # Optional: override S3 endpoint for LocalStack or other S3-compatible stores.
+    # endpoint: "http://localhost:4566"
+    # force_path_style: true
+
+    # Optional: explicit AWS credentials.
+    # Leave blank to use IAM role / environment / shared credentials.
+    credentials:
+      access_key_id: ""
+      secret_access_key: ""
+      session_token: ""
+
+  local:
+    # Directory used when backend is "local".
+    directory: "/tmp/dbbackups"
+
+compress:
+  algorithm: "gzip"
+  level: 6
+
+# Temporary directory for staging dump files before upload.
+temp_dir: "/tmp"
