@@ -1,0 +1,101 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1, 4px);
+  width: 100%;
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input {
+  width: 100%;
+  padding: var(--spacing-2, 8px) var(--spacing-3, 12px);
+  font-size: var(--font-size-base, 1rem);
+  font-family: inherit;
+  line-height: var(--line-height-normal, 1.5);
+  color: var(--color-text-primary, #1a1a1a);
+  background-color: var(--color-bg-input, #ffffff);
+  border: 2px solid var(--color-border-default, #d1d5db);
+  border-radius: var(--radius-md, 6px);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-placeholder, #9ca3af);
+}
+
+.input:hover:not(:disabled):not(.inputError) {
+  border-color: var(--color-border-hover, #9ca3af);
+}
+
+.input:focus {
+  border-color: var(--color-focus, #2563eb);
+  box-shadow: 0 0 0 3px var(--color-focus-ring, rgba(37, 99, 235, 0.25));
+}
+
+.input:disabled {
+  background-color: var(--color-bg-disabled, #f3f4f6);
+  color: var(--color-text-disabled, #9ca3af);
+  cursor: not-allowed;
+  border-color: var(--color-border-disabled, #e5e7eb);
+}
+
+.input[readonly] {
+  background-color: var(--color-bg-readonly, #f9fafb);
+  cursor: default;
+}
+
+.inputError {
+  border-color: var(--color-error, #dc2626) !important;
+}
+
+.inputError:focus {
+  box-shadow: 0 0 0 3px var(--color-error-ring, rgba(220, 38, 38, 0.25)) !important;
+}
+
+.inputSuccess {
+  border-color: var(--color-success, #16a34a);
+}
+
+.inputSuccess:focus {
+  box-shadow: 0 0 0 3px var(--color-success-ring, rgba(22, 163, 74, 0.25));
+}
+
+/* Prefix / Suffix slots */
+.hasPrefix {
+  padding-left: var(--spacing-9, 36px);
+}
+
+.hasSuffix {
+  padding-right: var(--spacing-9, 36px);
+}
+
+.prefix,
+.suffix {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted, #6b7280);
+  pointer-events: none;
+  user-select: none;
+}
+
+.prefix {
+  left: var(--spacing-3, 12px);
+}
+
+.suffix {
+  right: var(--spacing-3, 12px);
+}

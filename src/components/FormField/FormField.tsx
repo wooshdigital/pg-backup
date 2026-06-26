@@ -1,55 +1,39 @@
-import React, { useMemo } from 'react';
-import { FormFieldContext, FormFieldContextValue } from './FormFieldContext';
-import styles from './FormField.module.css';
-
-let idCounter = 0;
-function generateId(prefix: string): string {
-  return `${prefix}-${++idCounter}`;
-}
+import React, { useId, useMemo } from 'react';
+import { FormFieldContext } from './FormFieldContext';
 
 export interface FormFieldProps {
-  /** Override the auto-generated base ID */
-  id?: string;
   children: React.ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-  hasError?: boolean;
-  disabled?: boolean;
+  /** Whether the field is invalid (drives aria-invalid on the input) */
+  invalid?: boolean;
+  /** Whether the field is required */
   required?: boolean;
+  /** Extra class name */
+  className?: string;
 }
 
+/**
+ * Provides context for Label, TextInput/Textarea, HelperText, and ErrorMessage.
+ * All children that consume FormFieldContext will be auto-wired.
+ */
 export const FormField: React.FC<FormFieldProps> = ({
-  id,
   children,
-  className,
-  style,
-  hasError = false,
-  disabled = false,
+  invalid = false,
   required = false,
+  className,
 }) => {
-  const baseId = useMemo(() => id ?? generateId('field'), [id]);
+  const baseId = useId();
+  const inputId = `${baseId}-input`;
+  const helperId = `${baseId}-helper`;
+  const errorId = `${baseId}-error`;
 
-  const contextValue = useMemo<FormFieldContextValue>(
-    () => ({
-      fieldId: baseId,
-      labelId: `${baseId}-label`,
-      helperId: `${baseId}-helper`,
-      errorId: `${baseId}-error`,
-      hasError,
-      disabled,
-      required,
-    }),
-    [baseId, hasError, disabled, required]
+  const contextValue = useMemo(
+    () => ({ inputId, helperId, errorId, required, invalid }),
+    [inputId, helperId, errorId, required, invalid],
   );
 
   return (
     <FormFieldContext.Provider value={contextValue}>
-      <div
-        className={[styles.formField, className].filter(Boolean).join(' ')}
-        style={style}
-        data-disabled={disabled || undefined}
-        data-error={hasError || undefined}
-      >
+      <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {children}
       </div>
     </FormFieldContext.Provider>

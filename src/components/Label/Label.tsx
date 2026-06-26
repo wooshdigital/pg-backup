@@ -1,46 +1,38 @@
-import React from 'react';
-import { useFormField } from '../FormField/useFormField';
-import styles from './Label.module.css';
+import React, { useContext } from 'react';
+import { FormFieldContext } from '../FormField/FormFieldContext';
 
-export interface LabelProps {
-  children: React.ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-  /** Override the htmlFor target if not using FormField context */
-  htmlFor?: string;
-  /** Show a tooltip trigger button after the label text */
-  tooltip?: React.ReactNode;
+export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
+  /** Show a visual required indicator (*) */
+  required?: boolean;
 }
 
 export const Label: React.FC<LabelProps> = ({
   children,
-  className,
-  style,
-  htmlFor,
-  tooltip,
+  htmlFor: htmlForProp,
+  required: requiredProp,
+  ...rest
 }) => {
-  const { fieldId, labelId, required, disabled } = useFormField();
+  const ctx = useContext(FormFieldContext);
+  const htmlFor = htmlForProp ?? ctx?.inputId;
+  const isRequired = requiredProp ?? ctx?.required;
 
   return (
     <label
-      id={labelId}
-      htmlFor={htmlFor ?? fieldId}
-      className={[
-        styles.label,
-        disabled ? styles.disabled : '',
-        className,
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      style={style}
+      htmlFor={htmlFor}
+      {...rest}
+      style={{
+        fontSize: '0.875rem',
+        fontWeight: 500,
+        color: '#374151',
+        ...(rest.style ?? {}),
+      }}
     >
-      <span className={styles.labelText}>{children}</span>
-      {required && (
-        <span className={styles.required} aria-hidden="true" title="Required">
-          {' '}*
+      {children}
+      {isRequired && (
+        <span aria-hidden="true" style={{ color: '#dc2626', marginLeft: '2px' }}>
+          *
         </span>
       )}
-      {tooltip && <span className={styles.tooltipTrigger}>{tooltip}</span>}
     </label>
   );
 };

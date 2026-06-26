@@ -1,0 +1,18 @@
+.characterCount {
+  font-size: var(--font-size-sm, 0.875rem);
+  color: var(--color-text-muted, #6b7280);
+  text-align: right;
+  margin-top: var(--spacing-1, 4px);
+  line-height: var(--line-height-normal, 1.5);
+  transition: color 0.15s ease;
+}
+
+.warning {
+  color: var(--color-warning, #d97706);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.error {
+  color: var(--color-error, #dc2626);
+  font-weight: var(--font-weight-medium, 500);
+}
