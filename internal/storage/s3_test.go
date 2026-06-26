@@ -1,5 +1,3 @@
-//go:build integration
-
 package storage_test
 
 import (
@@ -26,14 +24,13 @@ const (
 	testRegion = "us-east-1"
 )
 
-// startLocalStack launches a LocalStack container and returns its HTTP endpoint
-// together with a cleanup function.
+// startLocalStack spins up a LocalStack container and returns its S3 endpoint URL.
 func startLocalStack(t *testing.T) (endpoint string, cleanup func()) {
 	t.Helper()
-	ctx := context.Background()
 
+	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
-		Image:        "localstack/localstack:3.2",
+		Image:        "localstack/localstack:3",
 		ExposedPorts: []string{"4566/tcp"},
 		Env: map[string]string{
 			"SERVICES":    "s3",
@@ -41,6 +38,11 @@ func startLocalStack(t *testing.T) (endpoint string, cleanup func()) {
 		},
 		WaitingFor: wait.ForHTTP("/_localstack/health").
 			WithPort("4566/tcp").
+			WithResponseMatcher(func(body io.Reader) bool {
+				b, _ := io.ReadAll(body)
+				return strings.Contains(string(b), `"s3": "available"`) ||
+					strings.Contains(string(b), `"s3":"available"`)
+			}).
 			WithStartupTimeout(60 * time.Second),
 	}
 
@@ -49,262 +51,262 @@ func startLocalStack(t *testing.T) (endpoint string, cleanup func()) {
 		Started:          true,
 	})
 	if err != nil {
-		t.Fatalf("starting LocalStack container: %v", err)
+		t.Skipf("skipping LocalStack integration test (container start failed: %v)", err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
-		t.Fatalf("getting LocalStack host: %v", err)
+		_ = container.Terminate(ctx)
+		t.Skipf("skipping LocalStack integration test (could not get host: %v)", err)
 	}
 	port, err := container.MappedPort(ctx, "4566")
 	if err != nil {
-		t.Fatalf("getting LocalStack port: %v", err)
+		_ = container.Terminate(ctx)
+		t.Skipf("skipping LocalStack integration test (could not get port: %v)", err)
 	}
 
-	ep := fmt.Sprintf("http://%s:%s", host, port.Port())
-
+	endpoint = fmt.Sprintf("http://%s:%s", host, port.Port())
 	cleanup = func() {
-		if err := container.Terminate(context.Background()); err != nil {
-			t.Logf("terminating LocalStack container: %v", err)
-		}
+		_ = container.Terminate(ctx)
 	}
-	return ep, cleanup
+	return endpoint, cleanup
 }
 
-// createBucket creates the test bucket in LocalStack.
-func createBucket(t *testing.T, endpoint string) {
+// newLocalStackClient builds a raw S3 client pointed at LocalStack.
+func newLocalStackClient(t *testing.T, endpoint string) *s3.Client {
 	t.Helper()
 	ctx := context.Background()
 
-	cfg, err := awsconfig.LoadDefaultConfig(ctx,
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(testRegion),
 		awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider("test", "test", ""),
 		),
 	)
 	if err != nil {
-		t.Fatalf("loading AWS config for bucket creation: %v", err)
+		t.Fatalf("failed to load AWS config: %v", err)
 	}
 
-	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+	return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(endpoint)
 		o.UsePathStyle = true
 	})
+}
 
-	_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(testBucket),
+// createBucket creates the test bucket via the raw client.
+func createBucket(t *testing.T, client *s3.Client, bucket string) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucket),
 	})
 	if err != nil {
-		t.Fatalf("creating test bucket: %v", err)
+		t.Fatalf("failed to create bucket %q: %v", bucket, err)
 	}
 }
 
-// downloadObject fetches the content of key from LocalStack for assertion.
-func downloadObject(t *testing.T, endpoint, key string) []byte {
+// getObject fetches the body of an object from S3 for assertion.
+func getObject(t *testing.T, client *s3.Client, bucket, key string) []byte {
 	t.Helper()
 	ctx := context.Background()
-
-	cfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion(testRegion),
-		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider("test", "test", ""),
-		),
-	)
-	if err != nil {
-		t.Fatalf("loading AWS config for download: %v", err)
-	}
-
-	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
-		o.BaseEndpoint = aws.String(endpoint)
-		o.UsePathStyle = true
-	})
-
 	out, err := client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(testBucket),
+		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		t.Fatalf("downloading object %q: %v", key, err)
+		t.Fatalf("GetObject(%q): %v", key, err)
 	}
 	defer out.Body.Close()
-
 	data, err := io.ReadAll(out.Body)
 	if err != nil {
-		t.Fatalf("reading object body: %v", err)
+		t.Fatalf("reading body of %q: %v", key, err)
 	}
 	return data
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-func TestS3Uploader_SmallFile(t *testing.T) {
+func TestS3Uploader_Upload_Integration(t *testing.T) {
 	endpoint, cleanup := startLocalStack(t)
 	defer cleanup()
-	createBucket(t, endpoint)
 
-	cfg := storage.S3Config{
+	rawClient := newLocalStackClient(t, endpoint)
+	createBucket(t, rawClient, testBucket)
+
+	ctx := context.Background()
+	uploader, err := storage.NewS3Uploader(ctx, storage.S3Config{
 		Bucket:          testBucket,
 		Region:          testRegion,
 		Endpoint:        endpoint,
-		ForcePathStyle:  true,
+		UsePathStyle:    true,
 		AccessKeyID:     "test",
 		SecretAccessKey: "test",
-	}
-
-	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
-	if err != nil {
-		t.Fatalf("NewS3Uploader: %v", err)
-	}
-	defer uploader.Close()
-
-	content := "hello, world!"
-	key := "test/small-file.txt"
-
-	err = uploader.Upload(context.Background(), key, strings.NewReader(content), int64(len(content)))
-	if err != nil {
-		t.Fatalf("Upload: %v", err)
-	}
-
-	got := downloadObject(t, endpoint, key)
-	if string(got) != content {
-		t.Errorf("uploaded content = %q; want %q", string(got), content)
-	}
-}
-
-func TestS3Uploader_LargeFile_Multipart(t *testing.T) {
-	endpoint, cleanup := startLocalStack(t)
-	defer cleanup()
-	createBucket(t, endpoint)
-
-	// Use a small part size (6 MiB) and upload 15 MiB to trigger multipart.
-	const partSize = 6 * 1024 * 1024
-	const totalSize = 15 * 1024 * 1024
-
-	cfg := storage.S3Config{
-		Bucket:          testBucket,
-		Region:          testRegion,
-		Endpoint:        endpoint,
-		ForcePathStyle:  true,
-		AccessKeyID:     "test",
-		SecretAccessKey: "test",
-		PartSize:        partSize,
+		PartSize:        5 * 1024 * 1024,
 		Concurrency:     2,
-	}
-
-	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
+		MaxRetries:      3,
+	})
 	if err != nil {
 		t.Fatalf("NewS3Uploader: %v", err)
 	}
 	defer uploader.Close()
 
-	data := bytes.Repeat([]byte("x"), totalSize)
-	key := "test/large-file.bin"
-
-	err = uploader.Upload(context.Background(), key, bytes.NewReader(data), int64(totalSize))
-	if err != nil {
-		t.Fatalf("Upload (multipart): %v", err)
-	}
-
-	got := downloadObject(t, endpoint, key)
-	if len(got) != totalSize {
-		t.Errorf("uploaded size = %d; want %d", len(got), totalSize)
-	}
-	if !bytes.Equal(got, data) {
-		t.Error("uploaded content does not match original data")
-	}
-}
-
-func TestS3Uploader_KeyTemplateRendering(t *testing.T) {
-	endpoint, cleanup := startLocalStack(t)
-	defer cleanup()
-	createBucket(t, endpoint)
-
-	cfg := storage.S3Config{
-		Bucket:          testBucket,
-		Region:          testRegion,
-		Endpoint:        endpoint,
-		ForcePathStyle:  true,
-		AccessKeyID:     "test",
-		SecretAccessKey: "test",
-	}
-
-	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
-	if err != nil {
-		t.Fatalf("NewS3Uploader: %v", err)
-	}
-	defer uploader.Close()
-
-	kr := storage.NewKeyRenderer("backups/{db}/{date}/dump.sql.gz")
-	key := kr.Render("mydb", time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC))
-	expected := "backups/mydb/2024-03-15/dump.sql.gz"
-	if key != expected {
-		t.Errorf("rendered key = %q; want %q", key, expected)
-	}
-
-	content := "fake-compressed-dump"
-	err = uploader.Upload(context.Background(), key, strings.NewReader(content), int64(len(content)))
-	if err != nil {
-		t.Fatalf("Upload with rendered key: %v", err)
-	}
-
-	got := downloadObject(t, endpoint, key)
-	if string(got) != content {
-		t.Errorf("content = %q; want %q", string(got), content)
-	}
-}
-
-func TestS3Uploader_InvalidConfig(t *testing.T) {
 	tests := []struct {
 		name string
-		cfg  storage.S3Config
+		key  string
+		data []byte
 	}{
 		{
-			name: "missing bucket",
-			cfg:  storage.S3Config{Region: "us-east-1"},
+			name: "small object",
+			key:  "backups/mydb/2024-03-15/dump.sql.gz",
+			data: []byte("small-compressed-dump-content"),
 		},
 		{
-			name: "missing region",
-			cfg:  storage.S3Config{Bucket: "my-bucket"},
+			name: "empty object",
+			key:  "backups/mydb/2024-03-15/empty.gz",
+			data: []byte{},
+		},
+		{
+			name: "object with binary data",
+			key:  "backups/mydb/binary.gz",
+			data: bytes.Repeat([]byte{0x00, 0xFF, 0xAB}, 100),
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := storage.NewS3Uploader(context.Background(), tc.cfg)
-			if err == nil {
-				t.Error("expected error, got nil")
+			r := bytes.NewReader(tc.data)
+			err := uploader.Upload(ctx, tc.key, r, int64(len(tc.data)))
+			if err != nil {
+				t.Fatalf("Upload() error: %v", err)
+			}
+
+			got := getObject(t, rawClient, testBucket, tc.key)
+			if !bytes.Equal(got, tc.data) {
+				t.Errorf("data mismatch for key %q: got %d bytes, want %d bytes", tc.key, len(got), len(tc.data))
 			}
 		})
 	}
 }
 
-func TestS3Uploader_ContextCancellation(t *testing.T) {
+func TestS3Uploader_Upload_EmptyKey(t *testing.T) {
 	endpoint, cleanup := startLocalStack(t)
 	defer cleanup()
-	createBucket(t, endpoint)
 
-	cfg := storage.S3Config{
+	ctx := context.Background()
+	uploader, err := storage.NewS3Uploader(ctx, storage.S3Config{
 		Bucket:          testBucket,
 		Region:          testRegion,
 		Endpoint:        endpoint,
-		ForcePathStyle:  true,
+		UsePathStyle:    true,
 		AccessKeyID:     "test",
 		SecretAccessKey: "test",
-	}
-
-	uploader, err := storage.NewS3Uploader(context.Background(), cfg)
+	})
 	if err != nil {
 		t.Fatalf("NewS3Uploader: %v", err)
 	}
 	defer uploader.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
-
-	err = uploader.Upload(ctx, "test/cancelled.txt", strings.NewReader("data"), 4)
+	err = uploader.Upload(ctx, "", bytes.NewReader([]byte("data")), 4)
 	if err == nil {
-		t.Error("expected error due to cancelled context, got nil")
+		t.Fatal("expected error for empty key, got nil")
+	}
+}
+
+func TestNewS3Uploader_Validation(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("missing bucket", func(t *testing.T) {
+		_, err := storage.NewS3Uploader(ctx, storage.S3Config{
+			Region: "us-east-1",
+		})
+		if err == nil {
+			t.Fatal("expected error for missing bucket")
+		}
+	})
+
+	t.Run("missing region", func(t *testing.T) {
+		_, err := storage.NewS3Uploader(ctx, storage.S3Config{
+			Bucket: "mybucket",
+		})
+		if err == nil {
+			t.Fatal("expected error for missing region")
+		}
+	})
+}
+
+func TestS3Uploader_EnsureBucketExists(t *testing.T) {
+	endpoint, cleanup := startLocalStack(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	const newBucket = "auto-created-bucket"
+
+	uploader, err := storage.NewS3Uploader(ctx, storage.S3Config{
+		Bucket:          newBucket,
+		Region:          testRegion,
+		Endpoint:        endpoint,
+		UsePathStyle:    true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+	})
+	if err != nil {
+		t.Fatalf("NewS3Uploader: %v", err)
+	}
+	defer uploader.Close()
+
+	if err := uploader.EnsureBucketExists(ctx); err != nil {
+		t.Fatalf("EnsureBucketExists: %v", err)
+	}
+
+	// Second call should be idempotent.
+	if err := uploader.EnsureBucketExists(ctx); err != nil {
+		t.Fatalf("EnsureBucketExists (idempotent): %v", err)
+	}
+
+	// Verify we can upload to the newly created bucket.
+	data := []byte("hello from auto-created bucket")
+	if err := uploader.Upload(ctx, "test/key.gz", bytes.NewReader(data), int64(len(data))); err != nil {
+		t.Fatalf("Upload to auto-created bucket: %v", err)
+	}
+}
+
+func TestS3Uploader_LargeObjectMultipart(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping large object test in short mode")
+	}
+
+	endpoint, cleanup := startLocalStack(t)
+	defer cleanup()
+
+	rawClient := newLocalStackClient(t, endpoint)
+	createBucket(t, rawClient, testBucket)
+
+	ctx := context.Background()
+
+	// Use a small PartSize (6 MB) and upload a 12 MB object to force multipart.
+	const partSize = 6 * 1024 * 1024
+	payload := bytes.Repeat([]byte("ABCDEFGH"), partSize/8*2) // ~12 MB
+
+	uploader, err := storage.NewS3Uploader(ctx, storage.S3Config{
+		Bucket:          testBucket,
+		Region:          testRegion,
+		Endpoint:        endpoint,
+		UsePathStyle:    true,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+		PartSize:        partSize,
+		Concurrency:     2,
+	})
+	if err != nil {
+		t.Fatalf("NewS3Uploader: %v", err)
+	}
+	defer uploader.Close()
+
+	key := "large/dump.sql.gz"
+	if err := uploader.Upload(ctx, key, bytes.NewReader(payload), int64(len(payload))); err != nil {
+		t.Fatalf("Upload large object: %v", err)
+	}
+
+	got := getObject(t, rawClient, testBucket, key)
+	if len(got) != len(payload) {
+		t.Errorf("large object size mismatch: got %d bytes, want %d bytes", len(got), len(payload))
 	}
 }

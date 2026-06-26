@@ -8,64 +8,74 @@ import (
 	"path/filepath"
 )
 
-// LocalStorage is a StorageBackend that writes objects to the local
-// filesystem.  It is intended for development and testing; it must not be
-// used in production.
-//
-// The key is treated as a relative path beneath BaseDir.  Intermediate
-// directories are created automatically.
+// LocalStorage implements StorageBackend by writing artifacts to the local filesystem.
+// It is intended for development and testing use only.
 type LocalStorage struct {
-	// BaseDir is the root directory under which all objects are written.
+	// BaseDir is the root directory under which all keys are stored.
 	BaseDir string
 }
 
-// NewLocalStorage returns a LocalStorage rooted at baseDir.
-// baseDir is created (with all parents) if it does not exist.
+// NewLocalStorage creates a LocalStorage that writes files under baseDir.
+// The directory is created if it does not already exist.
 func NewLocalStorage(baseDir string) (*LocalStorage, error) {
 	if baseDir == "" {
-		return nil, fmt.Errorf("storage: LocalStorage baseDir must not be empty")
+		return nil, fmt.Errorf("local storage: baseDir must not be empty")
 	}
-	if err := os.MkdirAll(baseDir, 0o755); err != nil {
-		return nil, fmt.Errorf("storage: creating base directory %q: %w", baseDir, err)
+	if err := os.MkdirAll(baseDir, 0o750); err != nil {
+		return nil, fmt.Errorf("local storage: failed to create base directory %q: %w", baseDir, err)
 	}
 	return &LocalStorage{BaseDir: baseDir}, nil
 }
 
-// Upload writes the content of r to BaseDir/key.
-// Intermediate directories under BaseDir are created as needed.
-// The context is checked for cancellation before the write begins.
-func (ls *LocalStorage) Upload(ctx context.Context, key string, r io.Reader, _ int64) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("storage: upload cancelled: %w", err)
+// Upload writes the contents of r to a file at <BaseDir>/<key>.
+// Any intermediate directories implied by the key are created automatically.
+func (l *LocalStorage) Upload(_ context.Context, key string, r io.Reader, _ int64) error {
+	if key == "" {
+		return fmt.Errorf("local storage: key must not be empty")
 	}
 
-	dest := filepath.Join(ls.BaseDir, filepath.FromSlash(key))
-
-	// Ensure the parent directory exists.
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return fmt.Errorf("storage: creating directory for key %q: %w", key, err)
+	// Resolve the full destination path and guard against path traversal.
+	destPath := filepath.Join(l.BaseDir, filepath.FromSlash(key))
+	if !isSubPath(l.BaseDir, destPath) {
+		return fmt.Errorf("local storage: key %q resolves outside base directory", key)
 	}
 
-	f, err := os.Create(dest)
+	// Create parent directories as needed.
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
+		return fmt.Errorf("local storage: failed to create directories for %q: %w", destPath, err)
+	}
+
+	f, err := os.Create(destPath)
 	if err != nil {
-		return fmt.Errorf("storage: creating file %q: %w", dest, err)
+		return fmt.Errorf("local storage: failed to create file %q: %w", destPath, err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, r); err != nil {
+		return fmt.Errorf("local storage: failed to write to %q: %w", destPath, err)
 	}
 
-	_, copyErr := io.Copy(f, r)
-	closeErr := f.Close()
+	return f.Sync()
+}
 
-	if copyErr != nil {
-		// Best-effort removal of a partially written file.
-		_ = os.Remove(dest)
-		return fmt.Errorf("storage: writing to %q: %w", dest, copyErr)
-	}
-	if closeErr != nil {
-		return fmt.Errorf("storage: closing %q: %w", dest, closeErr)
-	}
+// Close is a no-op for LocalStorage.
+func (l *LocalStorage) Close() error {
 	return nil
 }
 
-// Close is a no-op for LocalStorage; it exists to satisfy StorageBackend.
-func (ls *LocalStorage) Close() error {
-	return nil
+// Path returns the filesystem path for the given key.
+func (l *LocalStorage) Path(key string) string {
+	return filepath.Join(l.BaseDir, filepath.FromSlash(key))
+}
+
+// isSubPath reports whether child is within parent (inclusive).
+func isSubPath(parent, child string) bool {
+	parent = filepath.Clean(parent)
+	child = filepath.Clean(child)
+	if parent == child {
+		return true
+	}
+	// Add a separator to prevent "parentdir" matching "parentdir-other".
+	parentWithSep := parent + string(filepath.Separator)
+	return len(child) > len(parentWithSep) && child[:len(parentWithSep)] == parentWithSep
 }

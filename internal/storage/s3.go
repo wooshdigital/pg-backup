@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -15,55 +14,54 @@ import (
 )
 
 const (
-	// DefaultPartSize is the default multipart upload chunk size (5 MiB).
+	// DefaultPartSize is the size of each part in a multipart upload (5 MB).
 	DefaultPartSize = 5 * 1024 * 1024
-	// DefaultConcurrency is the default number of parallel upload goroutines.
+	// DefaultConcurrency is the number of goroutines used for multipart upload.
 	DefaultConcurrency = 5
-	// DefaultMaxRetries is the maximum number of retry attempts on transient errors.
+	// DefaultMaxRetries is the maximum number of upload attempts.
 	DefaultMaxRetries = 3
 )
 
-// S3Config holds all configuration required to construct an S3Uploader.
+// S3Config holds configuration for the S3Uploader.
 type S3Config struct {
-	// Bucket is the target S3 bucket name (required).
+	// Bucket is the target S3 bucket name. Required.
 	Bucket string
-	// Region is the AWS region, e.g. "us-east-1" (required).
+	// Region is the AWS region (e.g. "us-east-1"). Required.
 	Region string
-	// Endpoint overrides the S3 endpoint URL (useful for LocalStack / MinIO).
+	// Endpoint is an optional custom endpoint URL (e.g. for LocalStack).
 	Endpoint string
-	// ForcePathStyle forces path-style S3 addressing (required for LocalStack).
-	ForcePathStyle bool
-
-	// AccessKeyID and SecretAccessKey provide explicit static credentials.
-	// When both are empty the SDK will use the default credential chain
-	// (IAM role, env vars, ~/.aws/credentials, etc.).
+	// UsePathStyle forces path-style addressing (required for LocalStack / MinIO).
+	UsePathStyle bool
+	// AccessKeyID and SecretAccessKey are optional static credentials.
+	// When empty, the default credential chain (env vars, IAM role, etc.) is used.
 	AccessKeyID     string
 	SecretAccessKey string
-
-	// PartSize is the size of each multipart upload part in bytes.
-	// Defaults to DefaultPartSize (5 MiB) when zero.
+	// SessionToken is an optional STS session token.
+	SessionToken string
+	// PartSize is the size of each multipart part in bytes. Defaults to DefaultPartSize.
 	PartSize int64
-	// Concurrency is the number of parallel goroutines used by the transfer
-	// manager.  Defaults to DefaultConcurrency (5) when zero.
+	// Concurrency is the number of parallel upload goroutines. Defaults to DefaultConcurrency.
 	Concurrency int
-	// MaxRetries is the maximum number of retry attempts.
-	// Defaults to DefaultMaxRetries (3) when zero.
+	// MaxRetries is the maximum number of attempts on transient failures. Defaults to DefaultMaxRetries.
 	MaxRetries int
 }
 
-// S3Uploader implements StorageBackend using the AWS SDK v2 transfer manager.
+// S3Uploader implements StorageBackend for Amazon S3 (and S3-compatible stores).
 type S3Uploader struct {
-	bucket   string
+	cfg      S3Config
 	uploader *manager.Uploader
+	client   *s3.Client
 }
 
-// NewS3Uploader constructs a ready-to-use S3Uploader from cfg.
+// NewS3Uploader creates a new S3Uploader using the provided S3Config.
+// It configures the AWS SDK v2 client with the supplied options and wraps it
+// in an s3manager.Uploader for automatic multipart upload support.
 func NewS3Uploader(ctx context.Context, cfg S3Config) (*S3Uploader, error) {
 	if cfg.Bucket == "" {
-		return nil, fmt.Errorf("storage: S3 bucket name must not be empty")
+		return nil, fmt.Errorf("s3: bucket name must not be empty")
 	}
 	if cfg.Region == "" {
-		return nil, fmt.Errorf("storage: AWS region must not be empty")
+		return nil, fmt.Errorf("s3: region must not be empty")
 	}
 
 	// Apply defaults.
@@ -77,71 +75,126 @@ func NewS3Uploader(ctx context.Context, cfg S3Config) (*S3Uploader, error) {
 		cfg.MaxRetries = DefaultMaxRetries
 	}
 
-	// Build the list of SDK option functions.
-	optFns := []func(*awsconfig.LoadOptions) error{
+	// Build AWS SDK load options.
+	loadOpts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.Region),
-		// Exponential backoff retry with configurable max attempts.
-		awsconfig.WithRetryer(func() aws.Retryer {
-			return retry.NewStandard(func(o *retry.StandardOptions) {
-				o.MaxAttempts = cfg.MaxRetries
-				o.Backoff = retry.NewExponentialJitterBackoff(20 * time.Second)
-			})
-		}),
 	}
 
-	// Explicit static credentials (optional; IAM role is preferred in prod).
+	// Static credentials take priority over the default chain.
 	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
-		optFns = append(optFns,
-			awsconfig.WithCredentialsProvider(
-				credentials.NewStaticCredentialsProvider(
-					cfg.AccessKeyID,
-					cfg.SecretAccessKey,
-					"", // session token – not used for static creds
-				),
-			),
+		staticCreds := credentials.NewStaticCredentialsProvider(
+			cfg.AccessKeyID,
+			cfg.SecretAccessKey,
+			cfg.SessionToken,
 		)
+		loadOpts = append(loadOpts, awsconfig.WithCredentialsProvider(staticCreds))
 	}
 
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, optFns...)
+	// Configure exponential backoff retry.
+	loadOpts = append(loadOpts, awsconfig.WithRetryMaxAttempts(cfg.MaxRetries))
+	loadOpts = append(loadOpts, awsconfig.WithRetryMode(aws.RetryModeAdaptive))
+
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("storage: loading AWS config: %w", err)
+		return nil, fmt.Errorf("s3: failed to load AWS config: %w", err)
 	}
 
-	// Build the S3 client, applying any endpoint override.
-	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		if cfg.Endpoint != "" {
+	// Build S3 client options.
+	s3Opts := []func(*s3.Options){}
+	if cfg.Endpoint != "" {
+		s3Opts = append(s3Opts, func(o *s3.Options) {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
-		}
-		o.UsePathStyle = cfg.ForcePathStyle
-	})
+		})
+	}
+	if cfg.UsePathStyle {
+		s3Opts = append(s3Opts, func(o *s3.Options) {
+			o.UsePathStyle = true
+		})
+	}
 
-	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
-		u.PartSize    = cfg.PartSize
+	client := s3.NewFromConfig(awsCfg, s3Opts...)
+
+	uploader := manager.NewUploader(client, func(u *manager.Uploader) {
+		u.PartSize = cfg.PartSize
 		u.Concurrency = cfg.Concurrency
 	})
 
 	return &S3Uploader{
-		bucket:   cfg.Bucket,
+		cfg:      cfg,
 		uploader: uploader,
+		client:   client,
 	}, nil
 }
 
-// Upload streams the content of r to s3://bucket/key using multipart upload.
-// size is accepted for interface compatibility but the S3 transfer manager
-// determines the actual part layout dynamically.
+// Upload streams r to S3 under the given key with automatic multipart chunking
+// and exponential-backoff retry (configured at the AWS client level).
+//
+// The size parameter is informational; the s3manager handles unknown sizes
+// gracefully by reading in parts.
 func (u *S3Uploader) Upload(ctx context.Context, key string, r io.Reader, size int64) error {
-	_, err := u.uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(u.bucket),
+	if key == "" {
+		return fmt.Errorf("s3: upload key must not be empty")
+	}
+
+	input := &s3.PutObjectInput{
+		Bucket: aws.String(u.cfg.Bucket),
 		Key:    aws.String(key),
 		Body:   r,
-	})
+	}
+	if size > 0 {
+		input.ContentLength = aws.Int64(size)
+	}
+
+	_, err := u.uploader.Upload(ctx, input)
 	if err != nil {
-		return fmt.Errorf("storage: S3 upload to %s/%s failed: %w", u.bucket, key, err)
+		return fmt.Errorf("s3: upload to s3://%s/%s failed: %w", u.cfg.Bucket, key, err)
 	}
 	return nil
 }
 
-// Close is a no-op for S3Uploader; it exists to satisfy StorageBackend.
+// Close is a no-op for S3Uploader (connections are managed by the HTTP transport).
 func (u *S3Uploader) Close() error {
 	return nil
+}
+
+// EnsureBucketExists creates the bucket if it does not already exist.
+// This is primarily useful in development / integration-test scenarios.
+func (u *S3Uploader) EnsureBucketExists(ctx context.Context) error {
+	_, err := u.client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(u.cfg.Bucket),
+	})
+	if err == nil {
+		return nil // Bucket already exists.
+	}
+
+	_, createErr := u.client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(u.cfg.Bucket),
+	})
+	if createErr != nil {
+		return fmt.Errorf("s3: failed to create bucket %q: %w", u.cfg.Bucket, createErr)
+	}
+	return nil
+}
+
+// retryWithBackoff is a helper used by callers that need manual retry logic
+// outside the AWS SDK layer (e.g., for non-SDK operations).
+func retryWithBackoff(ctx context.Context, maxAttempts int, fn func() error) error {
+	var lastErr error
+	delay := 200 * time.Millisecond
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+			delay *= 2 // Exponential backoff.
+		}
+		if err := fn(); err != nil {
+			lastErr = err
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("all %d attempts failed, last error: %w", maxAttempts, lastErr)
 }

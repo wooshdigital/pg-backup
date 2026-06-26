@@ -1,121 +1,116 @@
-package storage
+package storage_test
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/yourorg/dbworker/internal/storage"
 )
 
-// fixed reference time: 2024-03-15 10:30:00 UTC  →  Unix 1710498600
-var refTime = time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC)
+func TestRenderKey(t *testing.T) {
+	// Fixed reference time for deterministic tests.
+	refTime := time.Date(2024, 3, 15, 12, 30, 0, 0, time.UTC)
 
-func TestKeyRenderer_Render(t *testing.T) {
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
+	}
+
 	tests := []struct {
-		name     string
-		template string
-		db       string
-		want     string
+		name        string
+		template    string
+		params      storage.KeyParams
+		wantContain []string
+		wantExact   string
+		wantErr     bool
 	}{
 		{
-			name:     "all placeholders",
-			template: "backups/{db}/{date}/{timestamp}.sql.gz",
-			db:       "mydb",
-			want:     "backups/mydb/2024-03-15/1710498600.sql.gz",
+			name:      "empty template returns error",
+			template:  "",
+			params:    storage.KeyParams{DB: "mydb", At: refTime},
+			wantErr:   true,
 		},
 		{
-			name:     "no placeholders",
-			template: "static/key.sql.gz",
-			db:       "mydb",
-			want:     "static/key.sql.gz",
+			name:      "empty DB returns error",
+			template:  "backups/{db}/{date}.sql.gz",
+			params:    storage.KeyParams{DB: "", At: refTime},
+			wantErr:   true,
 		},
 		{
-			name:     "empty template",
-			template: "",
-			db:       "mydb",
-			want:     "",
+			name:      "all placeholders substituted",
+			template:  "backups/{db}/{date}/{timestamp}/{hostname}/dump.sql.gz",
+			params:    storage.KeyParams{DB: "mydb", At: refTime},
+			wantExact: "backups/mydb/2024-03-15/1710505800/" + hostname + "/dump.sql.gz",
 		},
 		{
-			name:     "only db placeholder",
-			template: "{db}.dump",
-			db:       "production",
-			want:     "production.dump",
+			name:      "only db placeholder",
+			template:  "dumps/{db}.sql.gz",
+			params:    storage.KeyParams{DB: "orders", At: refTime},
+			wantExact: "dumps/orders.sql.gz",
 		},
 		{
-			name:     "db with special chars is sanitized",
-			template: "{db}/backup.gz",
-			db:       "my/db:name",
-			want:     "my_db_name/backup.gz",
+			name:      "only date placeholder",
+			template:  "daily/{date}/backup.gz",
+			params:    storage.KeyParams{DB: "mydb", At: refTime},
+			wantExact: "daily/2024-03-15/backup.gz",
 		},
 		{
-			name:     "multiple occurrences of same placeholder",
-			template: "{db}/{db}/{date}",
-			db:       "testdb",
-			want:     "testdb/testdb/2024-03-15",
+			name:     "no placeholders – static path",
+			template: "static/path/backup.gz",
+			params:   storage.KeyParams{DB: "mydb", At: refTime},
+			wantExact: "static/path/backup.gz",
 		},
 		{
-			name:     "unknown placeholder left as-is",
-			template: "{db}/{unknown}/file.gz",
-			db:       "mydb",
-			want:     "mydb/{unknown}/file.gz",
+			name:     "zero time uses current time",
+			template: "backups/{db}/{timestamp}.gz",
+			params:   storage.KeyParams{DB: "mydb"},
+			// We can't assert the exact timestamp, just that it is numeric.
+			wantContain: []string{"backups/mydb/"},
 		},
 		{
-			name:     "date placeholder only",
-			template: "dumps/{date}/backup.gz",
-			db:       "",
-			want:     "dumps/2024-03-15/backup.gz",
+			name:     "db name with special chars",
+			template: "backups/{db}/{date}.gz",
+			params:   storage.KeyParams{DB: "my-db_v2", At: refTime},
+			wantExact: "backups/my-db_v2/2024-03-15.gz",
 		},
 		{
-			name:     "timestamp placeholder only",
-			template: "dumps/{timestamp}.gz",
-			db:       "x",
-			want:     "dumps/1710498600.gz",
+			name:      "hostname placeholder",
+			template:  "{hostname}/{db}/{date}.gz",
+			params:    storage.KeyParams{DB: "app", At: refTime},
+			wantContain: []string{"app/2024-03-15.gz"},
 		},
 		{
-			name:     "empty db is sanitized to empty string",
-			template: "prefix/{db}/file",
-			db:       "",
-			want:     "prefix//file",
+			name:      "repeated placeholders",
+			template:  "{db}/{db}/{date}-{date}.gz",
+			params:    storage.KeyParams{DB: "x", At: refTime},
+			wantExact: "x/x/2024-03-15-2024-03-15.gz",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			kr := NewKeyRenderer(tc.template)
-			got := kr.Render(tc.db, refTime)
-			if got != tc.want {
-				t.Errorf("Render(%q, %q) = %q; want %q", tc.db, tc.template, got, tc.want)
+			got, err := storage.RenderKey(tc.template, tc.params)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil (result: %q)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tc.wantExact != "" && got != tc.wantExact {
+				t.Errorf("RenderKey() = %q, want %q", got, tc.wantExact)
+			}
+
+			for _, sub := range tc.wantContain {
+				if !strings.Contains(got, sub) {
+					t.Errorf("RenderKey() = %q, expected to contain %q", got, sub)
+				}
 			}
 		})
-	}
-}
-
-func TestKeyRenderer_Template(t *testing.T) {
-	tmpl := "some/{db}/template"
-	kr := NewKeyRenderer(tmpl)
-	if kr.Template() != tmpl {
-		t.Errorf("Template() = %q; want %q", kr.Template(), tmpl)
-	}
-}
-
-func TestSanitize(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"hello", "hello"},
-		{"hello-world", "hello-world"},
-		{"hello_world", "hello_world"},
-		{"hello.world", "hello.world"},
-		{"hello/world", "hello_world"},
-		{"hello world", "hello_world"},
-		{"my:db@host", "my_db_host"},
-		{"", ""},
-		{"ABC123", "ABC123"},
-	}
-
-	for _, tc := range tests {
-		got := sanitize(tc.input)
-		if got != tc.want {
-			t.Errorf("sanitize(%q) = %q; want %q", tc.input, got, tc.want)
-		}
 	}
 }

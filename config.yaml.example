@@ -1,68 +1,61 @@
-# Example configuration file for dbworker.
-# Copy this file to config.yaml and adjust values for your environment.
+# Example configuration for the DB backup worker.
+# Copy this file to config.yaml and adjust for your environment.
+
+worker:
+  # Cron schedule for backup runs (default: daily at 02:00 UTC).
+  schedule: "0 2 * * *"
+  # Maximum duration for a single backup run.
+  timeout: 2h
 
 database:
-  host: localhost
-  port: 5432
+  # Full DSN for the source database.
+  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+  # Logical name used in key templates. Inferred from DSN if omitted.
   name: mydb
-  user: postgres
-  password: ""
-  ssl_mode: disable
 
 storage:
-  # backend selects the storage destination.
-  # Supported values: "s3" (default), "local"
+  # Backend to use: "s3" (default) or "local" (for dev/testing).
   backend: s3
 
   s3:
-    # Target S3 bucket (required for backend=s3).
-    bucket: my-backup-bucket
+    # Target S3 bucket. Required.
+    bucket: my-db-backups
 
-    # AWS region (required for backend=s3).
+    # AWS region. Required.
     region: us-east-1
 
-    # Optional: override the S3 endpoint (useful for LocalStack / MinIO).
+    # Custom endpoint URL (for LocalStack / MinIO). Omit for real AWS.
     # endpoint: http://localhost:4566
 
-    # Optional: force path-style S3 addressing (required for LocalStack).
-    # force_path_style: true
+    # Use path-style addressing. Required for LocalStack / MinIO.
+    # use_path_style: true
 
-    # S3 object key template.
-    # Supported placeholders: {db}, {date}, {timestamp}, {hostname}
-    key_prefix: "backups/{db}/{date}/{timestamp}.sql.gz"
+    # Key template for uploaded objects.
+    # Placeholders: {db}, {date}, {timestamp}, {hostname}
+    prefix_template: "backups/{db}/{date}/{timestamp}/dump.sql.gz"
 
-    # Multipart upload part size in bytes (default: 5242880 = 5 MiB).
-    part_size: 5242880
+    # Multipart upload part size in bytes (default: 5 MB).
+    part_size_bytes: 5242880
 
-    # Number of parallel goroutines for multipart upload (default: 5).
+    # Number of parallel upload goroutines (default: 5).
     concurrency: 5
 
     # Maximum retry attempts on transient errors (default: 3).
     max_retries: 3
 
-    # Optional explicit AWS credentials.
-    # When omitted, the SDK uses its default credential chain:
-    #   1. IAM role (recommended for production)
-    #   2. Environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
-    #   3. ~/.aws/credentials
-    credentials:
-      access_key_id: ""
-      secret_access_key: ""
+    # Optional static credentials.
+    # When omitted, the default credential chain is used (env vars, IAM role, etc.).
+    # credentials:
+    #   access_key_id: AKIAIOSFODNN7EXAMPLE
+    #   secret_access_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+    #   session_token: ""   # Optional STS session token.
 
+  # Local filesystem backend settings (used when backend: local).
   local:
-    # Base directory for the local filesystem backend (required for backend=local).
-    base_dir: /var/backups/dbworker
+    base_dir: /var/backups/db
 
 compress:
-  # Compression algorithm: "gzip" (default), "zstd", or "none".
+  # Compression algorithm: "gzip" (default) or "zstd".
   algorithm: gzip
-  # Compression level (algorithm-specific, 0 = default).
+  # Compression level (algorithm-specific; 0 = default).
   level: 6
-
-worker:
-  # Cron expression for the backup schedule.
-  schedule: "0 2 * * *"
-  # Maximum duration for a single backup run (e.g. "2h", "30m").
-  timeout: 2h
-  # Directory for temporary files during backup.
-  temp_dir: /tmp

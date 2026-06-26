@@ -1,81 +1,104 @@
 package storage_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/yourorg/dbworker/internal/storage"
 )
 
 func TestLocalStorage_Upload(t *testing.T) {
 	dir := t.TempDir()
 
-	ls, err := NewLocalStorageForTest(dir)
+	ls, err := storage.NewLocalStorage(dir)
 	if err != nil {
 		t.Fatalf("NewLocalStorage: %v", err)
 	}
-	defer ls.Close()
 
-	content := "test content"
-	key := "subdir/file.txt"
-
-	err = ls.Upload(context.Background(), key, strings.NewReader(content), int64(len(content)))
-	if err != nil {
-		t.Fatalf("Upload: %v", err)
+	tests := []struct {
+		name    string
+		key     string
+		data    []byte
+		wantErr bool
+	}{
+		{
+			name: "simple key",
+			key:  "backup.sql.gz",
+			data: []byte("compressed-data"),
+		},
+		{
+			name: "nested key",
+			key:  "mydb/2024-03-15/1710505800/dump.sql.gz",
+			data: []byte("nested-compressed-data"),
+		},
+		{
+			name: "empty data",
+			key:  "empty.gz",
+			data: []byte{},
+		},
+		{
+			name:    "empty key returns error",
+			key:     "",
+			data:    []byte("data"),
+			wantErr: true,
+		},
+		{
+			name:    "path traversal rejected",
+			key:     "../outside.gz",
+			data:    []byte("evil"),
+			wantErr: true,
+		},
 	}
 
-	dest := filepath.Join(dir, "subdir", "file.txt")
-	data, err := os.ReadFile(dest)
-	if err != nil {
-		t.Fatalf("reading uploaded file: %v", err)
-	}
-	if string(data) != content {
-		t.Errorf("file content = %q; want %q", string(data), content)
+	ctx := context.Background()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := bytes.NewReader(tc.data)
+			err := ls.Upload(ctx, tc.key, r, int64(len(tc.data)))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Upload() error: %v", err)
+			}
+
+			// Verify the file exists and has the correct contents.
+			dest := filepath.Join(dir, filepath.FromSlash(tc.key))
+			got, err := os.ReadFile(dest)
+			if err != nil {
+				t.Fatalf("failed to read written file: %v", err)
+			}
+			if !bytes.Equal(got, tc.data) {
+				t.Errorf("file content mismatch: got %q, want %q", got, tc.data)
+			}
+		})
 	}
 }
 
-func TestLocalStorage_Upload_CreatesIntermediateDirs(t *testing.T) {
-	dir := t.TempDir()
-
-	ls, err := NewLocalStorageForTest(dir)
-	if err != nil {
-		t.Fatalf("NewLocalStorage: %v", err)
-	}
-	defer ls.Close()
-
-	key := "a/b/c/d/file.bin"
-	err = ls.Upload(context.Background(), key, strings.NewReader("data"), 4)
-	if err != nil {
-		t.Fatalf("Upload: %v", err)
-	}
-
-	if _, err := os.Stat(filepath.Join(dir, "a", "b", "c", "d", "file.bin")); err != nil {
-		t.Errorf("expected file to exist: %v", err)
-	}
-}
-
-func TestLocalStorage_Upload_CancelledContext(t *testing.T) {
-	dir := t.TempDir()
-
-	ls, err := NewLocalStorageForTest(dir)
-	if err != nil {
-		t.Fatalf("NewLocalStorage: %v", err)
-	}
-	defer ls.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err = ls.Upload(ctx, "file.txt", strings.NewReader("hello"), 5)
+func TestNewLocalStorage_MissingBaseDir(t *testing.T) {
+	_, err := storage.NewLocalStorage("")
 	if err == nil {
-		t.Error("expected error due to cancelled context, got nil")
+		t.Fatal("expected error for empty baseDir, got nil")
 	}
 }
 
-func TestLocalStorage_EmptyBaseDir(t *testing.T) {
-	_, err := NewLocalStorageForTest("")
-	if err == nil {
-		t.Error("expected error for empty baseDir, got nil")
+func TestNewLocalStorage_CreatesDir(t *testing.T) {
+	parent := t.TempDir()
+	newDir := filepath.Join(parent, "subdir", "nested")
+
+	ls, err := storage.NewLocalStorage(newDir)
+	if err != nil {
+		t.Fatalf("NewLocalStorage failed to create directories: %v", err)
+	}
+
+	if _, err := os.Stat(ls.BaseDir); os.IsNotExist(err) {
+		t.Errorf("base directory %q was not created", ls.BaseDir)
 	}
 }
