@@ -1,5 +1,5 @@
-// Package storage provides a StorageBackend interface and implementations
-// for uploading database dump artifacts to various backends (S3, local filesystem).
+// Package storage provides the StorageBackend interface and implementations
+// for uploading database backup artifacts to various destinations.
 package storage
 
 import (
@@ -7,14 +7,19 @@ import (
 	"io"
 )
 
-// StorageBackend defines the interface for uploading dump artifacts.
-// Any backend (S3, local filesystem, GCS, etc.) must satisfy this interface.
+// StorageBackend is the common interface for all storage implementations.
+// Callers supply the destination key, a reader over the data, and the
+// total size in bytes (used to optimise multipart uploads; pass -1 when
+// the size is unknown).
 type StorageBackend interface {
-	// Upload streams r (of the given size in bytes) to the backend under key.
-	// A size of -1 indicates the size is unknown; the backend should handle this
-	// gracefully (e.g., by buffering or using chunked encoding).
+	// Upload writes the contents of r to the given key.
+	// size is the total byte count of r, or -1 if unknown.
 	Upload(ctx context.Context, key string, r io.Reader, size int64) error
 
-	// Close releases any resources held by the backend (connections, etc.).
-	Close() error
+	// Delete removes the object at key. Implementations should return nil
+	// if the object did not exist (idempotent delete).
+	Delete(ctx context.Context, key string) error
+
+	// Exists reports whether an object with the given key exists.
+	Exists(ctx context.Context, key string) (bool, error)
 }

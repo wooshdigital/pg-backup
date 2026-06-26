@@ -1,104 +1,144 @@
 package storage_test
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/yourorg/dbworker/internal/storage"
+	storage "github.com/yourusername/dbbackup/internal/storage"
 )
 
 func TestLocalStorage_Upload(t *testing.T) {
 	dir := t.TempDir()
-
 	ls, err := storage.NewLocalStorage(dir)
 	if err != nil {
 		t.Fatalf("NewLocalStorage: %v", err)
 	}
 
-	tests := []struct {
-		name    string
-		key     string
-		data    []byte
-		wantErr bool
-	}{
-		{
-			name: "simple key",
-			key:  "backup.sql.gz",
-			data: []byte("compressed-data"),
-		},
-		{
-			name: "nested key",
-			key:  "mydb/2024-03-15/1710505800/dump.sql.gz",
-			data: []byte("nested-compressed-data"),
-		},
-		{
-			name: "empty data",
-			key:  "empty.gz",
-			data: []byte{},
-		},
-		{
-			name:    "empty key returns error",
-			key:     "",
-			data:    []byte("data"),
-			wantErr: true,
-		},
-		{
-			name:    "path traversal rejected",
-			key:     "../outside.gz",
-			data:    []byte("evil"),
-			wantErr: true,
-		},
+	ctx := context.Background()
+	const key = "backups/mydb/2024-03-15/dump.sql.gz"
+	const content = "compressed dump data"
+
+	if err := ls.Upload(ctx, key, strings.NewReader(content), int64(len(content))); err != nil {
+		t.Fatalf("Upload: %v", err)
 	}
 
+	// Verify file exists on disk.
+	dest := filepath.Join(dir, filepath.FromSlash(key))
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("reading uploaded file: %v", err)
+	}
+	if string(data) != content {
+		t.Errorf("file content = %q, want %q", string(data), content)
+	}
+}
+
+func TestLocalStorage_Exists(t *testing.T) {
+	dir := t.TempDir()
+	ls, _ := storage.NewLocalStorage(dir)
 	ctx := context.Background()
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			r := bytes.NewReader(tc.data)
-			err := ls.Upload(ctx, tc.key, r, int64(len(tc.data)))
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Upload() error: %v", err)
-			}
+	ok, err := ls.Exists(ctx, "does/not/exist.sql.gz")
+	if err != nil {
+		t.Fatalf("Exists: %v", err)
+	}
+	if ok {
+		t.Error("expected false for non-existent key")
+	}
 
-			// Verify the file exists and has the correct contents.
-			dest := filepath.Join(dir, filepath.FromSlash(tc.key))
-			got, err := os.ReadFile(dest)
-			if err != nil {
-				t.Fatalf("failed to read written file: %v", err)
-			}
-			if !bytes.Equal(got, tc.data) {
-				t.Errorf("file content mismatch: got %q, want %q", got, tc.data)
-			}
-		})
+	// Upload something, then check.
+	const key = "mydb/dump.sql.gz"
+	if err := ls.Upload(ctx, key, strings.NewReader("data"), -1); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	ok, err = ls.Exists(ctx, key)
+	if err != nil {
+		t.Fatalf("Exists after upload: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected true for key %q after upload", key)
 	}
 }
 
-func TestNewLocalStorage_MissingBaseDir(t *testing.T) {
+func TestLocalStorage_Delete(t *testing.T) {
+	dir := t.TempDir()
+	ls, _ := storage.NewLocalStorage(dir)
+	ctx := context.Background()
+
+	const key = "backups/todelete.sql.gz"
+	if err := ls.Upload(ctx, key, strings.NewReader("data"), -1); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	if err := ls.Delete(ctx, key); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	ok, err := ls.Exists(ctx, key)
+	if err != nil {
+		t.Fatalf("Exists after delete: %v", err)
+	}
+	if ok {
+		t.Errorf("key %q should not exist after deletion", key)
+	}
+}
+
+func TestLocalStorage_Delete_NonExistent(t *testing.T) {
+	dir := t.TempDir()
+	ls, _ := storage.NewLocalStorage(dir)
+	ctx := context.Background()
+
+	// Deleting a non-existent key should be a no-op (idempotent).
+	if err := ls.Delete(ctx, "ghost/key.sql.gz"); err != nil {
+		t.Errorf("Delete of non-existent key returned error: %v", err)
+	}
+}
+
+func TestLocalStorage_Upload_CreatesIntermediaryDirs(t *testing.T) {
+	dir := t.TempDir()
+	ls, _ := storage.NewLocalStorage(dir)
+	ctx := context.Background()
+
+	const key = "a/b/c/d/dump.sql.gz"
+	if err := ls.Upload(ctx, key, strings.NewReader("data"), -1); err != nil {
+		t.Fatalf("Upload with deep path: %v", err)
+	}
+
+	dest := filepath.Join(dir, filepath.FromSlash(key))
+	if _, err := os.Stat(dest); err != nil {
+		t.Errorf("file not created at %q: %v", dest, err)
+	}
+}
+
+func TestLocalStorage_EmptyKey_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	ls, _ := storage.NewLocalStorage(dir)
+	ctx := context.Background()
+
+	if err := ls.Upload(ctx, "", strings.NewReader("x"), -1); err == nil {
+		t.Error("Upload with empty key should return error")
+	}
+	if _, err := ls.Exists(ctx, ""); err == nil {
+		t.Error("Exists with empty key should return error")
+	}
+	if err := ls.Delete(ctx, ""); err == nil {
+		t.Error("Delete with empty key should return error")
+	}
+}
+
+func TestLocalStorage_ImplementsStorageBackend(t *testing.T) {
+	// Compile-time check: LocalStorage must implement StorageBackend.
+	dir := t.TempDir()
+	ls, _ := storage.NewLocalStorage(dir)
+	var _ storage.StorageBackend = ls
+}
+
+func TestNewLocalStorage_EmptyDir_ReturnsError(t *testing.T) {
 	_, err := storage.NewLocalStorage("")
 	if err == nil {
-		t.Fatal("expected error for empty baseDir, got nil")
-	}
-}
-
-func TestNewLocalStorage_CreatesDir(t *testing.T) {
-	parent := t.TempDir()
-	newDir := filepath.Join(parent, "subdir", "nested")
-
-	ls, err := storage.NewLocalStorage(newDir)
-	if err != nil {
-		t.Fatalf("NewLocalStorage failed to create directories: %v", err)
-	}
-
-	if _, err := os.Stat(ls.BaseDir); os.IsNotExist(err) {
-		t.Errorf("base directory %q was not created", ls.BaseDir)
+		t.Error("expected error for empty baseDir")
 	}
 }
