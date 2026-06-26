@@ -1,33 +1,33 @@
 import React, { useContext } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
+import styles from './ErrorMessage.module.css';
 
-export interface ErrorMessageProps extends React.HTMLAttributes<HTMLSpanElement> {
+export interface ErrorMessageProps extends React.HTMLAttributes<HTMLParagraphElement> {
   children: React.ReactNode;
 }
 
 export const ErrorMessage: React.FC<ErrorMessageProps> = ({
   children,
+  className,
   id: idProp,
-  role = 'alert',
   ...rest
 }) => {
   const ctx = useContext(FormFieldContext);
   const id = idProp ?? ctx?.errorId;
 
   return (
-    <span
+    <p
       id={id}
-      role={role}
+      role="alert"
+      aria-live="assertive"
+      className={[styles.errorMessage, className].filter(Boolean).join(' ')}
       {...rest}
-      style={{
-        fontSize: '0.8125rem',
-        color: '#dc2626',
-        ...(rest.style ?? {}),
-      }}
     >
       {children}
-    </span>
+    </p>
   );
 };
+
+ErrorMessage.displayName = 'ErrorMessage';
 
 export default ErrorMessage;

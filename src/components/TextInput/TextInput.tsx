@@ -1,104 +1,82 @@
-import React, { useContext, useId } from 'react';
-import styles from './TextInput.module.css';
+import React, { forwardRef, useContext, useId } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
+import styles from './TextInput.module.css';
 
-export type ValidationState = 'default' | 'error' | 'success';
+export type InputMode = 'none' | 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url';
 
-export type InputMode =
-  | 'none'
-  | 'text'
-  | 'decimal'
-  | 'numeric'
-  | 'tel'
-  | 'search'
-  | 'email'
-  | 'url';
-
-export interface TextInputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
-  /** Validation state – drives border colour and aria-invalid */
-  validationState?: ValidationState;
-  /** Content rendered to the left of the input text (icon, symbol…) */
+export interface TextInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
+  /** Visual validation state */
+  validationState?: 'error' | 'success' | 'warning';
+  /** Element rendered before the input */
   prefix?: React.ReactNode;
-  /** Content rendered to the right of the input text (icon, symbol…) */
+  /** Element rendered after the input */
   suffix?: React.ReactNode;
-  /** Additional class applied to the outer wrapper div */
-  wrapperClassName?: string;
-  /**
-   * inputMode prop for virtual-keyboard hints.
-   * Mapped directly onto the native inputmode attribute.
-   */
+  /** Maps to the inputmode attribute for virtual keyboard hints */
   inputMode?: InputMode;
+  /** Additional className for the wrapper */
+  wrapperClassName?: string;
 }
 
-/**
- * Accessible text input that auto-wires ARIA attributes from FormFieldContext.
- *
- * - Wraps a native <input> – all standard HTMLInputAttributes are forwarded.
- * - Picks up `helperId`, `errorId`, `required`, and `invalid` from the
- *   nearest FormFieldContext when present.
- * - Supports prefix/suffix icon slots.
- * - Supports controlled and uncontrolled modes.
- */
-export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
+export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   (
     {
-      validationState = 'default',
+      validationState,
       prefix,
       suffix,
+      inputMode,
       wrapperClassName,
       className,
+      'aria-describedby': ariaDescribedBy,
+      'aria-invalid': ariaInvalid,
+      'aria-required': ariaRequired,
       id: idProp,
-      'aria-describedby': ariaDescribedByProp,
-      'aria-invalid': ariaInvalidProp,
-      'aria-required': ariaRequiredProp,
-      inputMode,
       disabled,
       readOnly,
       ...rest
     },
-    ref,
+    ref
   ) => {
     const ctx = useContext(FormFieldContext);
     const generatedId = useId();
     const inputId = idProp ?? ctx?.inputId ?? generatedId;
 
-    // Merge describedby: explicit prop → context helpers
+    // Build aria-describedby from context + any caller-supplied value
     const describedByParts: string[] = [];
-    if (ariaDescribedByProp) describedByParts.push(ariaDescribedByProp);
     if (ctx?.helperId) describedByParts.push(ctx.helperId);
     if (ctx?.errorId) describedByParts.push(ctx.errorId);
-    const ariaDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
+    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
+    const computedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
 
-    // aria-invalid: explicit prop > context > validationState
+    // Derive invalid state from context or prop
     const isInvalid =
-      ariaInvalidProp !== undefined
-        ? ariaInvalidProp
-        : ctx?.invalid !== undefined
-        ? ctx.invalid
-        : validationState === 'error';
+      ariaInvalid !== undefined
+        ? ariaInvalid
+        : ctx?.hasError ?? validationState === 'error'
+        ? true
+        : undefined;
 
-    // aria-required: explicit prop > context
-    const isRequired =
-      ariaRequiredProp !== undefined
-        ? ariaRequiredProp
-        : ctx?.required !== undefined
-        ? ctx.required
-        : rest.required;
+    const isRequired = ariaRequired !== undefined ? ariaRequired : ctx?.required;
 
-    const inputClasses = [
-      styles.input,
-      validationState === 'error' || isInvalid ? styles.inputError : '',
-      validationState === 'success' ? styles.inputSuccess : '',
-      prefix ? styles.hasPrefix : '',
-      suffix ? styles.hasSuffix : '',
-      className,
+    const resolvedState = validationState ?? (ctx?.hasError ? 'error' : undefined);
+
+    const wrapperClasses = [
+      styles.wrapper,
+      resolvedState === 'error' && styles.error,
+      resolvedState === 'success' && styles.success,
+      resolvedState === 'warning' && styles.warning,
+      disabled && styles.disabled,
+      readOnly && styles.readonly,
+      prefix && styles.hasPrefix,
+      suffix && styles.hasSuffix,
+      wrapperClassName,
     ]
       .filter(Boolean)
       .join(' ');
 
+    const inputClasses = [styles.input, className].filter(Boolean).join(' ');
+
     return (
-      <div className={[styles.inputWrapper, wrapperClassName].filter(Boolean).join(' ')}>
+      <div className={wrapperClasses}>
         {prefix && (
           <span className={styles.prefix} aria-hidden="true">
             {prefix}
@@ -108,12 +86,12 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
           ref={ref}
           id={inputId}
           className={inputClasses}
-          aria-describedby={ariaDescribedBy}
-          aria-invalid={isInvalid || undefined}
-          aria-required={isRequired || undefined}
           inputMode={inputMode}
           disabled={disabled}
           readOnly={readOnly}
+          aria-describedby={computedDescribedBy}
+          aria-invalid={isInvalid}
+          aria-required={isRequired}
           {...rest}
         />
         {suffix && (
@@ -123,7 +101,7 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
         )}
       </div>
     );
-  },
+  }
 );
 
 TextInput.displayName = 'TextInput';

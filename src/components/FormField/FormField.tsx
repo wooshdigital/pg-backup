@@ -1,43 +1,42 @@
 import React, { useId, useMemo } from 'react';
-import { FormFieldContext } from './FormFieldContext';
+import { FormFieldContext, FormFieldContextValue } from './FormFieldContext';
+import styles from './FormField.module.css';
 
 export interface FormFieldProps {
   children: React.ReactNode;
-  /** Whether the field is invalid (drives aria-invalid on the input) */
-  invalid?: boolean;
+  /** When provided, marks the field as having an error */
+  error?: string;
   /** Whether the field is required */
   required?: boolean;
-  /** Extra class name */
   className?: string;
 }
 
-/**
- * Provides context for Label, TextInput/Textarea, HelperText, and ErrorMessage.
- * All children that consume FormFieldContext will be auto-wired.
- */
-export const FormField: React.FC<FormFieldProps> = ({
-  children,
-  invalid = false,
-  required = false,
-  className,
-}) => {
-  const baseId = useId();
-  const inputId = `${baseId}-input`;
-  const helperId = `${baseId}-helper`;
-  const errorId = `${baseId}-error`;
+export const FormField: React.FC<FormFieldProps> = ({ children, error, required, className }) => {
+  const id = useId();
+  const inputId = `field-input-${id}`;
+  const helperId = `field-helper-${id}`;
+  const errorId = `field-error-${id}`;
 
-  const contextValue = useMemo(
-    () => ({ inputId, helperId, errorId, required, invalid }),
-    [inputId, helperId, errorId, required, invalid],
+  const ctx = useMemo<FormFieldContextValue>(
+    () => ({
+      inputId,
+      helperId,
+      errorId,
+      hasError: Boolean(error),
+      required,
+    }),
+    [inputId, helperId, errorId, error, required]
   );
 
   return (
-    <FormFieldContext.Provider value={contextValue}>
-      <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+    <FormFieldContext.Provider value={ctx}>
+      <div className={[styles.formField, className].filter(Boolean).join(' ')}>
         {children}
       </div>
     </FormFieldContext.Provider>
   );
 };
+
+FormField.displayName = 'FormField';
 
 export default FormField;

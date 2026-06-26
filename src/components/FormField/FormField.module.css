@@ -1,11 +1,6 @@
 .formField {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1, 0.25rem);
   width: 100%;
-}
-
-.formField[data-disabled] {
-  opacity: 0.6;
-  pointer-events: none;
 }

@@ -1,32 +1,17 @@
 .label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--color-label, #111827);
-  cursor: pointer;
-  user-select: none;
+  display: block;
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: 500;
+  color: var(--color-text, #111827);
+  line-height: 1.4;
 }
 
-.label.disabled {
-  color: var(--color-label-disabled, #9ca3af);
-  cursor: not-allowed;
+.required::after {
+  content: ' *';
+  color: var(--color-error, #dc2626);
 }
 
-.labelText {
-  /* allow natural inline flow */
-}
-
-.required {
-  color: var(--color-required, #dc2626);
-  font-weight: 700;
-  line-height: 1;
-}
-
-.tooltipTrigger {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.25rem;
+.optional {
+  font-weight: 400;
+  color: var(--color-text-muted, #6b7280);
 }

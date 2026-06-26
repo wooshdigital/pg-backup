@@ -1,37 +1,9 @@
 .errorMessage {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.75rem;
-  line-height: 1.4;
+  margin: 0;
+  font-size: var(--font-size-sm, 0.875rem);
   color: var(--color-error, #dc2626);
-  margin-top: 0.125rem;
-  animation: errorAppear 0.15s ease-out;
-}
-
-.iconWrapper {
-  display: inline-flex;
+  line-height: 1.4;
+  display: flex;
   align-items: center;
-  flex-shrink: 0;
-}
-
-.errorIcon {
-  width: 0.875rem;
-  height: 0.875rem;
-  fill: currentColor;
-}
-
-.errorText {
-  /* inline text */
-}
-
-@keyframes errorAppear {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  gap: var(--space-1, 0.25rem);
 }

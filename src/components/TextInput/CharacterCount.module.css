@@ -1,18 +1,38 @@
-.characterCount {
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1, 0.25rem);
   font-size: var(--font-size-sm, 0.875rem);
-  color: var(--color-text-muted, #6b7280);
-  text-align: right;
-  margin-top: var(--spacing-1, 4px);
-  line-height: var(--line-height-normal, 1.5);
+  font-variant-numeric: tabular-nums;
   transition: color 0.15s ease;
+}
+
+.normal {
+  color: var(--color-text-muted, #6b7280);
 }
 
 .warning {
   color: var(--color-warning, #d97706);
-  font-weight: var(--font-weight-medium, 500);
 }
 
-.error {
+.critical {
+  color: var(--color-error-light, #ef4444);
+}
+
+.exceeded {
   color: var(--color-error, #dc2626);
-  font-weight: var(--font-weight-medium, 500);
+  font-weight: 600;
+}
+
+/* Screen reader only utility */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

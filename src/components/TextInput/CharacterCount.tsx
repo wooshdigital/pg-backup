@@ -2,55 +2,55 @@ import React from 'react';
 import styles from './CharacterCount.module.css';
 
 export interface CharacterCountProps {
-  /** Current length of the input value */
+  /** Current character count */
   current: number;
   /** Maximum allowed characters */
   max: number;
-  /**
-   * Fraction of max at which the count turns "warning" colour.
-   * Defaults to 0.8 (80 %).
-   */
-  warningThreshold?: number;
-  /** Extra class name */
-  className?: string;
-  /** ID so the input can reference this via aria-describedby */
+  /** ID for external aria-describedby wiring */
   id?: string;
+  /** Class name override */
+  className?: string;
 }
 
-/**
- * Renders an aria-live="polite" region that announces remaining characters
- * as the user types.
- */
-export const CharacterCount: React.FC<CharacterCountProps> = ({
-  current,
-  max,
-  warningThreshold = 0.8,
-  className,
-  id,
-}) => {
+export const CharacterCount: React.FC<CharacterCountProps> = ({ current, max, id, className }) => {
   const remaining = max - current;
-  const ratio = current / max;
+  const percentage = max > 0 ? current / max : 0;
 
-  let colorClass = '';
-  if (remaining < 0) {
-    colorClass = styles.error;
-  } else if (ratio >= warningThreshold) {
-    colorClass = styles.warning;
-  }
+  const thresholdClass =
+    percentage >= 1
+      ? styles.exceeded
+      : percentage >= 0.9
+      ? styles.critical
+      : percentage >= 0.75
+      ? styles.warning
+      : styles.normal;
+
+  const classes = [styles.count, thresholdClass, className].filter(Boolean).join(' ');
+
+  // Accessible message for screen readers
+  const srMessage =
+    remaining < 0
+      ? `${Math.abs(remaining)} characters over the limit of ${max}`
+      : `${remaining} of ${max} characters remaining`;
 
   return (
     <span
       id={id}
-      role="status"
+      className={classes}
       aria-live="polite"
       aria-atomic="true"
-      className={[styles.characterCount, colorClass, className].filter(Boolean).join(' ')}
+      role="status"
     >
-      {remaining < 0
-        ? `${Math.abs(remaining)} characters over limit`
-        : `${remaining} of ${max} characters remaining`}
+      {/* Visible numeric display */}
+      <span aria-hidden="true">
+        {current}/{max}
+      </span>
+      {/* Screen reader only text */}
+      <span className={styles.srOnly}>{srMessage}</span>
     </span>
   );
 };
+
+CharacterCount.displayName = 'CharacterCount';
 
 export default CharacterCount;

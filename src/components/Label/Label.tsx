@@ -1,40 +1,29 @@
 import React, { useContext } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
+import styles from './Label.module.css';
 
 export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
-  /** Show a visual required indicator (*) */
-  required?: boolean;
+  children: React.ReactNode;
+  /** Visually indicate the field is optional */
+  optional?: boolean;
 }
 
-export const Label: React.FC<LabelProps> = ({
-  children,
-  htmlFor: htmlForProp,
-  required: requiredProp,
-  ...rest
-}) => {
+export const Label: React.FC<LabelProps> = ({ children, optional, className, htmlFor, ...rest }) => {
   const ctx = useContext(FormFieldContext);
-  const htmlFor = htmlForProp ?? ctx?.inputId;
-  const isRequired = requiredProp ?? ctx?.required;
+  const resolvedFor = htmlFor ?? ctx?.inputId;
 
   return (
     <label
-      htmlFor={htmlFor}
+      htmlFor={resolvedFor}
+      className={[styles.label, ctx?.required && styles.required, className].filter(Boolean).join(' ')}
       {...rest}
-      style={{
-        fontSize: '0.875rem',
-        fontWeight: 500,
-        color: '#374151',
-        ...(rest.style ?? {}),
-      }}
     >
       {children}
-      {isRequired && (
-        <span aria-hidden="true" style={{ color: '#dc2626', marginLeft: '2px' }}>
-          *
-        </span>
-      )}
+      {optional && <span className={styles.optional}> (optional)</span>}
     </label>
   );
 };
+
+Label.displayName = 'Label';
 
 export default Label;
