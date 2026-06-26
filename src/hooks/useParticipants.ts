@@ -2,19 +2,10 @@ import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { useTripContext } from '../context/TripContext';
 import { Participant } from '../types';
+import { getRandomAvatarColor } from '../utils/avatarColors';
+import { generateId } from '../utils/id';
 
-export interface UseParticipantsReturn {
-  participants: Participant[];
-  addParticipant: (name: string) => void;
-  removeParticipant: (participantId: string) => void;
-}
-
-/**
- * Returns participants for a given tripId and exposes action creators.
- * The `hasExpense` check is a stub that will be replaced in Phase 4 when
- * the expenses slice is introduced.
- */
-export function useParticipants(tripId: string): UseParticipantsReturn {
+export function useParticipants(tripId: string) {
   const { state, dispatch } = useTripContext();
 
   const trip = state.trips.find((t) => t.id === tripId);
@@ -23,46 +14,44 @@ export function useParticipants(tripId: string): UseParticipantsReturn {
   const addParticipant = useCallback(
     (name: string) => {
       const trimmed = name.trim();
-      if (!trimmed) {
-        Alert.alert('Invalid name', 'Participant name cannot be empty.');
-        return;
-      }
-      dispatch({ type: 'TRIP_ADD_PARTICIPANT', payload: { tripId, name: trimmed } });
+      if (!trimmed) return;
+
+      const participant: Participant = {
+        id: generateId(),
+        name: trimmed,
+        avatarColor: getRandomAvatarColor(),
+        tripId,
+      };
+
+      dispatch({
+        type: 'TRIP_ADD_PARTICIPANT',
+        payload: { tripId, participant },
+      });
     },
-    [dispatch, tripId]
+    [tripId, dispatch]
   );
 
   const removeParticipant = useCallback(
     (participantId: string) => {
-      // Phase 4 will inject real expense data here. For now the array is always empty.
-      const expenseParticipantIds: string[] = [];
+      // Future: check if participant is attached to any expense
+      // For now, always allow removal (Phase 4 will add expense validation)
+      const hasExpenses = false; // placeholder for Phase 4
 
-      if (expenseParticipantIds.includes(participantId)) {
+      if (hasExpenses) {
         Alert.alert(
-          'Cannot remove participant',
-          'This participant is already attached to one or more expenses. Remove them from all expenses first.'
+          'Cannot Remove Participant',
+          'This participant is attached to one or more expenses. Remove their expenses first.',
+          [{ text: 'OK' }]
         );
         return;
       }
 
-      Alert.alert(
-        'Remove participant',
-        'Are you sure you want to remove this participant from the trip?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: () =>
-              dispatch({
-                type: 'TRIP_REMOVE_PARTICIPANT',
-                payload: { tripId, participantId },
-              }),
-          },
-        ]
-      );
+      dispatch({
+        type: 'TRIP_REMOVE_PARTICIPANT',
+        payload: { tripId, participantId },
+      });
     },
-    [dispatch, tripId]
+    [tripId, dispatch]
   );
 
   return { participants, addParticipant, removeParticipant };

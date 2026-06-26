@@ -1,44 +1,40 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { getInitials } from '../../utils/avatarColors';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { getAvatarInitials } from '../../utils/avatarColors';
 
 interface AvatarCircleProps {
   name: string;
   color: string;
   size?: number;
-  fontSize?: number;
 }
 
-export function AvatarCircle({ name, color, size = 44, fontSize }: AvatarCircleProps) {
-  const computedFontSize = fontSize ?? Math.round(size * 0.38);
-  const initials = getInitials(name);
+export function AvatarCircle({ name, color, size = 44 }: AvatarCircleProps) {
+  const initials = getAvatarInitials(name);
+  const fontSize = size * 0.38;
+
+  const circleStyle: ViewStyle = {
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    backgroundColor: color,
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
 
   return (
-    <View
-      style={[
-        styles.circle,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-        },
-      ]}
-      accessibilityLabel={`Avatar for ${name}`}
-    >
-      <Text style={[styles.initials, { fontSize: computedFontSize }]}>{initials}</Text>
+    <View style={circleStyle}>
+      <Text style={[styles.initials, { fontSize, lineHeight: size }]}>
+        {initials}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  circle: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   initials: {
     color: '#FFFFFF',
     fontWeight: '700',
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 });

@@ -1,31 +1,29 @@
 import React, { useLayoutEffect } from 'react';
 import { StyleSheet } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { RootStackParamList } from '../types';
+import { useTrips } from '../hooks/useTrips';
 import { TripDetailTabs } from '../navigation/TripDetailTabs';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'TripDetail'>;
-
-export function TripDetailScreen({ route, navigation }: Props) {
-  const { tripId, tripName } = route.params;
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title: tripName,
-      headerBackTitle: 'Trips',
-    });
-  }, [navigation, tripName]);
-
-  return (
-    <GestureHandlerRootView style={styles.root}>
-      <TripDetailTabs tripId={tripId} />
-    </GestureHandlerRootView>
-  );
+interface TripDetailScreenProps {
+  route: {
+    params: {
+      tripId: string;
+    };
+  };
+  navigation: any;
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-});
+export function TripDetailScreen({ route, navigation }: TripDetailScreenProps) {
+  const { tripId } = route.params;
+  const { getTripById } = useTrips();
+  const trip = getTripById(tripId);
+
+  useLayoutEffect(() => {
+    if (trip) {
+      navigation.setOptions({ title: trip.name });
+    }
+  }, [navigation, trip]);
+
+  return <TripDetailTabs tripId={tripId} />;
+}
+
+const styles = StyleSheet.create({});

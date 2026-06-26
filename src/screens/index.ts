@@ -1,8 +1,8 @@
-export * from './HomeScreen';
-export * from './TripsListScreen';
-export * from './TripsScreen';
-export * from './CreateTripScreen';
-export * from './SettingsScreen';
-export * from './TripDetailScreen';
-export * from './ParticipantsScreen';
-export * from './ExpensesPlaceholderScreen';
+export { HomeScreen } from './HomeScreen';
+export { TripsScreen } from './TripsScreen';
+export { TripsListScreen } from './TripsListScreen';
+export { CreateTripScreen } from './CreateTripScreen';
+export { TripDetailScreen } from './TripDetailScreen';
+export { ParticipantsScreen } from './ParticipantsScreen';
+export { ExpensesPlaceholderScreen } from './ExpensesPlaceholderScreen';
+export { SettingsScreen } from './SettingsScreen';

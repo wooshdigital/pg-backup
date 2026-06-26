@@ -1,29 +1,28 @@
 import { useCallback } from 'react';
 import { useTripContext } from '../context/TripContext';
 import { Trip } from '../types';
+import { generateId } from '../utils/id';
 
-export interface UseTripsReturn {
-  trips: Trip[];
-  loading: boolean;
-  createTrip: (data: Omit<Trip, 'id' | 'createdAt' | 'participants'>) => void;
-  updateTrip: (id: string, data: Partial<Trip>) => void;
-  deleteTrip: (id: string) => void;
-  getTripById: (id: string) => Trip | undefined;
-}
-
-export function useTrips(): UseTripsReturn {
+export function useTrips() {
   const { state, dispatch } = useTripContext();
 
-  const createTrip = useCallback(
+  const addTrip = useCallback(
     (data: Omit<Trip, 'id' | 'createdAt' | 'participants'>) => {
-      dispatch({ type: 'TRIP_CREATE', payload: data });
+      const trip: Trip = {
+        ...data,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        participants: [],
+      };
+      dispatch({ type: 'TRIP_ADD', payload: trip });
+      return trip;
     },
     [dispatch]
   );
 
   const updateTrip = useCallback(
-    (id: string, data: Partial<Trip>) => {
-      dispatch({ type: 'TRIP_UPDATE', payload: { id, ...data } });
+    (trip: Trip) => {
+      dispatch({ type: 'TRIP_UPDATE', payload: trip });
     },
     [dispatch]
   );
@@ -36,14 +35,16 @@ export function useTrips(): UseTripsReturn {
   );
 
   const getTripById = useCallback(
-    (id: string) => state.trips.find((t) => t.id === id),
+    (id: string): Trip | undefined => {
+      return state.trips.find((t) => t.id === id);
+    },
     [state.trips]
   );
 
   return {
     trips: state.trips,
-    loading: state.loading,
-    createTrip,
+    isLoading: state.isLoading,
+    addTrip,
     updateTrip,
     deleteTrip,
     getTripById,

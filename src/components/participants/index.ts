@@ -1,3 +1,3 @@
-export * from './AvatarCircle';
-export * from './ParticipantRow';
-export * from './AddParticipantSheet';
+export { AvatarCircle } from './AvatarCircle';
+export { ParticipantRow } from './ParticipantRow';
+export { AddParticipantSheet } from './AddParticipantSheet';

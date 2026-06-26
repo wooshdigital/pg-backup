@@ -1,3 +1,3 @@
-export * from './RootNavigator';
-export * from './TripStackNavigator';
-export * from './TripDetailTabs';
+export { RootNavigator } from './RootNavigator';
+export { TripStackNavigator } from './TripStackNavigator';
+export { TripDetailTabs } from './TripDetailTabs';

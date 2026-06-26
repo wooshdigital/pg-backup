@@ -1,8 +1,8 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TripsListScreen } from '../screens/TripsListScreen';
-import { CreateTripScreen } from '../screens/CreateTripScreen';
 import { TripDetailScreen } from '../screens/TripDetailScreen';
+import { CreateTripScreen } from '../screens/CreateTripScreen';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -11,31 +11,32 @@ export function TripStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#FFFFFF' },
-        headerTintColor: '#3F51B5',
+        headerStyle: {
+          backgroundColor: '#FFFFFF',
+        },
+        headerTintColor: '#111827',
         headerTitleStyle: {
           fontWeight: '700',
           fontSize: 18,
-          color: '#1A1A2E',
         },
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: '#F5F5F5' },
+        contentStyle: {
+          backgroundColor: '#F9FAFB',
+        },
       }}
     >
       <Stack.Screen
-        name="TripsList"
+        name="Trips"
         component={TripsListScreen}
         options={{ title: 'My Trips' }}
       />
       <Stack.Screen
         name="TripDetail"
         component={TripDetailScreen}
-        options={({ route }) => ({ title: route.params.tripName })}
-      />
-      <Stack.Screen
-        name="CreateTrip"
-        component={CreateTripScreen}
-        options={{ title: 'New Trip', presentation: 'modal' }}
+        options={{
+          title: 'Trip',
+          headerBackTitle: 'Back',
+        }}
       />
     </Stack.Navigator>
   );

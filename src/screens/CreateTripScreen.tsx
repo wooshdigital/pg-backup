@@ -1,280 +1,180 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
+  View,
   Text,
   TextInput,
-  View,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTrips } from '../hooks/useTrips';
-import { DatePicker } from '../components/common/DatePicker';
-import { CurrencyPicker } from '../components/trips/CurrencyPicker';
-import { RootStackParamList } from '../types';
+import { CURRENCIES } from '../constants/currencies';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+interface CreateTripScreenProps {
+  navigation: any;
+}
 
-const today = () => new Date();
-const tomorrow = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d;
-};
-
-export const CreateTripScreen: React.FC = () => {
-  const navigation = useNavigation<NavigationProp>();
+export function CreateTripScreen({ navigation }: CreateTripScreenProps) {
   const { addTrip } = useTrips();
-
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [currency, setCurrency] = useState('USD');
-  const [startDate, setStartDate] = useState<Date>(today());
-  const [endDate, setEndDate] = useState<Date>(tomorrow());
-  const [nameError, setNameError] = useState('');
 
-  const handleSave = () => {
-    const trimmedName = name.trim();
-
-    if (!trimmedName) {
-      setNameError('Trip name is required.');
+  const handleCreate = useCallback(() => {
+    if (!name.trim()) {
+      Alert.alert('Validation Error', 'Please enter a trip name.');
       return;
     }
-
-    if (endDate < startDate) {
-      Alert.alert('Invalid Dates', 'End date must be on or after start date.');
-      return;
-    }
-
-    setNameError('');
-    addTrip({
-      name: trimmedName,
+    const trip = addTrip({
+      name: name.trim(),
+      description: description.trim(),
       currency,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
     });
-
     navigation.goBack();
-  };
-
-  const handleCancel = () => {
-    navigation.goBack();
-  };
+  }, [name, description, currency, addTrip, navigation]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>New Trip</Text>
-            <Text style={styles.headerSubtitle}>
-              Set up your trip details to start tracking shared expenses.
-            </Text>
-          </View>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.field}>
+        <Text style={styles.label}>Trip Name *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. Summer in Europe"
+          placeholderTextColor="#9CA3AF"
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+          returnKeyType="next"
+        />
+      </View>
 
-          {/* Form */}
-          <View style={styles.form}>
-            {/* Trip Name */}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.fieldLabel}>Trip Name</Text>
-              <TextInput
-                style={[styles.textInput, nameError ? styles.textInputError : null]}
-                value={name}
-                onChangeText={(text) => {
-                  setName(text);
-                  if (text.trim()) setNameError('');
-                }}
-                placeholder="e.g. Japan Summer 2026"
-                placeholderTextColor="#9CA3AF"
-                returnKeyType="done"
-                autoFocus
-                accessibilityLabel="Trip name"
-              />
-              {!!nameError && <Text style={styles.errorText}>{nameError}</Text>}
-            </View>
+      <View style={styles.field}>
+        <Text style={styles.label}>Description</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Optional description..."
+          placeholderTextColor="#9CA3AF"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+        />
+      </View>
 
-            {/* Currency */}
-            <CurrencyPicker value={currency} onChange={setCurrency} />
-
-            {/* Date Range */}
-            <View style={styles.dateRow}>
-              <View style={styles.dateField}>
-                <DatePicker
-                  label="Start Date"
-                  value={startDate}
-                  onChange={(d) => {
-                    setStartDate(d);
-                    if (d > endDate) setEndDate(d);
-                  }}
-                />
-              </View>
-              <View style={styles.dateSeparator}>
-                <Text style={styles.dateSeparatorText}>→</Text>
-              </View>
-              <View style={styles.dateField}>
-                <DatePicker
-                  label="End Date"
-                  value={endDate}
-                  onChange={setEndDate}
-                  minimumDate={startDate}
-                />
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Actions */}
-        <View style={styles.actions}>
-          <Pressable style={styles.cancelButton} onPress={handleCancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.saveButton, !name.trim() && styles.saveButtonDisabled]}
-            onPress={handleSave}
-          >
-            <Text style={styles.saveText}>Create Trip</Text>
-          </Pressable>
+      <View style={styles.field}>
+        <Text style={styles.label}>Currency</Text>
+        <View style={styles.currencyRow}>
+          {['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'].map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[
+                styles.currencyChip,
+                currency === c && styles.currencyChipActive,
+              ]}
+              onPress={() => setCurrency(c)}
+            >
+              <Text
+                style={[
+                  styles.currencyChipText,
+                  currency === c && styles.currencyChipTextActive,
+                ]}
+              >
+                {c}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.button, !name.trim() && styles.buttonDisabled]}
+        onPress={handleCreate}
+        disabled={!name.trim()}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.buttonText}>Create Trip</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
   },
-  keyboardAvoid: {
-    flex: 1,
+  content: {
+    padding: 20,
+    gap: 20,
   },
-  scroll: {
-    flex: 1,
+  field: {
+    gap: 6,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
-  },
-  header: {
-    marginBottom: 28,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 6,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-  },
-  form: {
-    gap: 4,
-  },
-  fieldContainer: {
-    marginBottom: 16,
-  },
-  fieldLabel: {
+  label: {
     fontSize: 13,
     fontWeight: '600',
     color: '#6B7280',
-    marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  textInput: {
-    backgroundColor: '#F9FAFB',
+  input: {
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
+    paddingVertical: 12,
+    fontSize: 16,
     color: '#111827',
-    fontWeight: '500',
+    backgroundColor: '#FFFFFF',
   },
-  textInputError: {
-    borderColor: '#EF4444',
+  textArea: {
+    height: 88,
+    paddingTop: 12,
   },
-  errorText: {
-    fontSize: 12,
-    color: '#EF4444',
-    marginTop: 4,
-    marginLeft: 2,
-  },
-  dateRow: {
+  currencyRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 4,
   },
-  dateField: {
-    flex: 1,
-  },
-  dateSeparator: {
-    paddingBottom: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dateSeparatorText: {
-    fontSize: 18,
-    color: '#9CA3AF',
-  },
-  actions: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    backgroundColor: '#fff',
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
+  currencyChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
-    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
-  cancelText: {
-    fontSize: 16,
+  currencyChipActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#6366F1',
+  },
+  currencyChipText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#6B7280',
   },
-  saveButton: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#4F6EF7',
+  currencyChipTextActive: {
+    color: '#6366F1',
+  },
+  button: {
+    backgroundColor: '#6366F1',
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#4F6EF7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    marginTop: 8,
   },
-  saveButtonDisabled: {
-    opacity: 0.55,
+  buttonDisabled: {
+    backgroundColor: '#C7D2FE',
   },
-  saveText: {
+  buttonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.2,
   },
 });
