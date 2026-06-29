@@ -2,27 +2,18 @@ import React, { forwardRef, useContext, useId } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
 import styles from './TextInput.module.css';
 
-export type TextInputInputMode =
-  | 'none'
-  | 'text'
-  | 'decimal'
-  | 'numeric'
-  | 'tel'
-  | 'search'
-  | 'email'
-  | 'url';
+export type InputMode = 'none' | 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url';
 
-export interface TextInputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
-  /** Visual state */
-  validationState?: 'error' | 'success' | 'warning' | 'none';
-  /** Slot rendered before the input text */
+export interface TextInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
+  /** Visual validation state */
+  validationState?: 'error' | 'success' | 'warning';
+  /** Element rendered before the input (icon, text, etc.) */
   prefix?: React.ReactNode;
-  /** Slot rendered after the input text */
+  /** Element rendered after the input (icon, button, etc.) */
   suffix?: React.ReactNode;
-  /** Maps to the inputmode attribute for virtual keyboards */
-  inputMode?: TextInputInputMode;
-  /** Additional class name for the wrapper */
+  /** Override the inputmode attribute for virtual keyboards */
+  inputMode?: InputMode;
+  /** Additional CSS class for the wrapper */
   wrapperClassName?: string;
 }
 
@@ -32,63 +23,59 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       validationState,
       prefix,
       suffix,
-      wrapperClassName,
+      inputMode,
       className,
+      wrapperClassName,
       'aria-describedby': ariaDescribedBy,
       'aria-invalid': ariaInvalid,
       'aria-required': ariaRequired,
-      disabled,
       id: idProp,
       ...rest
     },
     ref
   ) => {
+    const ctx = useContext(FormFieldContext);
     const generatedId = useId();
-    const fieldCtx = useContext(FormFieldContext);
+    const inputId = idProp ?? ctx?.inputId ?? generatedId;
 
-    const inputId = idProp ?? fieldCtx?.inputId ?? generatedId;
-
-    // Merge aria-describedby from context and prop
+    // Combine caller's aria-describedby with context ids
     const describedByParts: string[] = [];
-    if (fieldCtx?.helperId) describedByParts.push(fieldCtx.helperId);
-    if (fieldCtx?.errorId) describedByParts.push(fieldCtx.errorId);
+    if (ctx?.helperId) describedByParts.push(ctx.helperId);
+    if (ctx?.errorId) describedByParts.push(ctx.errorId);
     if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
-    const mergedDescribedBy =
-      describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
+    const combinedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
 
-    const isInvalid =
+    const invalid =
       ariaInvalid !== undefined
         ? ariaInvalid
-        : fieldCtx?.hasError
+        : ctx?.hasError
         ? true
         : undefined;
 
-    const isRequired =
+    const required =
       ariaRequired !== undefined
         ? ariaRequired
-        : fieldCtx?.required
+        : ctx?.required
         ? true
         : undefined;
 
-    const resolvedValidationState =
-      validationState ?? (fieldCtx?.hasError ? 'error' : 'none');
+    const effectiveValidationState = validationState ?? (ctx?.hasError ? 'error' : undefined);
 
     const wrapperClasses = [
       styles.wrapper,
-      resolvedValidationState !== 'none'
-        ? styles[`wrapper--${resolvedValidationState}`]
-        : '',
-      disabled ? styles['wrapper--disabled'] : '',
-      prefix ? styles['wrapper--has-prefix'] : '',
-      suffix ? styles['wrapper--has-suffix'] : '',
-      wrapperClassName ?? '',
+      effectiveValidationState === 'error' && styles.error,
+      effectiveValidationState === 'success' && styles.success,
+      effectiveValidationState === 'warning' && styles.warning,
+      rest.disabled && styles.disabled,
+      rest.readOnly && styles.readonly,
+      prefix && styles.hasPrefix,
+      suffix && styles.hasSuffix,
+      wrapperClassName,
     ]
       .filter(Boolean)
       .join(' ');
 
-    const inputClasses = [styles.input, className ?? '']
-      .filter(Boolean)
-      .join(' ');
+    const inputClasses = [styles.input, className].filter(Boolean).join(' ');
 
     return (
       <div className={wrapperClasses}>
@@ -101,10 +88,10 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
           ref={ref}
           id={inputId}
           className={inputClasses}
-          disabled={disabled}
-          aria-describedby={mergedDescribedBy}
-          aria-invalid={isInvalid}
-          aria-required={isRequired}
+          inputMode={inputMode}
+          aria-describedby={combinedDescribedBy}
+          aria-invalid={invalid}
+          aria-required={required}
           {...rest}
         />
         {suffix && (
@@ -118,5 +105,3 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
 );
 
 TextInput.displayName = 'TextInput';
-
-export default TextInput;

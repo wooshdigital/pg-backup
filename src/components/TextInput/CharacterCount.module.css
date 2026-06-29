@@ -1,35 +1,17 @@
-/* Base count display */
 .count {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1, 0.25rem);
+  display: block;
+  margin-top: 0.25rem;
   font-size: var(--font-size-sm, 0.875rem);
   color: var(--color-text-muted, #6b7280);
-  font-variant-numeric: tabular-nums;
-  user-select: none;
+  text-align: right;
 }
 
-/* Warning threshold color */
-.count--warning {
-  color: var(--color-warning, #f59e0b);
+.count.warning {
+  color: var(--color-warning, #d97706);
   font-weight: 500;
 }
 
-/* Over-limit error color */
-.count--error {
-  color: var(--color-error, #ef4444);
+.count.error {
+  color: var(--color-error, #dc2626);
   font-weight: 600;
-}
-
-/* Visually hidden but available to screen readers */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }

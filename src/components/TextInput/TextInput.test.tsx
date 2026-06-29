@@ -9,213 +9,222 @@ import { FormFieldContext } from '../FormField/FormFieldContext';
 
 expect.extend(toHaveNoViolations);
 
-// Helper to wrap with FormFieldContext
-function renderWithFieldCtx(
-  ui: React.ReactElement,
-  ctx: Partial<React.ContextType<typeof FormFieldContext>> = {}
-) {
-  const defaultCtx = {
-    inputId: 'test-input',
-    helperId: undefined,
-    errorId: undefined,
-    hasError: false,
-    required: false,
-    ...ctx,
-  };
-  return render(
-    <FormFieldContext.Provider value={defaultCtx}>
-      {ui}
-    </FormFieldContext.Provider>
+// Helper to wrap in a label for axe accessibility
+function WithLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div>
+      <label htmlFor="test-input">Name</label>
+      {children}
+    </div>
   );
 }
 
 describe('TextInput', () => {
-  it('renders an input element', () => {
-    render(<TextInput placeholder="Enter text" />);
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
-
-  it('passes through placeholder and value', () => {
-    render(<TextInput placeholder="Search..." defaultValue="hello" />);
-    const input = screen.getByRole('textbox') as HTMLInputElement;
-    expect(input.placeholder).toBe('Search...');
-    expect(input.value).toBe('hello');
-  });
-
-  it('works in controlled mode', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-
-    function Controlled() {
-      const [value, setValue] = useState('');
-      return (
-        <TextInput
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            onChange(e.target.value);
-          }}
-          aria-label="controlled"
-        />
-      );
-    }
-
-    render(<Controlled />);
-    const input = screen.getByRole('textbox');
-    await user.type(input, 'abc');
-    expect(onChange).toHaveBeenCalledTimes(3);
-    expect((input as HTMLInputElement).value).toBe('abc');
-  });
-
-  it('works in uncontrolled mode', async () => {
-    const user = userEvent.setup();
-    render(<TextInput defaultValue="" aria-label="uncontrolled" />);
-    const input = screen.getByRole('textbox');
-    await user.type(input, 'hello');
-    expect((input as HTMLInputElement).value).toBe('hello');
-  });
-
-  it('wires aria-describedby from FormFieldContext', () => {
-    renderWithFieldCtx(<TextInput aria-label="field" />, {
-      helperId: 'helper-1',
-      errorId: 'error-1',
+  describe('Rendering', () => {
+    it('renders an input element', () => {
+      render(<TextInput id="test-input" />);
+      expect(screen.getByRole('textbox')).toBeInTheDocument();
     });
-    const input = screen.getByRole('textbox');
-    expect(input).toHaveAttribute('aria-describedby', 'helper-1 error-1');
+
+    it('forwards ref to the input element', () => {
+      const ref = React.createRef<HTMLInputElement>();
+      render(<TextInput ref={ref} id="test-input" />);
+      expect(ref.current).toBeInstanceOf(HTMLInputElement);
+    });
+
+    it('spreads extra props onto the native input', () => {
+      render(<TextInput id="test-input" placeholder="Enter text" data-testid="my-input" />);
+      const input = screen.getByTestId('my-input');
+      expect(input).toHaveAttribute('placeholder', 'Enter text');
+    });
+
+    it('renders prefix slot', () => {
+      render(<TextInput id="test-input" prefix={<span>$</span>} />);
+      expect(screen.getByText('$')).toBeInTheDocument();
+    });
+
+    it('renders suffix slot', () => {
+      render(<TextInput id="test-input" suffix={<span>USD</span>} />);
+      expect(screen.getByText('USD')).toBeInTheDocument();
+    });
   });
 
-  it('merges aria-describedby from context and prop', () => {
-    renderWithFieldCtx(
-      <TextInput aria-label="field" aria-describedby="extra-id" />,
-      {
-        helperId: 'helper-1',
-      }
-    );
-    const input = screen.getByRole('textbox');
-    expect(input.getAttribute('aria-describedby')).toContain('helper-1');
-    expect(input.getAttribute('aria-describedby')).toContain('extra-id');
+  describe('ARIA wiring', () => {
+    it('applies aria-describedby from FormFieldContext', () => {
+      render(
+        <FormFieldContext.Provider
+          value={{ inputId: 'test-input', helperId: 'helper-1', errorId: 'error-1', hasError: false, required: false }}
+        >
+          <TextInput id="test-input" />
+        </FormFieldContext.Provider>
+      );
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute('aria-describedby', 'helper-1 error-1');
+    });
+
+    it('combines context aria-describedby with caller-provided aria-describedby', () => {
+      render(
+        <FormFieldContext.Provider
+          value={{ inputId: 'test-input', helperId: 'helper-1', errorId: undefined, hasError: false, required: false }}
+        >
+          <TextInput id="test-input" aria-describedby="extra-1" />
+        </FormFieldContext.Provider>
+      );
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute('aria-describedby', 'helper-1 extra-1');
+    });
+
+    it('sets aria-invalid from context hasError', () => {
+      render(
+        <FormFieldContext.Provider
+          value={{ inputId: 'test-input', helperId: undefined, errorId: 'error-1', hasError: true, required: false }}
+        >
+          <TextInput id="test-input" />
+        </FormFieldContext.Provider>
+      );
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('sets aria-required from context required', () => {
+      render(
+        <FormFieldContext.Provider
+          value={{ inputId: 'test-input', helperId: undefined, errorId: undefined, hasError: false, required: true }}
+        >
+          <TextInput id="test-input" />
+        </FormFieldContext.Provider>
+      );
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute('aria-required', 'true');
+    });
+
+    it('caller aria-invalid overrides context', () => {
+      render(
+        <FormFieldContext.Provider
+          value={{ inputId: 'test-input', helperId: undefined, errorId: undefined, hasError: true, required: false }}
+        >
+          <TextInput id="test-input" aria-invalid={false} />
+        </FormFieldContext.Provider>
+      );
+      const input = screen.getByRole('textbox');
+      expect(input).toHaveAttribute('aria-invalid', 'false');
+    });
   });
 
-  it('sets aria-invalid from context hasError', () => {
-    renderWithFieldCtx(<TextInput aria-label="field" />, { hasError: true });
-    expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'true');
+  describe('Controlled mode', () => {
+    it('reflects controlled value', () => {
+      render(<TextInput id="test-input" value="hello" onChange={() => {}} />);
+      expect(screen.getByRole('textbox')).toHaveValue('hello');
+    });
+
+    it('calls onChange when value changes', async () => {
+      const onChange = vi.fn();
+      render(<TextInput id="test-input" value="" onChange={onChange} />);
+      await userEvent.type(screen.getByRole('textbox'), 'a');
+      expect(onChange).toHaveBeenCalled();
+    });
   });
 
-  it('sets aria-required from context required', () => {
-    renderWithFieldCtx(<TextInput aria-label="field" />, { required: true });
-    expect(screen.getByRole('textbox')).toHaveAttribute(
-      'aria-required',
-      'true'
-    );
+  describe('Uncontrolled mode', () => {
+    it('accepts defaultValue', () => {
+      render(<TextInput id="test-input" defaultValue="default text" />);
+      expect(screen.getByRole('textbox')).toHaveValue('default text');
+    });
   });
 
-  it('prop aria-invalid overrides context', () => {
-    renderWithFieldCtx(
-      <TextInput aria-label="field" aria-invalid={false} />,
-      { hasError: true }
-    );
-    expect(screen.getByRole('textbox')).toHaveAttribute(
-      'aria-invalid',
-      'false'
-    );
+  describe('Disabled and readonly', () => {
+    it('is disabled when disabled prop passed', () => {
+      render(<TextInput id="test-input" disabled />);
+      expect(screen.getByRole('textbox')).toBeDisabled();
+    });
+
+    it('is readonly when readOnly prop passed', () => {
+      render(<TextInput id="test-input" readOnly />);
+      expect(screen.getByRole('textbox')).toHaveAttribute('readonly');
+    });
   });
 
-  it('is disabled when disabled prop is set', () => {
-    render(<TextInput aria-label="field" disabled />);
-    expect(screen.getByRole('textbox')).toBeDisabled();
+  describe('inputMode', () => {
+    it('passes inputMode to native input', () => {
+      render(<TextInput id="test-input" inputMode="numeric" />);
+      expect(screen.getByRole('textbox')).toHaveAttribute('inputmode', 'numeric');
+    });
   });
 
-  it('renders prefix and suffix', () => {
-    render(
-      <TextInput
-        aria-label="search"
-        prefix={<span data-testid="prefix-icon">$</span>}
-        suffix={<span data-testid="suffix-icon">✓</span>}
-      />
-    );
-    expect(screen.getByTestId('prefix-icon')).toBeInTheDocument();
-    expect(screen.getByTestId('suffix-icon')).toBeInTheDocument();
-  });
+  describe('Accessibility (axe)', () => {
+    it('passes axe with a label', async () => {
+      const { container } = render(
+        <WithLabel>
+          <TextInput id="test-input" />
+        </WithLabel>
+      );
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
+    });
 
-  it('has no accessibility violations', async () => {
-    const { container } = render(
-      <div>
-        <label htmlFor="ai-input">Name</label>
-        <TextInput id="ai-input" placeholder="Enter name" />
-      </div>
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
+    it('passes axe in error state', async () => {
+      const { container } = render(
+        <div>
+          <label htmlFor="err-input">Email</label>
+          <TextInput id="err-input" validationState="error" aria-invalid={true} aria-describedby="err-msg" />
+          <span id="err-msg" role="alert">Invalid email</span>
+        </div>
+      );
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
+    });
   });
 });
 
 describe('CharacterCount', () => {
-  it('renders remaining characters', () => {
+  it('renders remaining count message', () => {
     render(<CharacterCount current={20} max={100} />);
-    expect(screen.getByText(/80 of 100 remaining/i)).toBeInTheDocument();
+    expect(screen.getByText('80 of 100 characters remaining')).toBeInTheDocument();
   });
 
-  it('shows over-limit text when exceeded', () => {
+  it('renders over-limit message when current exceeds max', () => {
     render(<CharacterCount current={105} max={100} />);
-    expect(screen.getByText(/5 over limit/i)).toBeInTheDocument();
+    expect(screen.getByText('5 characters over the limit')).toBeInTheDocument();
   });
 
-  it('has an aria-live polite region', () => {
-    render(<CharacterCount current={50} max={100} />);
-    const liveRegion = document.querySelector('[aria-live="polite"]');
-    expect(liveRegion).toBeInTheDocument();
+  it('renders singular "character" when 1 remaining', () => {
+    render(<CharacterCount current={99} max={100} />);
+    expect(screen.getByText('1 of 100 character remaining')).toBeInTheDocument();
   });
 
-  it('announces remaining count', () => {
-    render(<CharacterCount current={30} max={100} />);
-    const liveRegion = document.querySelector('[aria-live="polite"]');
-    expect(liveRegion?.textContent).toMatch(/70 of 100 characters remaining/i);
+  it('has aria-live="polite" and role="status"', () => {
+    render(<CharacterCount current={50} max={100} id="char-count" />);
+    const el = screen.getByRole('status');
+    expect(el).toHaveAttribute('aria-live', 'polite');
+    expect(el).toHaveAttribute('aria-atomic', 'true');
   });
 
-  it('announces over-limit to screen readers', () => {
-    render(<CharacterCount current={110} max={100} />);
-    const liveRegion = document.querySelector('[aria-live="polite"]');
-    expect(liveRegion?.textContent).toMatch(/10 characters over the limit/i);
-  });
-
-  it('updates aria-live region when count changes', () => {
-    const { rerender } = render(<CharacterCount current={10} max={100} />);
-    const liveRegion = document.querySelector('[aria-live="polite"]');
-    expect(liveRegion?.textContent).toMatch(/90 of 100 characters remaining/i);
-
-    rerender(<CharacterCount current={50} max={100} />);
-    expect(liveRegion?.textContent).toMatch(/50 of 100 characters remaining/i);
-  });
-
-  it('has no accessibility violations', async () => {
-    const { container } = render(<CharacterCount current={20} max={100} />);
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-});
-
-describe('TextInput + CharacterCount integration', () => {
-  it('updates character count as user types', async () => {
-    const user = userEvent.setup();
-
-    function WithCount() {
-      const [value, setValue] = useState('');
+  it('updates live region as user types', async () => {
+    function Controlled() {
+      const [val, setVal] = useState('');
       return (
-        <div>
-          <TextInput
-            aria-label="bio"
-            maxLength={50}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
-          <CharacterCount current={value.length} max={50} />
-        </div>
+        <>
+          <label htmlFor="ci">Text</label>
+          <TextInput id="ci" value={val} onChange={(e) => setVal(e.target.value)} maxLength={10} />
+          <CharacterCount current={val.length} max={10} />
+        </>
       );
     }
-
-    render(<WithCount />);
+    render(<Controlled />);
     const input = screen.getByRole('textbox');
-    await user.type(input, 'Hello');
-    expect(screen.getByText(/45 of 50 remaining/i)).toBeInTheDocument();
+    await userEvent.type(input, 'hello');
+    expect(screen.getByRole('status')).toHaveTextContent('5 of 10 characters remaining');
+  });
+
+  it('passes axe', async () => {
+    const { container } = render(
+      <div>
+        <label htmlFor="cc-input">Comment</label>
+        <TextInput id="cc-input" />
+        <CharacterCount current={30} max={200} id="cc-count" />
+      </div>
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });

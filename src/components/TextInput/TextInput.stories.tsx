@@ -6,20 +6,17 @@ import { CharacterCount } from './CharacterCount';
 const meta: Meta<typeof TextInput> = {
   title: 'Components/TextInput',
   component: TextInput,
-  tags: ['autodocs'],
   parameters: {
-    layout: 'padded',
+    layout: 'centered',
   },
   argTypes: {
     validationState: {
-      control: 'select',
-      options: ['none', 'error', 'success', 'warning'],
+      control: { type: 'select' },
+      options: [undefined, 'error', 'success', 'warning'],
     },
-    disabled: { control: 'boolean' },
-    readOnly: { control: 'boolean' },
     inputMode: {
-      control: 'select',
-      options: ['text', 'numeric', 'email', 'url', 'tel', 'search', 'decimal'],
+      control: { type: 'select' },
+      options: ['text', 'numeric', 'email', 'url', 'tel', 'decimal', 'search', 'none'],
     },
   },
 };
@@ -29,57 +26,43 @@ type Story = StoryObj<typeof TextInput>;
 
 export const Default: Story = {
   args: {
-    placeholder: 'Enter text...',
-    'aria-label': 'Default input',
+    placeholder: 'Enter text…',
+    id: 'default-input',
   },
+  render: (args) => (
+    <div style={{ width: 320 }}>
+      <TextInput {...args} />
+    </div>
+  ),
 };
 
 export const WithLabel: Story = {
   render: () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label htmlFor="name-input" style={{ fontWeight: 500, fontSize: 14 }}>
-        Full Name
+    <div style={{ width: 320 }}>
+      <label htmlFor="labeled" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+        Full name
       </label>
-      <TextInput id="name-input" placeholder="John Doe" />
+      <TextInput id="labeled" placeholder="Jane Doe" />
     </div>
   ),
 };
 
 export const WithError: Story = {
   render: () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label htmlFor="email-error" style={{ fontWeight: 500, fontSize: 14 }}>
+    <div style={{ width: 320 }}>
+      <label htmlFor="err" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
         Email
       </label>
       <TextInput
-        id="email-error"
+        id="err"
         type="email"
         defaultValue="not-an-email"
         validationState="error"
         aria-invalid={true}
-        aria-describedby="email-error-msg"
+        aria-describedby="err-msg"
       />
-      <span id="email-error-msg" style={{ color: '#ef4444', fontSize: 13 }}>
+      <span id="err-msg" style={{ color: '#dc2626', fontSize: '0.875rem', marginTop: 4, display: 'block' }}>
         Please enter a valid email address.
-      </span>
-    </div>
-  ),
-};
-
-export const WithSuccess: Story = {
-  render: () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label htmlFor="user-success" style={{ fontWeight: 500, fontSize: 14 }}>
-        Username
-      </label>
-      <TextInput
-        id="user-success"
-        defaultValue="johndoe"
-        validationState="success"
-        aria-describedby="user-success-msg"
-      />
-      <span id="user-success-msg" style={{ color: '#22c55e', fontSize: 13 }}>
-        Username is available!
       </span>
     </div>
   ),
@@ -87,17 +70,13 @@ export const WithSuccess: Story = {
 
 export const WithHelper: Story = {
   render: () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label htmlFor="pass-input" style={{ fontWeight: 500, fontSize: 14 }}>
-        Password
+    <div style={{ width: 320 }}>
+      <label htmlFor="with-helper" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+        Username
       </label>
-      <TextInput
-        id="pass-input"
-        type="password"
-        aria-describedby="pass-helper"
-      />
-      <span id="pass-helper" style={{ color: '#6b7280', fontSize: 13 }}>
-        Must be at least 8 characters.
+      <TextInput id="with-helper" placeholder="johndoe" aria-describedby="helper-msg" />
+      <span id="helper-msg" style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: 4, display: 'block' }}>
+        Must be 3–20 characters, letters and numbers only.
       </span>
     </div>
   ),
@@ -105,98 +84,95 @@ export const WithHelper: Story = {
 
 export const WithCharCount: Story = {
   render: () => {
-    const MAX = 100;
+    const MAX = 80;
     const [value, setValue] = useState('');
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <label htmlFor="bio-input" style={{ fontWeight: 500, fontSize: 14 }}>
-          Bio
+      <div style={{ width: 320 }}>
+        <label htmlFor="char-count-input" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+          Short bio
         </label>
         <TextInput
-          id="bio-input"
-          maxLength={MAX}
+          id="char-count-input"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Tell us about yourself..."
+          maxLength={MAX}
+          aria-describedby="char-count-status"
         />
-        <CharacterCount current={value.length} max={MAX} />
+        <CharacterCount id="char-count-status" current={value.length} max={MAX} />
       </div>
     );
   },
 };
 
 export const Disabled: Story = {
-  args: {
-    defaultValue: 'Cannot edit this',
-    disabled: true,
-    'aria-label': 'Disabled input',
-  },
+  render: () => (
+    <div style={{ width: 320 }}>
+      <label htmlFor="disabled-input" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+        Locked field
+      </label>
+      <TextInput id="disabled-input" defaultValue="Cannot edit" disabled />
+    </div>
+  ),
 };
 
 export const Readonly: Story = {
-  args: {
-    defaultValue: 'Read only value',
-    readOnly: true,
-    'aria-label': 'Read-only input',
-  },
+  render: () => (
+    <div style={{ width: 320 }}>
+      <label htmlFor="readonly-input" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+        Account ID
+      </label>
+      <TextInput id="readonly-input" defaultValue="ACC-000123" readOnly />
+    </div>
+  ),
 };
 
 export const WithPrefix: Story = {
   render: () => (
-    <TextInput
-      placeholder="0.00"
-      inputMode="decimal"
-      aria-label="Amount"
-      prefix={<span style={{ fontSize: 16 }}>$</span>}
-    />
+    <div style={{ width: 320 }}>
+      <label htmlFor="prefix-input" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+        Amount
+      </label>
+      <TextInput id="prefix-input" prefix="$" inputMode="decimal" placeholder="0.00" />
+    </div>
   ),
 };
 
 export const WithSuffix: Story = {
   render: () => (
-    <TextInput
-      placeholder="username"
-      aria-label="Username with domain"
-      suffix={<span style={{ fontSize: 14, color: '#6b7280' }}>@example.com</span>}
-    />
-  ),
-};
-
-export const WithPrefixAndSuffix: Story = {
-  render: () => (
-    <TextInput
-      placeholder="0.00"
-      inputMode="decimal"
-      aria-label="Price in USD"
-      prefix={<span style={{ fontSize: 16 }}>$</span>}
-      suffix={<span style={{ fontSize: 13, color: '#6b7280' }}>USD</span>}
-    />
+    <div style={{ width: 320 }}>
+      <label htmlFor="suffix-input" style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>
+        Weight
+      </label>
+      <TextInput id="suffix-input" suffix="kg" inputMode="decimal" placeholder="70" />
+    </div>
   ),
 };
 
 export const AllInputTypes: Story = {
   render: () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ width: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
       {(
         [
-          { type: 'text', label: 'Text', placeholder: 'text input' },
-          { type: 'email', label: 'Email', placeholder: 'you@example.com', inputMode: 'email' as const },
-          { type: 'url', label: 'URL', placeholder: 'https://', inputMode: 'url' as const },
-          { type: 'tel', label: 'Phone', placeholder: '+1 (555) 000-0000', inputMode: 'tel' as const },
-          { type: 'number', label: 'Number', placeholder: '42', inputMode: 'numeric' as const },
-          { type: 'password', label: 'Password', placeholder: '••••••••' },
-          { type: 'search', label: 'Search', placeholder: 'Search...', inputMode: 'search' as const },
+          { label: 'Text', type: 'text', inputMode: 'text' as const, placeholder: 'Plain text' },
+          { label: 'Email', type: 'email', inputMode: 'email' as const, placeholder: 'user@example.com' },
+          { label: 'Numeric', type: 'text', inputMode: 'numeric' as const, placeholder: '12345' },
+          { label: 'URL', type: 'url', inputMode: 'url' as const, placeholder: 'https://example.com' },
+          { label: 'Tel', type: 'tel', inputMode: 'tel' as const, placeholder: '+1 555 000 0000' },
+          { label: 'Password', type: 'password', inputMode: undefined, placeholder: '••••••••' },
         ] as const
-      ).map(({ type, label, placeholder, inputMode }) => (
-        <div key={type} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <label htmlFor={`type-${type}`} style={{ fontWeight: 500, fontSize: 14 }}>
+      ).map(({ label, type, inputMode, placeholder }) => (
+        <div key={label}>
+          <label
+            htmlFor={`type-${label.toLowerCase()}`}
+            style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}
+          >
             {label}
           </label>
           <TextInput
-            id={`type-${type}`}
+            id={`type-${label.toLowerCase()}`}
             type={type}
-            placeholder={placeholder}
             inputMode={inputMode}
+            placeholder={placeholder}
           />
         </div>
       ))}

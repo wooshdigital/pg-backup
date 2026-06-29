@@ -1,28 +1,21 @@
-import React, {
-  forwardRef,
-  useContext,
-  useId,
-  useEffect,
-  useRef,
-  useCallback,
-} from 'react';
+import React, { forwardRef, useContext, useEffect, useId, useRef, useCallback } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
 import styles from './Textarea.module.css';
 
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   /** Visual validation state */
-  validationState?: 'error' | 'success' | 'warning' | 'none';
-  /**
-   * When true, the textarea grows to fit content height automatically.
-   * Uses ResizeObserver to respond to content changes.
-   */
+  validationState?: 'error' | 'success' | 'warning';
+  /** Automatically resize height to fit content */
   autoResize?: boolean;
-  /** Minimum number of visible text rows (used as min-height) */
+  /** Minimum number of rows (used as min-height when autoResize is true) */
   minRows?: number;
-  /** Maximum number of visible text rows before scrolling */
+  /** Maximum number of rows (used as max-height when autoResize is true) */
   maxRows?: number;
-  /** Wrapper class name */
+  /** Element rendered before the textarea */
+  prefix?: React.ReactNode;
+  /** Element rendered after the textarea */
+  suffix?: React.ReactNode;
+  /** Additional CSS class for the wrapper */
   wrapperClassName?: string;
 }
 
@@ -33,24 +26,28 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       autoResize = false,
       minRows = 3,
       maxRows,
-      wrapperClassName,
+      prefix,
+      suffix,
       className,
+      wrapperClassName,
       'aria-describedby': ariaDescribedBy,
       'aria-invalid': ariaInvalid,
       'aria-required': ariaRequired,
-      disabled,
       id: idProp,
-      onChange,
       style,
+      onChange,
       ...rest
     },
     ref
   ) => {
+    const ctx = useContext(FormFieldContext);
     const generatedId = useId();
-    const fieldCtx = useContext(FormFieldContext);
-    const internalRef = useRef<HTMLTextAreaElement>(null);
+    const textareaId = idProp ?? ctx?.inputId ?? generatedId;
 
-    // Support both forwarded ref and internal ref
+    const internalRef = useRef<HTMLTextAreaElement>(null);
+    const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
+    // Merge the forwarded ref with our internal ref
     const setRef = useCallback(
       (node: HTMLTextAreaElement | null) => {
         (internalRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
@@ -63,139 +60,124 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       [ref]
     );
 
-    const inputId = idProp ?? fieldCtx?.inputId ?? generatedId;
+    // Compute CSS custom properties for min/max row heights
+    const lineHeightPx = 24; // 1.5rem at 16px base
+    const paddingVerticalPx = 16; // 0.5rem top + 0.5rem bottom
+    const minHeightPx = minRows * lineHeightPx + paddingVerticalPx;
+    const maxHeightPx = maxRows ? maxRows * lineHeightPx + paddingVerticalPx : undefined;
 
-    // Merge aria-describedby
-    const describedByParts: string[] = [];
-    if (fieldCtx?.helperId) describedByParts.push(fieldCtx.helperId);
-    if (fieldCtx?.errorId) describedByParts.push(fieldCtx.errorId);
-    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
-    const mergedDescribedBy =
-      describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
-
-    const isInvalid =
-      ariaInvalid !== undefined
-        ? ariaInvalid
-        : fieldCtx?.hasError
-        ? true
-        : undefined;
-
-    const isRequired =
-      ariaRequired !== undefined
-        ? ariaRequired
-        : fieldCtx?.required
-        ? true
-        : undefined;
-
-    const resolvedValidationState =
-      validationState ?? (fieldCtx?.hasError ? 'error' : 'none');
-
-    // Auto-resize logic
     const adjustHeight = useCallback(() => {
       const el = internalRef.current;
       if (!el || !autoResize) return;
-
-      // Reset height to measure scrollHeight correctly
       el.style.height = 'auto';
+      const scrollH = el.scrollHeight;
+      const clamped = maxHeightPx ? Math.min(scrollH, maxHeightPx) : scrollH;
+      el.style.height = `${Math.max(minHeightPx, clamped)}px`;
+      el.style.overflowY = maxHeightPx && scrollH > maxHeightPx ? 'auto' : 'hidden';
+    }, [autoResize, minHeightPx, maxHeightPx]);
 
-      const lineHeight = parseInt(getComputedStyle(el).lineHeight) || 20;
-      const paddingTop =
-        parseInt(getComputedStyle(el).paddingTop) || 0;
-      const paddingBottom =
-        parseInt(getComputedStyle(el).paddingBottom) || 0;
-      const extraPadding = paddingTop + paddingBottom;
+    // Initial height adjustment and on value changes
+    useEffect(() => {
+      adjustHeight();
+    }, [adjustHeight, rest.value, rest.defaultValue]);
 
-      const minHeight = minRows * lineHeight + extraPadding;
-      const maxHeight = maxRows
-        ? maxRows * lineHeight + extraPadding
-        : undefined;
-
-      const scrollHeight = el.scrollHeight;
-      const newHeight = Math.max(scrollHeight, minHeight);
-
-      if (maxHeight !== undefined && newHeight > maxHeight) {
-        el.style.height = `${maxHeight}px`;
-        el.style.overflowY = 'auto';
-      } else {
-        el.style.height = `${newHeight}px`;
-        el.style.overflowY = 'hidden';
-      }
-    }, [autoResize, minRows, maxRows]);
-
-    // Set up ResizeObserver for autoResize
+    // ResizeObserver to handle external container size changes
     useEffect(() => {
       if (!autoResize) return;
-
       const el = internalRef.current;
       if (!el) return;
 
-      adjustHeight();
-
-      const observer = new ResizeObserver(() => {
+      resizeObserverRef.current = new ResizeObserver(() => {
         adjustHeight();
       });
-
-      observer.observe(el);
+      resizeObserverRef.current.observe(el);
 
       return () => {
-        observer.disconnect();
+        resizeObserverRef.current?.disconnect();
       };
     }, [autoResize, adjustHeight]);
 
-    // Also adjust on value changes (controlled mode)
-    useEffect(() => {
-      if (autoResize) {
+    const handleChange = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         adjustHeight();
-      }
-    }, [rest.value, autoResize, adjustHeight]);
+        onChange?.(e);
+      },
+      [adjustHeight, onChange]
+    );
 
-    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      if (autoResize) {
-        adjustHeight();
-      }
-      onChange?.(e);
-    };
+    // ARIA wiring
+    const describedByParts: string[] = [];
+    if (ctx?.helperId) describedByParts.push(ctx.helperId);
+    if (ctx?.errorId) describedByParts.push(ctx.errorId);
+    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
+    const combinedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
+
+    const invalid =
+      ariaInvalid !== undefined
+        ? ariaInvalid
+        : ctx?.hasError
+        ? true
+        : undefined;
+
+    const required =
+      ariaRequired !== undefined
+        ? ariaRequired
+        : ctx?.required
+        ? true
+        : undefined;
+
+    const effectiveValidationState = validationState ?? (ctx?.hasError ? 'error' : undefined);
 
     const wrapperClasses = [
       styles.wrapper,
-      resolvedValidationState !== 'none'
-        ? styles[`wrapper--${resolvedValidationState}`]
-        : '',
-      disabled ? styles['wrapper--disabled'] : '',
-      autoResize ? styles['wrapper--auto-resize'] : '',
-      wrapperClassName ?? '',
+      effectiveValidationState === 'error' && styles.error,
+      effectiveValidationState === 'success' && styles.success,
+      effectiveValidationState === 'warning' && styles.warning,
+      rest.disabled && styles.disabled,
+      rest.readOnly && styles.readonly,
+      autoResize && styles.autoResize,
+      prefix && styles.hasPrefix,
+      suffix && styles.hasSuffix,
+      wrapperClassName,
     ]
       .filter(Boolean)
       .join(' ');
 
-    const textareaClasses = [
-      styles.textarea,
-      autoResize ? styles['textarea--auto-resize'] : '',
-      className ?? '',
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const textareaClasses = [styles.textarea, className].filter(Boolean).join(' ');
+
+    const textareaStyle: React.CSSProperties = {
+      ...style,
+      ...(autoResize
+        ? { minHeight: minHeightPx, overflowY: 'hidden', resize: 'none' }
+        : undefined),
+    };
 
     return (
       <div className={wrapperClasses}>
+        {prefix && (
+          <span className={styles.prefix} aria-hidden="true">
+            {prefix}
+          </span>
+        )}
         <textarea
           ref={setRef}
-          id={inputId}
+          id={textareaId}
           className={textareaClasses}
-          disabled={disabled}
-          aria-describedby={mergedDescribedBy}
-          aria-invalid={isInvalid}
-          aria-required={isRequired}
-          rows={autoResize ? undefined : minRows}
+          aria-describedby={combinedDescribedBy}
+          aria-invalid={invalid}
+          aria-required={required}
           onChange={handleChange}
-          style={style}
+          style={textareaStyle}
           {...rest}
         />
+        {suffix && (
+          <span className={styles.suffix} aria-hidden="true">
+            {suffix}
+          </span>
+        )}
       </div>
     );
   }
 );
 
 Textarea.displayName = 'Textarea';
-
-export default Textarea;

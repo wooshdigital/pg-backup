@@ -1,72 +1,41 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import styles from './CharacterCount.module.css';
 
 export interface CharacterCountProps {
-  /** Current length of the input value */
+  /** Current length of the value */
   current: number;
-  /** Maximum allowed characters */
+  /** Maximum allowed length */
   max: number;
-  /** Custom class name */
+  /** Additional CSS class */
   className?: string;
-  /**
-   * Threshold (0–1) at which to show a warning color.
-   * Defaults to 0.8 (80% used).
-   */
-  warningThreshold?: number;
+  /** id so it can be referenced in aria-describedby */
+  id?: string;
 }
 
-export const CharacterCount: React.FC<CharacterCountProps> = ({
-  current,
-  max,
-  className,
-  warningThreshold = 0.8,
-}) => {
+export const CharacterCount: React.FC<CharacterCountProps> = ({ current, max, className, id }) => {
   const remaining = max - current;
-  const ratio = current / max;
-
+  const isWarning = remaining <= Math.ceil(max * 0.1); // last 10%
   const isError = remaining < 0;
-  const isWarning = !isError && ratio >= warningThreshold;
 
-  const stateClass = isError
-    ? styles['count--error']
-    : isWarning
-    ? styles['count--warning']
-    : '';
-
-  const classes = [styles.count, stateClass, className ?? '']
+  const countClasses = [
+    styles.count,
+    isError && styles.error,
+    isWarning && !isError && styles.warning,
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
 
-  // Announce remaining count to screen readers
-  const [announcement, setAnnouncement] = useState('');
-
-  useEffect(() => {
-    if (remaining < 0) {
-      setAnnouncement(`${Math.abs(remaining)} characters over the limit`);
-    } else {
-      setAnnouncement(`${remaining} of ${max} characters remaining`);
-    }
-  }, [remaining, max]);
+  const message =
+    remaining >= 0
+      ? `${remaining} of ${max} character${remaining !== 1 ? 's' : ''} remaining`
+      : `${Math.abs(remaining)} character${Math.abs(remaining) !== 1 ? 's' : ''} over the limit`;
 
   return (
-    <span className={classes} aria-hidden="true">
-      <span
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className={styles['sr-only']}
-      >
-        {announcement}
-      </span>
-      <span aria-hidden="true">
-        {remaining < 0
-          ? `${Math.abs(remaining)} over limit`
-          : `${remaining} of ${max} remaining`}
-      </span>
+    <span id={id} className={countClasses} aria-live="polite" aria-atomic="true" role="status">
+      {message}
     </span>
   );
 };
 
 CharacterCount.displayName = 'CharacterCount';
-
-export default CharacterCount;

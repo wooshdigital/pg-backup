@@ -1,7 +1,7 @@
-/* Wrapper */
 .wrapper {
-  position: relative;
   display: flex;
+  align-items: flex-start;
+  position: relative;
   width: 100%;
   border: 1.5px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md, 6px);
@@ -10,90 +10,116 @@
 }
 
 .wrapper:focus-within {
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 3px var(--color-primary-ring, rgba(59, 130, 246, 0.3));
+  border-color: var(--color-focus, #2563eb);
+  box-shadow: 0 0 0 3px var(--color-focus-ring, rgba(37, 99, 235, 0.25));
   outline: none;
 }
 
 /* Validation states */
-.wrapper--error {
-  border-color: var(--color-error, #ef4444);
+.wrapper.error {
+  border-color: var(--color-error, #dc2626);
 }
 
-.wrapper--error:focus-within {
-  border-color: var(--color-error, #ef4444);
-  box-shadow: 0 0 0 3px var(--color-error-ring, rgba(239, 68, 68, 0.3));
+.wrapper.error:focus-within {
+  border-color: var(--color-error, #dc2626);
+  box-shadow: 0 0 0 3px var(--color-error-ring, rgba(220, 38, 38, 0.2));
 }
 
-.wrapper--success {
-  border-color: var(--color-success, #22c55e);
+.wrapper.success {
+  border-color: var(--color-success, #16a34a);
 }
 
-.wrapper--success:focus-within {
-  border-color: var(--color-success, #22c55e);
-  box-shadow: 0 0 0 3px var(--color-success-ring, rgba(34, 197, 94, 0.3));
+.wrapper.success:focus-within {
+  border-color: var(--color-success, #16a34a);
+  box-shadow: 0 0 0 3px var(--color-success-ring, rgba(22, 163, 74, 0.2));
 }
 
-.wrapper--warning {
-  border-color: var(--color-warning, #f59e0b);
+.wrapper.warning {
+  border-color: var(--color-warning, #d97706);
 }
 
-.wrapper--warning:focus-within {
-  border-color: var(--color-warning, #f59e0b);
-  box-shadow: 0 0 0 3px var(--color-warning-ring, rgba(245, 158, 11, 0.3));
+.wrapper.warning:focus-within {
+  border-color: var(--color-warning, #d97706);
+  box-shadow: 0 0 0 3px var(--color-warning-ring, rgba(217, 119, 6, 0.2));
 }
 
-/* Disabled state */
-.wrapper--disabled {
-  background-color: var(--color-surface-disabled, #f3f4f6);
-  border-color: var(--color-border-disabled, #e5e7eb);
-  opacity: 0.6;
+/* Disabled / readonly */
+.wrapper.disabled {
+  background-color: var(--color-disabled-bg, #f3f4f6);
+  border-color: var(--color-border-muted, #e5e7eb);
   cursor: not-allowed;
+  opacity: 0.7;
 }
 
-/* Auto-resize: hide the native resize handle */
-.wrapper--auto-resize {
+.wrapper.readonly {
+  background-color: var(--color-readonly-bg, #f9fafb);
+}
+
+/* Auto-resize: hide native resize handle when we manage height */
+.wrapper.autoResize .textarea {
   resize: none;
 }
 
 /* Native textarea */
 .textarea {
   flex: 1;
-  width: 100%;
   min-width: 0;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-size-md, 1rem);
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--color-text, #111827);
+  background: transparent;
   border: none;
   outline: none;
-  background: transparent;
-  padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
-  font-size: var(--font-size-base, 1rem);
-  line-height: var(--line-height-normal, 1.5);
-  color: var(--color-text, #111827);
-  font-family: inherit;
   resize: vertical;
-  /* Minimum height enforced via rows attribute or inline style from autoResize */
-  min-height: 5rem;
+  min-height: 4.5rem; /* 3 rows default */
+  max-height: 20rem; /* fixed max when not autoResize */
 }
 
 .textarea::placeholder {
-  color: var(--color-text-placeholder, #9ca3af);
+  color: var(--color-placeholder, #9ca3af);
 }
 
 .textarea:disabled {
   cursor: not-allowed;
-  color: var(--color-text-disabled, #6b7280);
-}
-
-/* Auto-resize: disable native resize handle and let JS control height */
-.textarea--auto-resize {
+  color: var(--color-text-muted, #6b7280);
   resize: none;
-  overflow: hidden;
-  /* Height is controlled inline by the autoResize JS logic */
 }
 
-/* Resize handle styling for non-auto-resize */
-.textarea:not(.textarea--auto-resize)::-webkit-resizer {
-  background-image: none;
-  border: 2px solid var(--color-border, #d1d5db);
-  border-top: none;
-  border-left: none;
+.textarea:read-only {
+  resize: none;
+}
+
+/* Resize handle area — only visible when resize is active */
+.wrapper:not(.autoResize) .textarea {
+  resize: vertical;
+}
+
+/* Prefix / suffix aligned to top */
+.prefix,
+.suffix {
+  display: flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+  color: var(--color-text-muted, #6b7280);
+  font-size: var(--font-size-md, 1rem);
+  padding-top: 0.5rem;
+}
+
+.prefix {
+  padding-left: 0.75rem;
+}
+
+.hasPrefix .textarea {
+  padding-left: 0.375rem;
+}
+
+.suffix {
+  padding-right: 0.75rem;
+}
+
+.hasSuffix .textarea {
+  padding-right: 0.375rem;
 }
