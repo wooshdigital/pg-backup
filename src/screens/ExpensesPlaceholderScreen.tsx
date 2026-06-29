@@ -7,11 +7,11 @@ export function ExpensesPlaceholderScreen() {
       <Text style={styles.icon}>💸</Text>
       <Text style={styles.title}>Expenses Coming Soon</Text>
       <Text style={styles.subtitle}>
-        Track shared expenses and split costs with your trip participants.
-        This feature is coming in the next phase!
+        In the next phase you'll be able to add and split expenses among trip participants.
+        Stay tuned!
       </Text>
       <View style={styles.badge}>
-        <Text style={styles.badgeText}>Phase 4</Text>
+        <Text style={styles.badgeText}>Phase 4 Feature</Text>
       </View>
     </View>
   );
@@ -22,8 +22,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F2F2F7',
-    paddingHorizontal: 40,
+    paddingHorizontal: 32,
+    backgroundColor: '#F9FAFB',
   },
   icon: {
     fontSize: 64,
@@ -32,27 +32,27 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#111827',
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
-    color: '#8E8E93',
+    color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
     marginBottom: 24,
   },
   badge: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#EEF2FF',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
   badgeText: {
-    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: '#6366F1',
   },
 });
 

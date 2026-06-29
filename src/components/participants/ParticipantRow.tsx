@@ -2,118 +2,72 @@ import React, { useRef } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
+  StyleSheet,
   Animated,
   Alert,
-  I18nManager,
 } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
 import { AvatarCircle } from './AvatarCircle';
 import { Participant } from '../../types';
 
 interface ParticipantRowProps {
   participant: Participant;
-  onRemove: (id: string) => void;
+  onRemove: (participantId: string) => void;
 }
 
 export function ParticipantRow({ participant, onRemove }: ParticipantRowProps) {
-  const swipeableRef = useRef<Swipeable>(null);
-
-  function handleDelete() {
+  function handleRemove() {
     Alert.alert(
       'Remove Participant',
-      `Remove ${participant.name} from this trip?`,
+      `Remove "${participant.name}" from this trip?`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => swipeableRef.current?.close(),
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
-            swipeableRef.current?.close();
-            onRemove(participant.id);
-          },
+          onPress: () => onRemove(participant.id),
         },
       ]
     );
   }
 
-  function renderRightActions(
-    _progress: Animated.AnimatedInterpolation<number>,
-    dragX: Animated.AnimatedInterpolation<number>
-  ) {
-    const scale = dragX.interpolate({
-      inputRange: [-80, 0],
-      outputRange: [1, 0.8],
-      extrapolate: 'clamp',
-    });
-
-    return (
-      <TouchableOpacity
-        style={styles.deleteAction}
-        onPress={handleDelete}
-        activeOpacity={0.8}
-      >
-        <Animated.Text
-          style={[styles.deleteActionText, { transform: [{ scale }] }]}
-        >
-          Remove
-        </Animated.Text>
-      </TouchableOpacity>
-    );
-  }
-
   return (
-    <Swipeable
-      ref={swipeableRef}
-      friction={2}
-      rightThreshold={40}
-      renderRightActions={renderRightActions}
-      overshootRight={false}
-    >
-      <View style={styles.row}>
-        <AvatarCircle
-          name={participant.name}
-          color={participant.avatarColor}
-          size={44}
-        />
-        <Text style={styles.name} numberOfLines={1}>
-          {participant.name}
-        </Text>
-      </View>
-    </Swipeable>
+    <View style={styles.container}>
+      <AvatarCircle name={participant.name} color={participant.avatarColor} size={44} fontSize={16} />
+      <Text style={styles.name} numberOfLines={1}>
+        {participant.name}
+      </Text>
+      <TouchableOpacity onPress={handleRemove} style={styles.removeButton} accessibilityLabel={`Remove ${participant.name}`}>
+        <Text style={styles.removeText}>✕</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  container: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
-    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
   },
   name: {
     flex: 1,
+    marginLeft: 12,
     fontSize: 16,
-    color: '#1C1C1E',
-    fontWeight: '500',
+    color: '#111827',
   },
-  deleteAction: {
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
+  removeButton: {
+    padding: 8,
+    borderRadius: 20,
   },
-  deleteActionText: {
-    color: '#FFFFFF',
+  removeText: {
+    fontSize: 16,
+    color: '#9CA3AF',
     fontWeight: '600',
-    fontSize: 14,
   },
 });
 

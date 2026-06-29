@@ -1,39 +1,39 @@
 import React, { useCallback } from 'react';
 import {
   View,
+  Text,
   FlatList,
   StyleSheet,
-  Text,
   TouchableOpacity,
-  ListRenderItem,
+  SafeAreaView,
+  ListRenderItemInfo,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTripContext } from '../context/TripContext';
-import { Trip } from '../types';
+import { Trip, RootStackParamList } from '../types';
 
-interface TripsListScreenProps {
-  navigation: any;
-}
+type TripsNavProp = NativeStackNavigationProp<RootStackParamList>;
 
-export function TripsListScreen({ navigation }: TripsListScreenProps) {
+export function TripsListScreen() {
   const { state } = useTripContext();
-  const { trips, loading } = state;
+  const navigation = useNavigation<TripsNavProp>();
 
   const handleTripPress = useCallback(
     (trip: Trip) => {
-      navigation.navigate('TripDetail', {
-        tripId: trip.id,
-        tripName: trip.name,
-      });
+      navigation.navigate('TripDetail', { tripId: trip.id, tripName: trip.name });
     },
     [navigation]
   );
 
-  const renderItem: ListRenderItem<Trip> = useCallback(
-    ({ item }) => (
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<Trip>) => (
       <TouchableOpacity
         style={styles.card}
         onPress={() => handleTripPress(item)}
-        activeOpacity={0.7}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityLabel={`Open trip ${item.name}`}
       >
         <View style={styles.cardContent}>
           <Text style={styles.tripName} numberOfLines={1}>
@@ -44,12 +44,14 @@ export function TripsListScreen({ navigation }: TripsListScreenProps) {
               {item.description}
             </Text>
           ) : null}
-          <View style={styles.cardMeta}>
-            <Text style={styles.metaText}>
+          <View style={styles.meta}>
+            <View style={styles.metaBadge}>
+              <Text style={styles.metaText}>{item.currency}</Text>
+            </View>
+            <Text style={styles.metaParticipants}>
               {item.participants?.length ?? 0} participant
               {(item.participants?.length ?? 0) !== 1 ? 's' : ''}
             </Text>
-            <Text style={styles.metaCurrency}>{item.currency}</Text>
           </View>
         </View>
         <Text style={styles.chevron}>›</Text>
@@ -60,83 +62,61 @@ export function TripsListScreen({ navigation }: TripsListScreenProps) {
 
   const keyExtractor = useCallback((item: Trip) => item.id, []);
 
-  const EmptyComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>✈️</Text>
-      <Text style={styles.emptyTitle}>No trips yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Create your first trip to get started.
-      </Text>
-    </View>
-  );
-
-  const handleAddTrip = () => {
-    navigation.navigate('CreateTrip' as any);
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading trips…</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <FlatList
-        data={trips}
-        renderItem={renderItem}
+        data={state.trips}
         keyExtractor={keyExtractor}
-        ListEmptyComponent={EmptyComponent}
-        contentContainerStyle={
-          trips.length === 0 ? styles.emptyList : styles.list
+        renderItem={renderItem}
+        contentContainerStyle={state.trips.length === 0 ? styles.emptyContainer : styles.list}
+        ListHeaderComponent={
+          <Text style={styles.heading}>My Trips</Text>
         }
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>✈️</Text>
+            <Text style={styles.emptyTitle}>No trips yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Create your first trip to get started.
+            </Text>
+          </View>
+        }
       />
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleAddTrip}
-        activeOpacity={0.85}
-        accessibilityLabel="Create new trip"
-      >
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#8E8E93',
+    backgroundColor: '#F9FAFB',
   },
   list: {
-    padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 24,
   },
-  emptyList: {
-    flex: 1,
+  emptyContainer: {
+    flexGrow: 1,
+  },
+  heading: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#111827',
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 12,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 16,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 2,
   },
   cardContent: {
@@ -145,82 +125,63 @@ const styles = StyleSheet.create({
   tripName: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#111827',
     marginBottom: 4,
   },
   tripDescription: {
     fontSize: 14,
-    color: '#636366',
+    color: '#6B7280',
     marginBottom: 8,
     lineHeight: 20,
   },
-  cardMeta: {
+  meta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  metaText: {
-    fontSize: 13,
-    color: '#8E8E93',
+  metaBadge: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  metaCurrency: {
-    fontSize: 13,
-    color: '#007AFF',
+  metaText: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#6366F1',
+  },
+  metaParticipants: {
+    fontSize: 13,
+    color: '#9CA3AF',
   },
   chevron: {
-    fontSize: 24,
-    color: '#C7C7CC',
+    fontSize: 22,
+    color: '#D1D5DB',
     marginLeft: 8,
   },
-  separator: {
-    height: 10,
-  },
-  emptyContainer: {
+  emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingBottom: 80,
+    paddingHorizontal: 32,
+    paddingTop: 80,
   },
   emptyIcon: {
     fontSize: 56,
     marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#111827',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#8E8E93',
+    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 32,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabIcon: {
-    fontSize: 28,
-    color: '#FFFFFF',
-    lineHeight: 32,
-    fontWeight: '400',
   },
 });
 

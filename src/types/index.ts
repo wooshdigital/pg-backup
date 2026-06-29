@@ -15,8 +15,11 @@ export interface Trip {
 }
 
 export type RootStackParamList = {
+  Home: undefined;
   Trips: undefined;
+  TripsList: undefined;
   TripDetail: { tripId: string; tripName: string };
+  Settings: undefined;
 };
 
 export type TripDetailTabParamList = {

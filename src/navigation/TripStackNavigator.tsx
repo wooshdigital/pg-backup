@@ -13,25 +13,28 @@ export function TripStackNavigator() {
         headerStyle: {
           backgroundColor: '#FFFFFF',
         },
-        headerTintColor: '#007AFF',
+        headerTintColor: '#6366F1',
         headerTitleStyle: {
           fontWeight: '700',
-          color: '#1C1C1E',
+          color: '#111827',
         },
         headerShadowVisible: false,
+        contentStyle: {
+          backgroundColor: '#F9FAFB',
+        },
       }}
     >
       <Stack.Screen
-        name="Trips"
+        name="TripsList"
         component={TripsListScreen}
-        options={{ title: 'My Trips' }}
+        options={{ title: 'My Trips', headerShown: false }}
       />
       <Stack.Screen
         name="TripDetail"
         component={TripDetailScreen}
         options={({ route }) => ({
-          title: route.params?.tripName ?? 'Trip',
-          headerBackTitle: 'Trips',
+          title: (route.params as any)?.tripName ?? 'Trip Details',
+          headerShown: true,
         })}
       />
     </Stack.Navigator>

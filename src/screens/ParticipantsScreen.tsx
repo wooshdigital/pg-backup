@@ -1,159 +1,140 @@
-import React, { useState, useCallback } from 'react';
+import React, { useRef, useCallback } from 'react';
 import {
   View,
+  Text,
   FlatList,
   StyleSheet,
-  Text,
   TouchableOpacity,
-  ListRenderItem,
+  SafeAreaView,
+  ListRenderItemInfo,
 } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useRoute, RouteProp } from '@react-navigation/native';
 import { useParticipants } from '../hooks/useParticipants';
 import { ParticipantRow } from '../components/participants/ParticipantRow';
-import { AddParticipantSheet } from '../components/participants/AddParticipantSheet';
+import { AddParticipantSheet, AddParticipantSheetRef } from '../components/participants/AddParticipantSheet';
 import { Participant } from '../types';
+import { TripDetailTabParamList } from '../types';
 
-interface ParticipantsScreenProps {
-  route: {
-    params: {
-      tripId: string;
-    };
-  };
-}
+type ParticipantsRouteProp = RouteProp<TripDetailTabParamList, 'Participants'>;
 
-export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
+export function ParticipantsScreen() {
+  const route = useRoute<ParticipantsRouteProp>();
   const { tripId } = route.params;
   const { participants, addParticipant, removeParticipant } = useParticipants(tripId);
-  const [sheetVisible, setSheetVisible] = useState(false);
+  const sheetRef = useRef<AddParticipantSheetRef>(null);
+
+  const handleOpenSheet = useCallback(() => {
+    sheetRef.current?.open();
+  }, []);
 
   const handleAdd = useCallback(
     (name: string) => {
       addParticipant(name);
-      setSheetVisible(false);
     },
     [addParticipant]
   );
 
-  const renderItem: ListRenderItem<Participant> = useCallback(
-    ({ item }) => (
-      <ParticipantRow participant={item} onRemove={removeParticipant} />
-    ),
+  const handleRemove = useCallback(
+    (participantId: string) => {
+      removeParticipant(participantId);
+    },
     [removeParticipant]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<Participant>) => (
+      <ParticipantRow participant={item} onRemove={handleRemove} />
+    ),
+    [handleRemove]
   );
 
   const keyExtractor = useCallback((item: Participant) => item.id, []);
 
-  const ItemSeparator = () => <View style={styles.separator} />;
-
-  const EmptyComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>👥</Text>
-      <Text style={styles.emptyTitle}>No participants yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Tap the + button to add friends to this trip.
-      </Text>
-    </View>
-  );
-
   return (
-    <GestureHandlerRootView style={styles.root}>
-      <View style={styles.container}>
-        <FlatList
-          data={participants}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          ItemSeparatorComponent={ItemSeparator}
-          ListEmptyComponent={EmptyComponent}
-          contentContainerStyle={
-            participants.length === 0 ? styles.emptyList : styles.list
-          }
-        />
+    <View style={styles.container}>
+      <FlatList
+        data={participants}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        contentContainerStyle={participants.length === 0 ? styles.emptyContainer : undefined}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>👥</Text>
+            <Text style={styles.emptyTitle}>No participants yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap the + button below to add friends to this trip.
+            </Text>
+          </View>
+        }
+      />
 
-        {/* FAB */}
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => setSheetVisible(true)}
-          activeOpacity={0.85}
-          accessibilityLabel="Add participant"
-          accessibilityRole="button"
-        >
-          <Text style={styles.fabIcon}>+</Text>
-        </TouchableOpacity>
+      {/* FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={handleOpenSheet}
+        accessibilityLabel="Add participant"
+        accessibilityRole="button"
+      >
+        <Text style={styles.fabIcon}>+</Text>
+      </TouchableOpacity>
 
-        <AddParticipantSheet
-          visible={sheetVisible}
-          onClose={() => setSheetVisible(false)}
-          onAdd={handleAdd}
-        />
-      </View>
-    </GestureHandlerRootView>
+      <AddParticipantSheet ref={sheetRef} onAdd={handleAdd} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
-  },
-  list: {
-    paddingTop: 12,
-    paddingBottom: 100,
-  },
-  emptyList: {
-    flex: 1,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#E5E5EA',
-    marginLeft: 72,
+    backgroundColor: '#F9FAFB',
   },
   emptyContainer: {
     flex: 1,
+  },
+  emptyState: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingBottom: 80,
+    paddingHorizontal: 32,
+    paddingTop: 80,
   },
   emptyIcon: {
-    fontSize: 48,
+    fontSize: 56,
     marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#111827',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#8E8E93',
+    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
   },
   fab: {
     position: 'absolute',
-    right: 20,
+    right: 24,
     bottom: 32,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#6366F1',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 6,
   },
   fabIcon: {
     fontSize: 28,
     color: '#FFFFFF',
-    lineHeight: 32,
+    lineHeight: 30,
     fontWeight: '400',
   },
 });

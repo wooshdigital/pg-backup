@@ -14,37 +14,38 @@ export function TripDetailTabs({ tripId }: TripDetailTabsProps) {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#8E8E93',
+        tabBarActiveTintColor: '#6366F1',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarIndicatorStyle: {
-          backgroundColor: '#007AFF',
+          backgroundColor: '#6366F1',
           height: 3,
-          borderRadius: 1.5,
+          borderRadius: 2,
         },
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           elevation: 0,
           shadowOpacity: 0,
           borderBottomWidth: 1,
-          borderBottomColor: '#E5E5EA',
+          borderBottomColor: '#E5E7EB',
         },
         tabBarLabelStyle: {
           fontSize: 14,
           fontWeight: '600',
-          textTransform: 'capitalize',
+          textTransform: 'none',
         },
-        lazy: true,
       }}
     >
       <Tab.Screen
         name="Participants"
         component={ParticipantsScreen}
         initialParams={{ tripId }}
+        options={{ title: 'Participants' }}
       />
       <Tab.Screen
         name="Expenses"
         component={ExpensesPlaceholderScreen}
         initialParams={{ tripId }}
+        options={{ title: 'Expenses' }}
       />
     </Tab.Navigator>
   );

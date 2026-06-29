@@ -1,34 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Trip } from '../types';
 
-const TRIPS_STORAGE_KEY = '@splitmate/trips';
-
-export const saveTrips = async (trips: Trip[]): Promise<void> => {
+export async function loadData<T>(key: string): Promise<T | null> {
   try {
-    const json = JSON.stringify(trips);
-    await AsyncStorage.setItem(TRIPS_STORAGE_KEY, json);
-  } catch (error) {
-    console.error('[storage] Failed to save trips:', error);
-    throw error;
+    const raw = await AsyncStorage.getItem(key);
+    if (raw === null) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
   }
-};
+}
 
-export const loadTrips = async (): Promise<Trip[]> => {
+export async function saveData<T>(key: string, data: T): Promise<void> {
   try {
-    const json = await AsyncStorage.getItem(TRIPS_STORAGE_KEY);
-    if (json === null) return [];
-    return JSON.parse(json) as Trip[];
-  } catch (error) {
-    console.error('[storage] Failed to load trips:', error);
-    return [];
+    await AsyncStorage.setItem(key, JSON.stringify(data));
+  } catch {
+    // silently fail
   }
-};
+}
 
-export const clearTrips = async (): Promise<void> => {
+export async function removeData(key: string): Promise<void> {
   try {
-    await AsyncStorage.removeItem(TRIPS_STORAGE_KEY);
-  } catch (error) {
-    console.error('[storage] Failed to clear trips:', error);
-    throw error;
+    await AsyncStorage.removeItem(key);
+  } catch {
+    // silently fail
   }
-};
+}

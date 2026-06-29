@@ -1,1 +1,1 @@
-export * from './types/index';
+export type { Participant, Trip, RootStackParamList, TripDetailTabParamList } from './types/index';
