@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { TextInput } from './TextInput';
 import { CharacterCount } from './CharacterCount';
-import { FormField } from '../FormField/FormField';
-import { Label } from '../Label/Label';
-import { HelperText } from '../HelperText/HelperText';
-import { ErrorMessage } from '../ErrorMessage/ErrorMessage';
+import { FormField } from '../FormField';
+import { Label } from '../Label';
+import { HelperText } from '../HelperText';
+import { ErrorMessage } from '../ErrorMessage';
 
 const meta: Meta<typeof TextInput> = {
   title: 'Components/TextInput',
@@ -14,78 +14,84 @@ const meta: Meta<typeof TextInput> = {
     layout: 'padded',
   },
   argTypes: {
-    validationState: {
+    variant: {
       control: 'select',
-      options: [undefined, 'error', 'success', 'warning'],
+      options: ['default', 'error', 'success'],
     },
     disabled: { control: 'boolean' },
     readOnly: { control: 'boolean' },
-    fullWidth: { control: 'boolean' },
+    placeholder: { control: 'text' },
   },
 };
-
 export default meta;
+
 type Story = StoryObj<typeof TextInput>;
+
+// ── Default ───────────────────────────────────────────────────────────────
 
 export const Default: Story = {
   args: {
     placeholder: 'Enter text…',
-    'aria-label': 'Default input',
+    'aria-label': 'Text field',
   },
 };
+
+// ── With Label ────────────────────────────────────────────────────────────
 
 export const WithLabel: Story = {
   render: () => (
     <FormField>
-      <Label>Full Name</Label>
-      <TextInput placeholder="Jane Doe" />
+      <Label htmlFor="field-label">Full name</Label>
+      <TextInput id="field-label" placeholder="Jane Doe" />
     </FormField>
   ),
 };
+
+// ── With Helper Text ──────────────────────────────────────────────────────
 
 export const WithHelper: Story = {
-  render: () => (
-    <FormField>
-      <Label>Email</Label>
-      <TextInput type="email" placeholder="jane@example.com" />
-      <HelperText>We will never share your email.</HelperText>
-    </FormField>
-  ),
+  render: () => {
+    const helperId = 'helper-1';
+    return (
+      <FormField helperId={helperId}>
+        <Label htmlFor="field-helper">Username</Label>
+        <TextInput id="field-helper" placeholder="johndoe" />
+        <HelperText id={helperId}>Must be unique across the platform.</HelperText>
+      </FormField>
+    );
+  },
 };
+
+// ── With Error ────────────────────────────────────────────────────────────
 
 export const WithError: Story = {
-  render: () => (
-    <FormField>
-      <Label>Email</Label>
-      <TextInput type="email" defaultValue="not-an-email" validationState="error" />
-      <ErrorMessage>Please enter a valid email address.</ErrorMessage>
-    </FormField>
-  ),
+  render: () => {
+    const errorId = 'error-1';
+    return (
+      <FormField hasError errorId={errorId}>
+        <Label htmlFor="field-error">Email</Label>
+        <TextInput id="field-error" type="email" placeholder="you@example.com" />
+        <ErrorMessage id={errorId}>Please enter a valid email address.</ErrorMessage>
+      </FormField>
+    );
+  },
 };
 
-export const WithSuccess: Story = {
-  render: () => (
-    <FormField>
-      <Label>Username</Label>
-      <TextInput defaultValue="janedoe" validationState="success" />
-      <HelperText>Username is available!</HelperText>
-    </FormField>
-  ),
-};
+// ── With Character Count ──────────────────────────────────────────────────
 
 export const WithCharCount: Story = {
   render: () => {
-    const MAX = 100;
     const [value, setValue] = useState('');
+    const MAX = 140;
     return (
       <FormField>
-        <Label>Bio</Label>
+        <Label htmlFor="field-charcount">Bio</Label>
         <TextInput
+          id="field-charcount"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           maxLength={MAX}
           placeholder="Tell us about yourself…"
-          fullWidth
         />
         <CharacterCount current={value.length} max={MAX} />
       </FormField>
@@ -93,74 +99,81 @@ export const WithCharCount: Story = {
   },
 };
 
+// ── Disabled ──────────────────────────────────────────────────────────────
+
 export const Disabled: Story = {
-  render: () => (
-    <FormField>
-      <Label>Email</Label>
-      <TextInput type="email" defaultValue="jane@example.com" disabled />
-    </FormField>
-  ),
+  args: {
+    placeholder: 'Cannot edit',
+    'aria-label': 'Disabled field',
+    disabled: true,
+    defaultValue: 'Disabled value',
+  },
 };
+
+// ── Readonly ──────────────────────────────────────────────────────────────
 
 export const Readonly: Story = {
-  render: () => (
-    <FormField>
-      <Label>API Key</Label>
-      <TextInput value="sk-xxxx-yyyy-zzzz" readOnly onChange={() => {}} />
-      <HelperText>This key is read-only.</HelperText>
-    </FormField>
-  ),
+  args: {
+    'aria-label': 'Readonly field',
+    readOnly: true,
+    defaultValue: 'Read-only value',
+  },
 };
 
-export const WithPrefix: Story = {
-  render: () => (
-    <FormField>
-      <Label>Website</Label>
-      <TextInput
-        type="url"
-        placeholder="example.com"
-        prefix={<span style={{ fontSize: '0.875rem' }}>https://</span>}
-        fullWidth
-      />
-    </FormField>
-  ),
-};
+// ── With Prefix Icon ──────────────────────────────────────────────────────
 
-export const WithSuffix: Story = {
+export const WithPrefixIcon: Story = {
   render: () => (
     <FormField>
-      <Label>Search</Label>
+      <Label htmlFor="field-prefix">Search</Label>
       <TextInput
-        type="search"
+        id="field-prefix"
         placeholder="Search…"
-        suffix={<span>🔍</span>}
-        fullWidth
+        prefix={
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        }
       />
     </FormField>
   ),
 };
+
+// ── With Suffix Icon ──────────────────────────────────────────────────────
+
+export const WithSuffixIcon: Story = {
+  render: () => (
+    <FormField>
+      <Label htmlFor="field-suffix">Password</Label>
+      <TextInput
+        id="field-suffix"
+        type="password"
+        placeholder="••••••••"
+        suffix={
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        }
+      />
+    </FormField>
+  ),
+};
+
+// ── All Input Types ───────────────────────────────────────────────────────
 
 export const AllInputTypes: Story = {
   render: () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {(['text', 'email', 'password', 'number', 'tel', 'url', 'search', 'date'] as const).map(
+      {(['text', 'email', 'url', 'tel', 'number', 'password', 'search', 'date'] as const).map(
         (type) => (
           <FormField key={type}>
-            <Label>{type}</Label>
-            <TextInput type={type} placeholder={`Enter ${type}`} />
+            <Label htmlFor={`type-${type}`}>{type}</Label>
+            <TextInput id={`type-${type}`} type={type} placeholder={`type="${type}"`} />
           </FormField>
-        )
+        ),
       )}
     </div>
-  ),
-};
-
-export const NumericInputMode: Story = {
-  render: () => (
-    <FormField>
-      <Label>Quantity</Label>
-      <TextInput inputMode="numeric" pattern="[0-9]*" placeholder="0" />
-      <HelperText>Numbers only on mobile keyboards.</HelperText>
-    </FormField>
   ),
 };

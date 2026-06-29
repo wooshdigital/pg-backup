@@ -1,53 +1,57 @@
 import React from 'react';
 import styles from './CharacterCount.module.css';
+import { classNames } from '../../utils/classNames';
 
 export interface CharacterCountProps {
-  /** Current character count */
+  /** Current number of characters */
   current: number;
   /** Maximum allowed characters */
   max: number;
-  /** Custom id for linking */
-  id?: string;
-  /** Override className */
+  /** Additional class name */
   className?: string;
+  /**
+   * Fraction of max at which the count turns "warning" colour.
+   * Defaults to 0.8 (80 %).
+   */
+  warningThreshold?: number;
 }
 
-/**
- * CharacterCount renders an aria-live region that announces
- * remaining characters as the user types.
- */
 export const CharacterCount: React.FC<CharacterCountProps> = ({
   current,
   max,
-  id,
   className,
+  warningThreshold = 0.8,
 }) => {
   const remaining = max - current;
-  const isOver = remaining < 0;
-  const isWarning = !isOver && remaining <= Math.ceil(max * 0.1);
+  const ratio = current / max;
+  const isWarning = ratio >= warningThreshold && ratio < 1;
+  const isError = remaining < 0;
 
-  const countClass = [
+  const countClass = classNames(
     styles.count,
-    isOver ? styles.error : '',
-    isWarning ? styles.warning : '',
-    className ?? '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+    isWarning ? styles.warning : undefined,
+    isError ? styles.error : undefined,
+    className,
+  );
 
-  const label = isOver
-    ? `${Math.abs(remaining)} characters over limit`
-    : `${remaining} of ${max} characters remaining`;
+  // Human-friendly announcement
+  const label =
+    remaining >= 0
+      ? `${remaining} of ${max} characters remaining`
+      : `${Math.abs(remaining)} characters over limit`;
 
   return (
     <span
-      id={id}
       className={countClass}
       aria-live="polite"
       aria-atomic="true"
       role="status"
     >
-      {label}
+      <span className={styles.visualLabel}>{label}</span>
+      {/* Numeric summary visible to sighted users */}
+      <span aria-hidden="true" className={styles.numeric}>
+        {current}/{max}
+      </span>
     </span>
   );
 };

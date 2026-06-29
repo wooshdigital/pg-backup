@@ -1,106 +1,90 @@
+/* ── Wrapper ─────────────────────────────────────────────── */
 .wrapper {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  background-color: var(--color-surface, #ffffff);
+  width: 100%;
+  background: var(--color-surface, #ffffff);
   border: 1.5px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md, 6px);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.wrapper.fullWidth {
-  display: flex;
-  width: 100%;
-}
-
-.wrapper:focus-within {
-  border-color: var(--color-primary, #3b82f6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  outline: none;
+/* ── Variants ────────────────────────────────────────────── */
+.wrapper.default {
+  border-color: var(--color-border, #d1d5db);
 }
 
 .wrapper.error {
   border-color: var(--color-error, #ef4444);
 }
 
-.wrapper.error:focus-within {
-  border-color: var(--color-error, #ef4444);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
-}
-
 .wrapper.success {
   border-color: var(--color-success, #22c55e);
 }
 
+/* Focus-within ring */
+.wrapper:focus-within {
+  outline: 2px solid var(--color-focus-ring, #3b82f6);
+  outline-offset: 2px;
+  border-color: var(--color-focus, #3b82f6);
+}
+
+.wrapper.error:focus-within {
+  outline-color: var(--color-error, #ef4444);
+  border-color: var(--color-error, #ef4444);
+}
+
 .wrapper.success:focus-within {
+  outline-color: var(--color-success, #22c55e);
   border-color: var(--color-success, #22c55e);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
 }
 
-.wrapper.warning {
-  border-color: var(--color-warning, #f59e0b);
-}
-
-.wrapper.warning:focus-within {
-  border-color: var(--color-warning, #f59e0b);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
-}
-
-.wrapper.disabled {
-  background-color: var(--color-surface-disabled, #f3f4f6);
-  border-color: var(--color-border-disabled, #e5e7eb);
-  cursor: not-allowed;
-}
-
+/* ── Input element ───────────────────────────────────────── */
 .input {
   flex: 1;
   min-width: 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  background: transparent;
   border: none;
   outline: none;
-  background: transparent;
-  padding: var(--spacing-2, 8px) var(--spacing-3, 12px);
-  font-size: var(--font-size-base, 1rem);
-  font-family: inherit;
+  font-size: var(--font-size-md, 1rem);
+  line-height: var(--line-height-normal, 1.5);
   color: var(--color-text, #111827);
-  line-height: 1.5;
+  width: 100%;
 }
 
 .input::placeholder {
-  color: var(--color-text-muted, #9ca3af);
+  color: var(--color-text-subtle, #9ca3af);
 }
 
 .input:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
-  color: var(--color-text-disabled, #9ca3af);
 }
 
-.input:read-only {
-  background-color: transparent;
+.input[readonly] {
+  background: var(--color-surface-subtle, #f9fafb);
+  cursor: default;
 }
 
-/* Prefix / Suffix slots */
+/* ── Prefix / Suffix ─────────────────────────────────────── */
 .prefix,
 .suffix {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--color-text-muted, #6b7280);
-  font-size: var(--font-size-base, 1rem);
-}
-
-.prefix {
-  padding-left: var(--spacing-3, 12px);
-}
-
-.suffix {
-  padding-right: var(--spacing-3, 12px);
+  color: var(--color-text-subtle, #6b7280);
+  padding: 0 var(--space-2, 8px);
+  pointer-events: none;
+  user-select: none;
 }
 
 .hasPrefix .input {
-  padding-left: var(--spacing-2, 8px);
+  padding-left: var(--space-1, 4px);
 }
 
 .hasSuffix .input {
-  padding-right: var(--spacing-2, 8px);
+  padding-right: var(--space-1, 4px);
 }

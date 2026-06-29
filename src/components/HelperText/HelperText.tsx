@@ -1,30 +1,22 @@
-import React, { useContext } from 'react';
-import { FormFieldContext } from '../FormField/FormFieldContext';
-import styles from './HelperText.module.css';
+import React from 'react';
 
-export interface HelperTextProps {
+export interface HelperTextProps extends React.HTMLAttributes<HTMLSpanElement> {
+  id: string;
   children: React.ReactNode;
-  id?: string;
-  className?: string;
 }
 
-export const HelperText: React.FC<HelperTextProps> = ({
-  children,
-  id: idProp,
-  className,
-}) => {
-  const fieldCtx = useContext(FormFieldContext);
-  const id = idProp ?? fieldCtx?.helperId;
-
-  return (
-    <span
-      id={id}
-      className={[styles.helperText, className ?? ''].filter(Boolean).join(' ')}
-    >
-      {children}
-    </span>
-  );
-};
+export const HelperText: React.FC<HelperTextProps> = ({ children, ...rest }) => (
+  <span
+    style={{
+      fontSize: '0.8125rem',
+      color: 'var(--color-text-subtle, #6b7280)',
+      marginTop: 2,
+    }}
+    {...rest}
+  >
+    {children}
+  </span>
+);
 
 HelperText.displayName = 'HelperText';
 

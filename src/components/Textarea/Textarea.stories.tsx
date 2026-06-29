@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { Textarea } from './Textarea';
 import { CharacterCount } from '../TextInput/CharacterCount';
-import { FormField } from '../FormField/FormField';
-import { Label } from '../Label/Label';
-import { HelperText } from '../HelperText/HelperText';
-import { ErrorMessage } from '../ErrorMessage/ErrorMessage';
+import { FormField } from '../FormField';
+import { Label } from '../Label';
+import { HelperText } from '../HelperText';
+import { ErrorMessage } from '../ErrorMessage';
 
 const meta: Meta<typeof Textarea> = {
   title: 'Components/Textarea',
@@ -14,75 +14,63 @@ const meta: Meta<typeof Textarea> = {
     layout: 'padded',
   },
   argTypes: {
-    validationState: {
-      control: 'select',
-      options: [undefined, 'error', 'success', 'warning'],
-    },
-    disabled: { control: 'boolean' },
     autoResize: { control: 'boolean' },
-    minRows: { control: 'number' },
-    maxRows: { control: 'number' },
-    fullWidth: { control: 'boolean' },
+    disabled: { control: 'boolean' },
+    readOnly: { control: 'boolean' },
+    placeholder: { control: 'text' },
+    minHeight: { control: { type: 'number', min: 40, max: 600 } },
+    maxHeight: { control: { type: 'number', min: 100, max: 1200 } },
   },
 };
-
 export default meta;
+
 type Story = StoryObj<typeof Textarea>;
+
+// ── Default ───────────────────────────────────────────────────────────────
 
 export const Default: Story = {
   render: () => (
     <FormField>
-      <Label>Description</Label>
-      <Textarea placeholder="Enter a description…" fullWidth />
+      <Label htmlFor="ta-default">Description</Label>
+      <Textarea id="ta-default" placeholder="Enter a description…" />
     </FormField>
   ),
 };
+
+// ── AutoResize ────────────────────────────────────────────────────────────
 
 export const AutoResize: Story = {
   render: () => (
     <FormField>
-      <Label>Notes</Label>
+      <Label htmlFor="ta-auto">Notes (auto-resize)</Label>
       <Textarea
-        placeholder="Start typing and watch me grow…"
+        id="ta-auto"
         autoResize
-        minRows={2}
-        fullWidth
+        minHeight={80}
+        maxHeight={400}
+        placeholder="Start typing – the textarea grows with your content…"
       />
-      <HelperText>This textarea grows as you type.</HelperText>
+      <HelperText id="ta-auto-help">This textarea grows as you type, up to 400 px.</HelperText>
     </FormField>
   ),
 };
 
-export const AutoResizeWithMaxRows: Story = {
-  render: () => (
-    <FormField>
-      <Label>Comments</Label>
-      <Textarea
-        placeholder="Type a long comment…"
-        autoResize
-        minRows={2}
-        maxRows={6}
-        fullWidth
-      />
-      <HelperText>Grows up to 6 rows, then scrolls.</HelperText>
-    </FormField>
-  ),
-};
+// ── With Character Count ──────────────────────────────────────────────────
 
 export const WithCharCount: Story = {
   render: () => {
-    const MAX = 280;
     const [value, setValue] = useState('');
+    const MAX = 280;
     return (
       <FormField>
-        <Label>Tweet</Label>
+        <Label htmlFor="ta-charcount">Tweet</Label>
         <Textarea
+          id="ta-charcount"
+          autoResize
           value={value}
           onChange={(e) => setValue(e.target.value)}
           maxLength={MAX}
-          minRows={3}
-          placeholder="What's happening?"
-          fullWidth
+          placeholder="What's on your mind?"
         />
         <CharacterCount current={value.length} max={MAX} />
       </FormField>
@@ -90,55 +78,43 @@ export const WithCharCount: Story = {
   },
 };
 
+// ── With Error ────────────────────────────────────────────────────────────
+
 export const WithError: Story = {
-  render: () => (
-    <FormField>
-      <Label>Bio</Label>
-      <Textarea validationState="error" defaultValue="x" minRows={3} fullWidth />
-      <ErrorMessage>Bio must be at least 10 characters.</ErrorMessage>
-    </FormField>
-  ),
+  render: () => {
+    const errorId = 'ta-error-msg';
+    return (
+      <FormField hasError errorId={errorId}>
+        <Label htmlFor="ta-error">Reason for cancellation</Label>
+        <Textarea id="ta-error" placeholder="Please provide a reason…" />
+        <ErrorMessage id={errorId}>This field is required.</ErrorMessage>
+      </FormField>
+    );
+  },
 };
 
-export const WithSuccess: Story = {
-  render: () => (
-    <FormField>
-      <Label>Bio</Label>
-      <Textarea
-        validationState="success"
-        defaultValue="I am a software developer with 5 years of experience."
-        minRows={3}
-        fullWidth
-      />
-      <HelperText>Looks great!</HelperText>
-    </FormField>
-  ),
-};
+// ── Fixed size ────────────────────────────────────────────────────────────
 
 export const Fixed: Story = {
   render: () => (
     <FormField>
-      <Label>Fixed Textarea</Label>
+      <Label htmlFor="ta-fixed">Fixed height</Label>
       <Textarea
-        placeholder="This textarea cannot be resized."
-        style={{ resize: 'none' }}
-        minRows={5}
-        fullWidth
+        id="ta-fixed"
+        placeholder="This textarea has a fixed height and scrolls…"
+        style={{ height: 160 }}
       />
     </FormField>
   ),
 };
 
+// ── Disabled ──────────────────────────────────────────────────────────────
+
 export const Disabled: Story = {
   render: () => (
     <FormField>
-      <Label>Notes</Label>
-      <Textarea
-        defaultValue="This content is read only."
-        disabled
-        minRows={3}
-        fullWidth
-      />
+      <Label htmlFor="ta-disabled">Notes</Label>
+      <Textarea id="ta-disabled" disabled defaultValue="Cannot be edited." />
     </FormField>
   ),
 };

@@ -1,39 +1,26 @@
-import React, { useContext } from 'react';
-import { FormFieldContext } from '../FormField/FormFieldContext';
-import styles from './Label.module.css';
+import React from 'react';
 
 export interface LabelProps extends React.LabelHTMLAttributes<HTMLLabelElement> {
-  children: React.ReactNode;
-  /** Mark as required (renders an asterisk) */
   required?: boolean;
 }
 
-export const Label: React.FC<LabelProps> = ({
-  children,
-  htmlFor: htmlForProp,
-  required: requiredProp,
-  className,
-  ...rest
-}) => {
-  const fieldCtx = useContext(FormFieldContext);
-  const htmlFor = htmlForProp ?? fieldCtx?.inputId;
-  const isRequired = requiredProp ?? fieldCtx?.required;
-
-  return (
-    <label
-      {...rest}
-      htmlFor={htmlFor}
-      className={[styles.label, className ?? ''].filter(Boolean).join(' ')}
-    >
-      {children}
-      {isRequired && (
-        <span className={styles.required} aria-hidden="true">
-          {' '}*
-        </span>
-      )}
-    </label>
-  );
-};
+export const Label: React.FC<LabelProps> = ({ children, required, ...rest }) => (
+  <label
+    style={{
+      fontSize: '0.875rem',
+      fontWeight: 500,
+      color: 'var(--color-text, #111827)',
+    }}
+    {...rest}
+  >
+    {children}
+    {required && (
+      <span aria-hidden="true" style={{ color: 'var(--color-error, #ef4444)', marginLeft: 2 }}>
+        *
+      </span>
+    )}
+  </label>
+);
 
 Label.displayName = 'Label';
 
