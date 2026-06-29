@@ -4,70 +4,43 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
-// localBackend implements StorageBackend using the local filesystem.
-// Intended for testing and development only.
-type localBackend struct {
-	root string
+// LocalBackend implements Backend by writing files to a local directory.
+// Useful for testing and local development.
+type LocalBackend struct {
+	baseDir string
 }
 
-// NewLocal creates a StorageBackend that stores objects under root.
-func NewLocal(root string) (StorageBackend, error) {
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return nil, fmt.Errorf("create local storage root %q: %w", root, err)
+// NewLocal creates a LocalBackend that stores files under baseDir.
+func NewLocal(baseDir string) (*LocalBackend, error) {
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create base dir: %w", err)
 	}
-	return &localBackend{root: root}, nil
+	return &LocalBackend{baseDir: baseDir}, nil
 }
 
-func (b *localBackend) Upload(_ context.Context, key string, r io.Reader, _ int64) error {
-	dst := filepath.Join(b.root, filepath.FromSlash(key))
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return fmt.Errorf("mkdir for key %q: %w", key, err)
+// Put writes the contents of r to a file at baseDir/key.
+func (b *LocalBackend) Put(_ context.Context, key string, r io.Reader) (int64, error) {
+	dest := filepath.Join(b.baseDir, key)
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return 0, fmt.Errorf("create parent dirs: %w", err)
 	}
-	f, err := os.Create(dst)
+
+	f, err := os.Create(dest)
 	if err != nil {
-		return fmt.Errorf("create file for key %q: %w", key, err)
+		return 0, fmt.Errorf("create file: %w", err)
 	}
 	defer f.Close()
-	if _, err = io.Copy(f, r); err != nil {
-		return fmt.Errorf("write key %q: %w", key, err)
-	}
-	return nil
-}
 
-func (b *localBackend) Delete(_ context.Context, key string) error {
-	path := filepath.Join(b.root, filepath.FromSlash(key))
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("delete key %q: %w", key, err)
-	}
-	return nil
-}
-
-func (b *localBackend) List(_ context.Context, prefix string) ([]string, error) {
-	var keys []string
-	err := filepath.WalkDir(b.root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, relErr := filepath.Rel(b.root, path)
-		if relErr != nil {
-			return relErr
-		}
-		key := filepath.ToSlash(rel)
-		if strings.HasPrefix(key, prefix) {
-			keys = append(keys, key)
-		}
-		return nil
-	})
+	n, err := io.Copy(f, r)
 	if err != nil {
-		return nil, fmt.Errorf("list local storage: %w", err)
+		return 0, fmt.Errorf("write file: %w", err)
 	}
-	return keys, nil
+
+	slog.Debug("local storage: wrote file", "path", dest, "bytes", n)
+	return n, nil
 }

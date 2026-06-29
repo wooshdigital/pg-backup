@@ -1,20 +1,19 @@
-# Example configuration for the backup worker.
-# Copy to config.yaml and fill in your values.
-
 database:
-  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
+  dsn: "postgres://postgres:password@localhost:5432/mydb?sslmode=disable"
 
 storage:
-  endpoint: ""            # Leave empty for real AWS S3; set for LocalStack, e.g. http://localhost:4566
   bucket: "my-backups"
   region: "us-east-1"
-  access_key_id: ""       # Uses AWS_ACCESS_KEY_ID env var if empty
-  secret_access_key: ""   # Uses AWS_SECRET_ACCESS_KEY env var if empty
-  force_path_style: false # Set to true when using LocalStack or MinIO
-  key_prefix: "backups"   # Object key prefix, e.g. "prod/postgres"
+  # Optional: set for LocalStack or other S3-compatible services.
+  endpoint: ""
+  force_path_style: false
+  # Optional: leave empty to use IAM roles / environment credentials.
+  access_key_id: ""
+  secret_access_key: ""
 
-compress:
-  level: 6  # gzip compression level 1-9 (default 6)
+compression:
+  algorithm: "gzip"   # supported: "gzip"
 
-# stream_direct: true  # Stream directly from pg_dump → compressor → S3 without a temp file
-stream_direct: false
+backup:
+  # When true, compressed data is piped directly to S3 without a temp file.
+  stream_direct: false

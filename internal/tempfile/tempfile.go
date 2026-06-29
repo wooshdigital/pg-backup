@@ -5,28 +5,39 @@ import (
 	"os"
 )
 
-// TempFile wraps an *os.File created in the OS temp directory and provides a
-// Remove helper that closes and unlinks it.
+// TempFile wraps an *os.File created in the system's temp directory.
 type TempFile struct {
-	*os.File
+	f    *os.File
+	path string
 }
 
-// New creates a temporary file in the default temp directory.
+// New creates a new temporary file.
 func New() (*TempFile, error) {
-	f, err := os.CreateTemp("", "dbbackup-*.tmp")
+	f, err := os.CreateTemp("", "pgbackup-*.sql.gz")
 	if err != nil {
 		return nil, fmt.Errorf("create temp file: %w", err)
 	}
-	return &TempFile{File: f}, nil
+	return &TempFile{f: f, path: f.Name()}, nil
 }
 
-// Remove closes and deletes the temporary file. Calling Remove more than once
-// is safe; subsequent calls are no-ops.
+// File returns the underlying *os.File.
+func (t *TempFile) File() *os.File {
+	return t.f
+}
+
+// Path returns the file system path of the temp file.
+func (t *TempFile) Path() string {
+	return t.path
+}
+
+// Remove closes and deletes the temp file.
 func (t *TempFile) Remove() error {
-	name := t.Name()
-	_ = t.Close()
-	if err := os.Remove(name); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove temp file %q: %w", name, err)
+	if err := t.f.Close(); err != nil {
+		// Ignore close errors on already-closed files.
+		_ = err
+	}
+	if err := os.Remove(t.path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove temp file %s: %w", t.path, err)
 	}
 	return nil
 }

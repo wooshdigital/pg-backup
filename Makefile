@@ -1,36 +1,23 @@
-.PHONY: build test test-unit test-integration lint docker-test-up docker-test-down
+.PHONY: build test test-unit test-integration lint clean
 
-BINARY     := bin/worker
-GO_FILES   := $(shell find . -name '*.go' -not -path './vendor/*')
-COMPOSE    := docker compose -f docker-compose.test.yml
-
+# Build the worker binary.
 build:
-	go build -o $(BINARY) ./cmd/worker
+	go build -o bin/worker ./cmd/worker
 
+# Run all unit tests (no integration tag).
 test: test-unit
 
 test-unit:
-	go test ./... -count=1
+	go test -v -race ./...
 
-test-integration: docker-test-up
-	TEST_POSTGRES_DSN="postgres://testuser:testpass@localhost:5433/testdb?sslmode=disable" \
-	TEST_S3_ENDPOINT="http://localhost:4566" \
-	TEST_S3_BUCKET="test-backups" \
-	TEST_S3_REGION="us-east-1" \
-	TEST_S3_ACCESS_KEY="test" \
-	TEST_S3_SECRET_KEY="test" \
-	go test -tags integration ./internal/backup/... -v -count=1 -timeout 5m; \
-	EXIT_CODE=$$?; \
-	$(MAKE) docker-test-down; \
-	exit $$EXIT_CODE
+# Run integration tests using Docker Compose.
+test-integration:
+	docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from test-runner
 
-docker-test-up:
-	$(COMPOSE) up -d --wait
-	@echo "Waiting for setup container to complete..."
-	$(COMPOSE) run --rm setup
-
-docker-test-down:
-	$(COMPOSE) down -v
-
+# Lint using golangci-lint.
 lint:
 	golangci-lint run ./...
+
+clean:
+	rm -rf bin/
+	docker-compose -f docker-compose.test.yml down -v

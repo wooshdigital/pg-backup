@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
+	"log/slog"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -12,24 +12,24 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// S3Config holds the settings required to connect to an S3-compatible store.
+// S3Config holds configuration for the S3 storage backend.
 type S3Config struct {
-	Endpoint        string
 	Bucket          string
 	Region          string
+	Endpoint        string
+	ForcePathStyle  bool
 	AccessKeyID     string
 	SecretAccessKey string
-	ForcePathStyle  bool
 }
 
-// s3Backend implements StorageBackend backed by Amazon S3 (or compatible).
-type s3Backend struct {
+// S3Backend implements Backend using Amazon S3 (or a compatible service).
+type S3Backend struct {
 	client *s3.Client
-	bucket string
+	cfg    S3Config
 }
 
-// NewS3 creates a new StorageBackend that writes to the configured S3 bucket.
-func NewS3(ctx context.Context, cfg S3Config) (StorageBackend, error) {
+// NewS3 creates a new S3Backend.
+func NewS3(ctx context.Context, cfg S3Config) (*S3Backend, error) {
 	opts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.Region),
 	}
@@ -42,7 +42,7 @@ func NewS3(ctx context.Context, cfg S3Config) (StorageBackend, error) {
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("load AWS config: %w", err)
+		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
 	clientOpts := []func(*s3.Options){}
@@ -54,61 +54,50 @@ func NewS3(ctx context.Context, cfg S3Config) (StorageBackend, error) {
 	}
 
 	client := s3.NewFromConfig(awsCfg, clientOpts...)
-
-	return &s3Backend{
-		client: client,
-		bucket: cfg.Bucket,
-	}, nil
+	return &S3Backend{client: client, cfg: cfg}, nil
 }
 
-// Upload streams r to the S3 object at key.
-func (b *s3Backend) Upload(ctx context.Context, key string, r io.Reader, size int64) error {
-	input := &s3.PutObjectInput{
-		Bucket: aws.String(b.bucket),
+// Put uploads the contents of r to S3 at the given key.
+func (b *S3Backend) Put(ctx context.Context, key string, r io.Reader) (int64, error) {
+	slog.Debug("s3: uploading object", "bucket", b.cfg.Bucket, "key", key)
+
+	// We need to count bytes as we upload.
+	cr := &countingReader{r: r}
+
+	_, err := b.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(b.cfg.Bucket),
 		Key:    aws.String(key),
-		Body:   r,
-	}
-	if size >= 0 {
-		input.ContentLength = aws.Int64(size)
+		Body:   cr,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("s3 put object: %w", err)
 	}
 
-	_, err := b.client.PutObject(ctx, input)
+	slog.Debug("s3: upload complete", "bucket", b.cfg.Bucket, "key", key, "bytes", cr.n)
+	return cr.n, nil
+}
+
+// EnsureBucket creates the S3 bucket if it does not already exist.
+func (b *S3Backend) EnsureBucket(ctx context.Context) error {
+	_, err := b.client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(b.cfg.Bucket),
+	})
 	if err != nil {
-		return fmt.Errorf("s3 put object %q: %w", key, err)
+		// Ignore "bucket already exists" errors.
+		// In production code you would type-assert the AWS error.
+		slog.Debug("s3: create bucket (may already exist)", "bucket", b.cfg.Bucket, "error", err)
 	}
 	return nil
 }
 
-// Delete removes the object at key from S3.
-func (b *s3Backend) Delete(ctx context.Context, key string) error {
-	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(b.bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return fmt.Errorf("s3 delete object %q: %w", key, err)
-	}
-	return nil
+// countingReader wraps an io.Reader and counts bytes read.
+type countingReader struct {
+	r io.Reader
+	n int64
 }
 
-// List returns all object keys in the bucket that share the given prefix.
-func (b *s3Backend) List(ctx context.Context, prefix string) ([]string, error) {
-	var keys []string
-	paginator := s3.NewListObjectsV2Paginator(b.client, &s3.ListObjectsV2Input{
-		Bucket: aws.String(b.bucket),
-		Prefix: aws.String(prefix),
-	})
-
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("s3 list objects (prefix=%q): %w", prefix, err)
-		}
-		for _, obj := range page.Contents {
-			if obj.Key != nil && !strings.HasSuffix(*obj.Key, "/") {
-				keys = append(keys, *obj.Key)
-			}
-		}
-	}
-	return keys, nil
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
 }

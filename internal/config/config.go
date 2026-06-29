@@ -7,72 +7,111 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config is the top-level application configuration.
+// Config holds all application configuration.
 type Config struct {
-	Database     DatabaseConfig  `yaml:"database"`
-	Storage      StorageConfig   `yaml:"storage"`
-	Compress     CompressConfig  `yaml:"compress"`
-	StreamDirect bool            `yaml:"stream_direct"`
+	Database    DatabaseConfig    `yaml:"database"`
+	Storage     StorageConfig     `yaml:"storage"`
+	Compression CompressionConfig `yaml:"compression"`
+	Backup      BackupConfig      `yaml:"backup"`
 }
 
-// DatabaseConfig holds connection settings for the source database.
+// DatabaseConfig holds Postgres connection settings.
 type DatabaseConfig struct {
 	DSN string `yaml:"dsn"`
 }
 
-// StorageConfig holds S3-compatible storage settings.
+// StorageConfig holds S3 (or compatible) settings.
 type StorageConfig struct {
-	Endpoint        string `yaml:"endpoint"`
 	Bucket          string `yaml:"bucket"`
 	Region          string `yaml:"region"`
+	Endpoint        string `yaml:"endpoint"`
+	ForcePathStyle  bool   `yaml:"force_path_style"`
 	AccessKeyID     string `yaml:"access_key_id"`
 	SecretAccessKey string `yaml:"secret_access_key"`
-	ForcePathStyle  bool   `yaml:"force_path_style"`
-	KeyPrefix       string `yaml:"key_prefix"`
 }
 
-// CompressConfig holds compression settings.
-type CompressConfig struct {
-	Level int `yaml:"level"`
+// CompressionConfig holds compressor settings.
+type CompressionConfig struct {
+	Algorithm string `yaml:"algorithm"` // e.g. "gzip", "zstd"
 }
 
-// Load reads configuration from the path given by the CONFIG_PATH environment
-// variable (default: config.yaml).
+// BackupConfig holds backup-specific settings.
+type BackupConfig struct {
+	// StreamDirect, when true, streams compressed data directly to storage
+	// without writing to a temp file first.
+	StreamDirect bool `yaml:"stream_direct"`
+}
+
+// Load reads configuration from config.yaml, with environment variable overrides.
 func Load() (*Config, error) {
-	path := os.Getenv("CONFIG_PATH")
-	if path == "" {
-		path = "config.yaml"
+	cfg := defaults()
+
+	// Attempt to read config file.
+	configPath := envOrDefault("CONFIG_PATH", "config.yaml")
+	if data, err := os.ReadFile(configPath); err == nil {
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("parse config file: %w", err)
+		}
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open config %q: %w", path, err)
-	}
-	defer f.Close()
+	// Environment variable overrides (highest priority).
+	applyEnvOverrides(cfg)
 
-	var cfg Config
-	dec := yaml.NewDecoder(f)
-	dec.KnownFields(true)
-	if err = dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("decode config: %w", err)
-	}
-
-	if err = cfg.validate(); err != nil {
+	if err := validate(cfg); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
-func (c *Config) validate() error {
-	if c.Database.DSN == "" {
-		return fmt.Errorf("database.dsn is required")
+func defaults() *Config {
+	return &Config{
+		Compression: CompressionConfig{
+			Algorithm: "gzip",
+		},
+		Storage: StorageConfig{
+			Region: "us-east-1",
+		},
 	}
-	if c.Storage.Bucket == "" {
-		return fmt.Errorf("storage.bucket is required")
+}
+
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("POSTGRES_DSN"); v != "" {
+		cfg.Database.DSN = v
 	}
-	if c.Compress.Level == 0 {
-		c.Compress.Level = 6 // gzip default
+	if v := os.Getenv("S3_BUCKET"); v != "" {
+		cfg.Storage.Bucket = v
+	}
+	if v := os.Getenv("S3_REGION"); v != "" {
+		cfg.Storage.Region = v
+	}
+	if v := os.Getenv("S3_ENDPOINT"); v != "" {
+		cfg.Storage.Endpoint = v
+	}
+	if v := os.Getenv("AWS_ACCESS_KEY_ID"); v != "" {
+		cfg.Storage.AccessKeyID = v
+	}
+	if v := os.Getenv("AWS_SECRET_ACCESS_KEY"); v != "" {
+		cfg.Storage.SecretAccessKey = v
+	}
+	if v := os.Getenv("COMPRESSION_ALGORITHM"); v != "" {
+		cfg.Compression.Algorithm = v
+	}
+}
+
+func validate(cfg *Config) error {
+	if cfg.Database.DSN == "" {
+		return fmt.Errorf("database.dsn is required (set POSTGRES_DSN env var or config file)")
+	}
+	if cfg.Storage.Bucket == "" {
+		return fmt.Errorf("storage.bucket is required (set S3_BUCKET env var or config file)")
 	}
 	return nil
+}
+
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

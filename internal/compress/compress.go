@@ -1,15 +1,42 @@
 package compress
 
-import "io"
+import (
+	"compress/gzip"
+	"io"
+)
 
-// Compressor wraps an io.Writer with a compression layer.
+// Compressor wraps an io.Reader with compression.
 type Compressor interface {
-	// Wrap returns a WriteCloser that compresses data written to it and
-	// forwards the compressed bytes to w. The caller must call Close() on the
-	// returned WriteCloser to flush and finalise the compressed stream.
-	Wrap(w io.Writer) (io.WriteCloser, error)
+	Compress(r io.Reader) (io.Reader, error)
+}
 
-	// Extension returns the file extension associated with this compressor
-	// (e.g. ".gz").
-	Extension() string
+// GzipCompressor compresses data using gzip.
+type GzipCompressor struct {
+	level int
+}
+
+// NewGzip creates a GzipCompressor with the given compression level.
+// Use gzip.DefaultCompression (-1) for the default.
+func NewGzip(level int) *GzipCompressor {
+	return &GzipCompressor{level: level}
+}
+
+// Compress wraps r with gzip compression and returns the compressed reader.
+func (g *GzipCompressor) Compress(r io.Reader) (io.Reader, error) {
+	pr, pw := io.Pipe()
+
+	gz, err := gzip.NewWriterLevel(pw, g.level)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		_, copyErr := io.Copy(gz, r)
+		if closeErr := gz.Close(); closeErr != nil && copyErr == nil {
+			copyErr = closeErr
+		}
+		pw.CloseWithError(copyErr)
+	}()
+
+	return pr, nil
 }

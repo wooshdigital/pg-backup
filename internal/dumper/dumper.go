@@ -4,41 +4,69 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 )
 
-// Dumper can stream a database dump to an io.Writer.
+// Dumper produces a pg_dump byte stream for a Postgres database.
 type Dumper interface {
-	Dump(ctx context.Context, w io.Writer) error
+	Dump(ctx context.Context) (io.Reader, error)
 }
 
-// pgDumper implements Dumper using the pg_dump CLI tool.
-type pgDumper struct {
+// PGDumper invokes the pg_dump binary.
+type PGDumper struct {
 	dsn string
+	env []string
 }
 
-// New returns a Dumper that wraps pg_dump for the given DSN.
-func New(dsn string) (Dumper, error) {
+// New creates a PGDumper for the given DSN.
+func New(dsn string) (*PGDumper, error) {
 	if dsn == "" {
-		return nil, fmt.Errorf("DSN must not be empty")
+		return nil, fmt.Errorf("dsn must not be empty")
 	}
-	return &pgDumper{dsn: dsn}, nil
+	env, err := dsnToEnv(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse dsn: %w", err)
+	}
+	return &PGDumper{dsn: dsn, env: env}, nil
 }
 
-// Dump executes pg_dump and streams its stdout to w.
-func (d *pgDumper) Dump(ctx context.Context, w io.Writer) error {
-	cmd := exec.CommandContext(ctx, "pg_dump", d.dsn)
-	cmd.Stdout = w
+// Dump runs pg_dump and returns a reader over its stdout.
+func (d *PGDumper) Dump(ctx context.Context) (io.Reader, error) {
+	args := pgDumpArgs(d.env)
+	slog.Debug("running pg_dump", "args", args)
 
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
+	cmd := exec.CommandContext(ctx, "pg_dump", args...)
+	cmd.Env = append(inheritEnv(), d.env...)
 
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg != "" {
-			return fmt.Errorf("pg_dump: %w: %s", err, msg)
-		}
-		return fmt.Errorf("pg_dump: %w", err)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
-	return nil
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start pg_dump: %w", err)
+	}
+
+	// Return a reader that also waits for the process to finish.
+	return &cmdReader{ReadCloser: stdout, cmd: cmd}, nil
+}
+
+// cmdReader wraps the stdout pipe of a running command and calls cmd.Wait()
+// when the stream is exhausted.
+type cmdReader struct {
+	io.ReadCloser
+	cmd    *exec.Cmd
+	waited bool
+}
+
+func (r *cmdReader) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if err == io.EOF && !r.waited {
+		r.waited = true
+		if waitErr := r.cmd.Wait(); waitErr != nil {
+			return n, fmt.Errorf("pg_dump exited with error: %w", waitErr)
+		}
+	}
+	return n, err
 }

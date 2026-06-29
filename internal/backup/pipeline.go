@@ -4,73 +4,66 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+
+	"github.com/sgorgun/go-backup/internal/compress"
+	"github.com/sgorgun/go-backup/internal/dumper"
+	"github.com/sgorgun/go-backup/internal/storage"
 )
 
-// PipelineStage represents a processing stage in a backup pipeline.
-type PipelineStage func(ctx context.Context, r io.Reader, w io.Writer) error
+// RunPipeline streams dump output through the compressor and directly into the
+// storage backend using an io.Pipe, avoiding any temp file on disk.
+//
+// The pipeline looks like:
+//
+//	pg_dump → compressor → io.Pipe → storage.Put
+func RunPipeline(
+	ctx context.Context,
+	d dumper.Dumper,
+	c compress.Compressor,
+	s storage.Backend,
+	key string,
+) (int64, error) {
+	slog.Debug("pipeline: starting direct-stream backup", "key", key)
 
-// Pipeline chains multiple stages together using io.Pipe, executing each
-// stage concurrently. Data flows: source → stage[0] → stage[1] → … → sink.
-type Pipeline struct {
-	stages []PipelineStage
-}
-
-// NewPipeline creates a new Pipeline with the provided stages.
-func NewPipeline(stages ...PipelineStage) *Pipeline {
-	return &Pipeline{stages: stages}
-}
-
-// Run executes the pipeline reading from src and writing final output to dst.
-// Each stage is run in its own goroutine, connected via io.Pipe.
-func (p *Pipeline) Run(ctx context.Context, src io.Reader, dst io.Writer) error {
-	if len(p.stages) == 0 {
-		_, err := io.Copy(dst, src)
-		return err
+	// Start the dump.
+	dumpReader, err := d.Dump(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("pipeline: start dump: %w", err)
 	}
 
-	// Build a chain of pipes.
-	readers := make([]io.Reader, len(p.stages))
-	writers := make([]io.WriteCloser, len(p.stages))
-
-	readers[0] = src
-	for i := 1; i < len(p.stages); i++ {
-		pr, pw := io.Pipe()
-		readers[i] = pr
-		writers[i-1] = pw
-	}
-	// Last writer goes to dst.
-	writers[len(p.stages)-1] = &nopWriteCloser{dst}
-
-	errCh := make(chan error, len(p.stages))
-
-	for i, stage := range p.stages {
-		i, stage := i, stage
-		r := readers[i]
-		w := writers[i]
-		go func() {
-			err := stage(ctx, r, w)
-			if err != nil {
-				_ = w.Close()
-				errCh <- fmt.Errorf("stage %d: %w", i, err)
-				return
-			}
-			errCh <- w.Close()
-		}()
+	// Wrap the dump reader with the compressor.
+	compressedReader, err := c.Compress(dumpReader)
+	if err != nil {
+		return 0, fmt.Errorf("pipeline: compress: %w", err)
 	}
 
-	// Collect errors from all stages.
-	var firstErr error
-	for range p.stages {
-		if err := <-errCh; err != nil && firstErr == nil {
-			firstErr = err
-		}
+	// Create an io.Pipe so we can stream the compressor output into storage.Put
+	// without buffering everything in memory or on disk.
+	pr, pw := io.Pipe()
+
+	// Goroutine: copy compressed data into the pipe writer.
+	copyErrCh := make(chan error, 1)
+	go func() {
+		_, copyErr := io.Copy(pw, compressedReader)
+		// Close the writer; this signals EOF (or error) to the reader side.
+		pw.CloseWithError(copyErr)
+		copyErrCh <- copyErr
+	}()
+
+	// Upload from the pipe reader side; this blocks until the writer goroutine finishes.
+	slog.Debug("pipeline: uploading", "key", key)
+	size, uploadErr := s.Put(ctx, key, pr)
+	// Drain copy error (writer goroutine should have already finished at this point).
+	copyErr := <-copyErrCh
+
+	if uploadErr != nil {
+		return 0, fmt.Errorf("pipeline: upload: %w", uploadErr)
 	}
-	return firstErr
+	if copyErr != nil {
+		return 0, fmt.Errorf("pipeline: compress copy: %w", copyErr)
+	}
+
+	slog.Debug("pipeline: direct-stream complete", "key", key, "size_bytes", size)
+	return size, nil
 }
-
-// nopWriteCloser wraps an io.Writer with a no-op Close method.
-type nopWriteCloser struct {
-	io.Writer
-}
-
-func (nopWriteCloser) Close() error { return nil }
