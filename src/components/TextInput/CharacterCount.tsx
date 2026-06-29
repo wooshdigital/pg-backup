@@ -1,17 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './CharacterCount.module.css';
-import { classNames } from '../../utils/classNames';
 
 export interface CharacterCountProps {
-  /** Current number of characters */
+  /** Current length of the input value */
   current: number;
   /** Maximum allowed characters */
   max: number;
-  /** Additional class name */
+  /** Custom class name */
   className?: string;
   /**
-   * Fraction of max at which the count turns "warning" colour.
-   * Defaults to 0.8 (80 %).
+   * Threshold (0–1) at which to show a warning color.
+   * Defaults to 0.8 (80% used).
    */
   warningThreshold?: number;
 }
@@ -24,33 +23,45 @@ export const CharacterCount: React.FC<CharacterCountProps> = ({
 }) => {
   const remaining = max - current;
   const ratio = current / max;
-  const isWarning = ratio >= warningThreshold && ratio < 1;
+
   const isError = remaining < 0;
+  const isWarning = !isError && ratio >= warningThreshold;
 
-  const countClass = classNames(
-    styles.count,
-    isWarning ? styles.warning : undefined,
-    isError ? styles.error : undefined,
-    className,
-  );
+  const stateClass = isError
+    ? styles['count--error']
+    : isWarning
+    ? styles['count--warning']
+    : '';
 
-  // Human-friendly announcement
-  const label =
-    remaining >= 0
-      ? `${remaining} of ${max} characters remaining`
-      : `${Math.abs(remaining)} characters over limit`;
+  const classes = [styles.count, stateClass, className ?? '']
+    .filter(Boolean)
+    .join(' ');
+
+  // Announce remaining count to screen readers
+  const [announcement, setAnnouncement] = useState('');
+
+  useEffect(() => {
+    if (remaining < 0) {
+      setAnnouncement(`${Math.abs(remaining)} characters over the limit`);
+    } else {
+      setAnnouncement(`${remaining} of ${max} characters remaining`);
+    }
+  }, [remaining, max]);
 
   return (
-    <span
-      className={countClass}
-      aria-live="polite"
-      aria-atomic="true"
-      role="status"
-    >
-      <span className={styles.visualLabel}>{label}</span>
-      {/* Numeric summary visible to sighted users */}
-      <span aria-hidden="true" className={styles.numeric}>
-        {current}/{max}
+    <span className={classes} aria-hidden="true">
+      <span
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className={styles['sr-only']}
+      >
+        {announcement}
+      </span>
+      <span aria-hidden="true">
+        {remaining < 0
+          ? `${Math.abs(remaining)} over limit`
+          : `${remaining} of ${max} remaining`}
       </span>
     </span>
   );

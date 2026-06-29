@@ -4,170 +4,201 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { axe, toHaveNoViolations } from 'jest-axe';
 import { Textarea } from './Textarea';
-import { CharacterCount } from '../TextInput/CharacterCount';
-import { FormField } from '../FormField';
-import { Label } from '../Label';
+import { FormFieldContext } from '../FormField/FormFieldContext';
 
 expect.extend(toHaveNoViolations);
 
-// ── Mock ResizeObserver ────────────────────────────────────────────────────
+function renderWithFieldCtx(
+  ui: React.ReactElement,
+  ctx: Partial<React.ContextType<typeof FormFieldContext>> = {}
+) {
+  const defaultCtx = {
+    inputId: 'test-textarea',
+    helperId: undefined,
+    errorId: undefined,
+    hasError: false,
+    required: false,
+    ...ctx,
+  };
+  return render(
+    <FormFieldContext.Provider value={defaultCtx}>
+      {ui}
+    </FormFieldContext.Provider>
+  );
+}
 
-let observerCallback: ResizeObserverCallback | null = null;
-
+// Mock ResizeObserver
 class MockResizeObserver {
-  constructor(cb: ResizeObserverCallback) {
-    observerCallback = cb;
-  }
+  private callback: ResizeObserverCallback;
   observe = vi.fn();
   unobserve = vi.fn();
   disconnect = vi.fn();
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+
+  trigger(entries: ResizeObserverEntry[] = []) {
+    this.callback(entries, this as unknown as ResizeObserver);
+  }
 }
 
-beforeEach(() => {
-  vi.stubGlobal('ResizeObserver', MockResizeObserver);
-});
+describe('Textarea', () => {
+  let originalResizeObserver: typeof ResizeObserver;
+  let mockObserverInstance: MockResizeObserver;
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-  observerCallback = null;
-});
-
-// ── Accessibility ──────────────────────────────────────────────────────────
-
-describe('Textarea – accessibility', () => {
-  it('has no axe violations in default state', async () => {
-    const { container } = render(
-      <FormField>
-        <Label htmlFor="ta-1">Description</Label>
-        <Textarea id="ta-1" placeholder="Enter description" />
-      </FormField>,
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
+  beforeEach(() => {
+    originalResizeObserver = global.ResizeObserver;
+    global.ResizeObserver = vi.fn((cb) => {
+      mockObserverInstance = new MockResizeObserver(cb);
+      return mockObserverInstance;
+    }) as unknown as typeof ResizeObserver;
   });
 
-  it('has no axe violations in error state', async () => {
-    const { container } = render(
-      <FormField hasError errorId="ta-err">
-        <Label htmlFor="ta-2">Notes</Label>
-        <Textarea id="ta-2" />
-        <span id="ta-err">This field is required.</span>
-      </FormField>,
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-});
-
-// ── ARIA wiring ────────────────────────────────────────────────────────────
-
-describe('Textarea – ARIA wiring', () => {
-  it('sets aria-invalid when hasError context is true', () => {
-    render(
-      <FormField hasError>
-        <Textarea aria-label="Notes" />
-      </FormField>,
-    );
-    expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'true');
+  afterEach(() => {
+    global.ResizeObserver = originalResizeObserver;
   });
 
-  it('combines helperId and errorId in aria-describedby', () => {
-    render(
-      <FormField helperId="h1" errorId="e1">
-        <Textarea aria-label="Notes" />
-      </FormField>,
-    );
-    const describedBy = screen.getByRole('textbox').getAttribute('aria-describedby') ?? '';
-    expect(describedBy).toContain('h1');
-    expect(describedBy).toContain('e1');
+  it('renders a textarea element', () => {
+    render(<Textarea aria-label="Description" />);
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
   });
 
-  it('merges caller-supplied aria-describedby with context ids', () => {
-    render(
-      <FormField helperId="h2">
-        <Textarea aria-label="Notes" aria-describedby="extra-id" />
-      </FormField>,
-    );
-    const describedBy = screen.getByRole('textbox').getAttribute('aria-describedby') ?? '';
-    expect(describedBy).toContain('h2');
-    expect(describedBy).toContain('extra-id');
-  });
-});
-
-// ── AutoResize ─────────────────────────────────────────────────────────────
-
-describe('Textarea – autoResize', () => {
-  it('does not apply auto-resize style when autoResize is false', () => {
-    render(<Textarea aria-label="Notes" />);
-    const ta = screen.getByRole('textbox') as HTMLTextAreaElement;
-    expect(ta.style.minHeight).toBe('');
+  it('passes through placeholder', () => {
+    render(<Textarea aria-label="Description" placeholder="Write here..." />);
+    expect(screen.getByPlaceholderText('Write here...')).toBeInTheDocument();
   });
 
-  it('applies minHeight style when autoResize is true', () => {
-    render(<Textarea aria-label="Notes" autoResize minHeight={120} />);
-    const ta = screen.getByRole('textbox') as HTMLTextAreaElement;
-    expect(ta.style.minHeight).toBe('120px');
-  });
-
-  it('calls resize logic on input change', async () => {
+  it('works in controlled mode', async () => {
     const user = userEvent.setup();
-    render(<Textarea aria-label="Notes" autoResize />);
-    const ta = screen.getByRole('textbox');
-    await user.type(ta, 'Hello');
-    // No crash = pass; height is managed via style property
-    expect(ta).toBeInTheDocument();
-  });
+    const onChange = vi.fn();
 
-  it('disconnects ResizeObserver on unmount', () => {
-    const { unmount } = render(<Textarea aria-label="Notes" autoResize />);
-    const disconnectSpy = (MockResizeObserver as unknown as { prototype: { disconnect: ReturnType<typeof vi.fn> } }).prototype?.disconnect;
-    unmount();
-    // Observer was created and disconnect should have been called
-    expect(true).toBe(true); // structural test – no errors on unmount
-  });
-});
-
-// ── Controlled / Uncontrolled ──────────────────────────────────────────────
-
-describe('Textarea – controlled/uncontrolled', () => {
-  it('renders controlled value', () => {
-    render(<Textarea aria-label="Notes" value="initial" onChange={() => {}} />);
-    expect(screen.getByRole('textbox')).toHaveValue('initial');
-  });
-
-  it('updates via uncontrolled defaultValue', async () => {
-    const user = userEvent.setup();
-    render(<Textarea aria-label="Notes" defaultValue="start" />);
-    const ta = screen.getByRole('textbox');
-    await user.clear(ta);
-    await user.type(ta, 'updated');
-    expect(ta).toHaveValue('updated');
-  });
-});
-
-// ── CharacterCount integration ─────────────────────────────────────────────
-
-describe('Textarea – with CharacterCount', () => {
-  it('live region updates as user types', async () => {
-    const user = userEvent.setup();
-
-    function Wrapper() {
-      const [val, setVal] = useState('');
+    function Controlled() {
+      const [value, setValue] = useState('');
       return (
-        <>
-          <Textarea
-            aria-label="Bio"
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            maxLength={50}
-          />
-          <CharacterCount current={val.length} max={50} />
-        </>
+        <Textarea
+          aria-label="controlled"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            onChange(e.target.value);
+          }}
+        />
       );
     }
 
-    render(<Wrapper />);
-    await user.type(screen.getByRole('textbox'), 'hello');
-    expect(screen.getByText('5/50')).toBeInTheDocument();
+    render(<Controlled />);
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'hello');
+    expect(onChange).toHaveBeenCalledTimes(5);
+    expect((textarea as HTMLTextAreaElement).value).toBe('hello');
+  });
+
+  it('works in uncontrolled mode', async () => {
+    const user = userEvent.setup();
+    render(<Textarea aria-label="uncontrolled" defaultValue="" />);
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, 'world');
+    expect((textarea as HTMLTextAreaElement).value).toBe('world');
+  });
+
+  it('wires aria-describedby from FormFieldContext', () => {
+    renderWithFieldCtx(<Textarea aria-label="field" />, {
+      helperId: 'helper-1',
+      errorId: 'error-1',
+    });
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).toHaveAttribute('aria-describedby', 'helper-1 error-1');
+  });
+
+  it('sets aria-invalid from context hasError', () => {
+    renderWithFieldCtx(<Textarea aria-label="field" />, { hasError: true });
+    expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('sets aria-required from context', () => {
+    renderWithFieldCtx(<Textarea aria-label="field" />, { required: true });
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'aria-required',
+      'true'
+    );
+  });
+
+  it('merges aria-describedby from context and prop', () => {
+    renderWithFieldCtx(
+      <Textarea aria-label="field" aria-describedby="custom-id" />,
+      { helperId: 'helper-1' }
+    );
+    const textarea = screen.getByRole('textbox');
+    const describedBy = textarea.getAttribute('aria-describedby');
+    expect(describedBy).toContain('helper-1');
+    expect(describedBy).toContain('custom-id');
+  });
+
+  it('is disabled when prop is set', () => {
+    render(<Textarea aria-label="field" disabled />);
+    expect(screen.getByRole('textbox')).toBeDisabled();
+  });
+
+  it('renders with minRows', () => {
+    render(<Textarea aria-label="field" minRows={5} />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.rows).toBe(5);
+  });
+
+  describe('autoResize', () => {
+    it('initialises ResizeObserver when autoResize is true', () => {
+      render(<Textarea aria-label="auto" autoResize />);
+      expect(global.ResizeObserver).toHaveBeenCalled();
+      expect(mockObserverInstance.observe).toHaveBeenCalled();
+    });
+
+    it('does not initialise ResizeObserver when autoResize is false', () => {
+      render(<Textarea aria-label="no-auto" autoResize={false} />);
+      expect(global.ResizeObserver).not.toHaveBeenCalled();
+    });
+
+    it('disconnects ResizeObserver on unmount', () => {
+      const { unmount } = render(<Textarea aria-label="auto" autoResize />);
+      unmount();
+      expect(mockObserverInstance.disconnect).toHaveBeenCalled();
+    });
+
+    it('does not set rows attribute when autoResize is true', () => {
+      render(<Textarea aria-label="auto" autoResize minRows={3} />);
+      const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+      // rows should not be set (undefined -> 0 default)
+      expect(textarea.getAttribute('rows')).toBeNull();
+    });
+  });
+
+  it('has no accessibility violations', async () => {
+    const { container } = render(
+      <div>
+        <label htmlFor="desc-textarea">Description</label>
+        <Textarea id="desc-textarea" placeholder="Enter description" />
+      </div>
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('has no accessibility violations in error state', async () => {
+    const { container } = render(
+      <div>
+        <label htmlFor="err-textarea">Notes</label>
+        <Textarea
+          id="err-textarea"
+          aria-invalid={true}
+          aria-describedby="err-msg"
+          validationState="error"
+        />
+        <span id="err-msg" role="alert">
+          This field is required.
+        </span>
+      </div>
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });

@@ -1,82 +1,99 @@
-/* ── Wrapper ─────────────────────────────────────────────── */
+/* Wrapper */
 .wrapper {
   position: relative;
+  display: flex;
   width: 100%;
-  background: var(--color-surface, #ffffff);
   border: 1.5px solid var(--color-border, #d1d5db);
   border-radius: var(--radius-md, 6px);
+  background-color: var(--color-surface, #ffffff);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* ── Variants ────────────────────────────────────────────── */
-.wrapper.default {
-  border-color: var(--color-border, #d1d5db);
-}
-
-.wrapper.error {
-  border-color: var(--color-error, #ef4444);
-}
-
-.wrapper.success {
-  border-color: var(--color-success, #22c55e);
-}
-
-/* Focus-within ring */
 .wrapper:focus-within {
-  outline: 2px solid var(--color-focus-ring, #3b82f6);
-  outline-offset: 2px;
-  border-color: var(--color-focus, #3b82f6);
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 3px var(--color-primary-ring, rgba(59, 130, 246, 0.3));
+  outline: none;
 }
 
-.wrapper.error:focus-within {
-  outline-color: var(--color-error, #ef4444);
+/* Validation states */
+.wrapper--error {
   border-color: var(--color-error, #ef4444);
 }
 
-.wrapper.success:focus-within {
-  outline-color: var(--color-success, #22c55e);
+.wrapper--error:focus-within {
+  border-color: var(--color-error, #ef4444);
+  box-shadow: 0 0 0 3px var(--color-error-ring, rgba(239, 68, 68, 0.3));
+}
+
+.wrapper--success {
   border-color: var(--color-success, #22c55e);
 }
 
-/* ── Textarea element ────────────────────────────────────── */
-.textarea {
-  display: block;
-  width: 100%;
-  padding: var(--space-2, 8px) var(--space-3, 12px);
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: vertical;
-  font-size: var(--font-size-md, 1rem);
-  line-height: var(--line-height-normal, 1.5);
-  color: var(--color-text, #111827);
-  font-family: inherit;
-  box-sizing: border-box;
-  min-height: 80px;
+.wrapper--success:focus-within {
+  border-color: var(--color-success, #22c55e);
+  box-shadow: 0 0 0 3px var(--color-success-ring, rgba(34, 197, 94, 0.3));
 }
 
-.textarea::placeholder {
-  color: var(--color-text-subtle, #9ca3af);
+.wrapper--warning {
+  border-color: var(--color-warning, #f59e0b);
 }
 
-.textarea:disabled {
-  opacity: 0.5;
+.wrapper--warning:focus-within {
+  border-color: var(--color-warning, #f59e0b);
+  box-shadow: 0 0 0 3px var(--color-warning-ring, rgba(245, 158, 11, 0.3));
+}
+
+/* Disabled state */
+.wrapper--disabled {
+  background-color: var(--color-surface-disabled, #f3f4f6);
+  border-color: var(--color-border-disabled, #e5e7eb);
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
-.textarea[readonly] {
-  background: var(--color-surface-subtle, #f9fafb);
-  cursor: default;
+/* Auto-resize: hide the native resize handle */
+.wrapper--auto-resize {
+  resize: none;
 }
 
-/* ── Auto-resize mode ────────────────────────────────────── */
-.autoResize {
+/* Native textarea */
+.textarea {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+  font-size: var(--font-size-base, 1rem);
+  line-height: var(--line-height-normal, 1.5);
+  color: var(--color-text, #111827);
+  font-family: inherit;
+  resize: vertical;
+  /* Minimum height enforced via rows attribute or inline style from autoResize */
+  min-height: 5rem;
+}
+
+.textarea::placeholder {
+  color: var(--color-text-placeholder, #9ca3af);
+}
+
+.textarea:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-disabled, #6b7280);
+}
+
+/* Auto-resize: disable native resize handle and let JS control height */
+.textarea--auto-resize {
   resize: none;
   overflow: hidden;
-  transition: height 0.1s ease;
+  /* Height is controlled inline by the autoResize JS logic */
 }
 
-/* Custom resize handle (shown only when resize: vertical is active) */
-.textarea:not(.autoResize)::-webkit-resizer {
+/* Resize handle styling for non-auto-resize */
+.textarea:not(.textarea--auto-resize)::-webkit-resizer {
   background-image: none;
+  border: 2px solid var(--color-border, #d1d5db);
+  border-top: none;
+  border-left: none;
 }

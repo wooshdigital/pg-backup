@@ -1,23 +1,23 @@
-// ── Form structure ─────────────────────────────────────────
-export { FormField } from './FormField';
-export type { FormFieldProps } from './FormField';
-export { FormFieldContext } from './FormField';
-export type { FormFieldContextValue } from './FormField';
+// FormField context (foundational – used by inputs)
+export { FormFieldContext } from './FormField/FormFieldContext';
+export type { FormFieldContextValue } from './FormField/FormFieldContext';
 
-// ── Labels & helpers ───────────────────────────────────────
-export { Label } from './Label';
-export type { LabelProps } from './Label';
+// ErrorMessage
+export * from './ErrorMessage';
 
-export { HelperText } from './HelperText';
-export type { HelperTextProps } from './HelperText';
+// FormField
+export * from './FormField';
 
-export { ErrorMessage } from './ErrorMessage';
-export type { ErrorMessageProps } from './ErrorMessage';
+// HelperText
+export * from './HelperText';
 
-// ── Text inputs ────────────────────────────────────────────
+// Label
+export * from './Label';
+
+// TextInput + CharacterCount
 export { TextInput, CharacterCount } from './TextInput';
-export type { TextInputProps, CharacterCountProps } from './TextInput';
+export type { TextInputProps, TextInputInputMode, CharacterCountProps } from './TextInput';
 
-// ── Textarea ───────────────────────────────────────────────
+// Textarea
 export { Textarea } from './Textarea';
 export type { TextareaProps } from './Textarea';

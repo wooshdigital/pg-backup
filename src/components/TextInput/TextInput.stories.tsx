@@ -2,178 +2,204 @@ import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { TextInput } from './TextInput';
 import { CharacterCount } from './CharacterCount';
-import { FormField } from '../FormField';
-import { Label } from '../Label';
-import { HelperText } from '../HelperText';
-import { ErrorMessage } from '../ErrorMessage';
 
 const meta: Meta<typeof TextInput> = {
   title: 'Components/TextInput',
   component: TextInput,
+  tags: ['autodocs'],
   parameters: {
     layout: 'padded',
   },
   argTypes: {
-    variant: {
+    validationState: {
       control: 'select',
-      options: ['default', 'error', 'success'],
+      options: ['none', 'error', 'success', 'warning'],
     },
     disabled: { control: 'boolean' },
     readOnly: { control: 'boolean' },
-    placeholder: { control: 'text' },
+    inputMode: {
+      control: 'select',
+      options: ['text', 'numeric', 'email', 'url', 'tel', 'search', 'decimal'],
+    },
   },
 };
+
 export default meta;
-
 type Story = StoryObj<typeof TextInput>;
-
-// ── Default ───────────────────────────────────────────────────────────────
 
 export const Default: Story = {
   args: {
-    placeholder: 'Enter text…',
-    'aria-label': 'Text field',
+    placeholder: 'Enter text...',
+    'aria-label': 'Default input',
   },
 };
-
-// ── With Label ────────────────────────────────────────────────────────────
 
 export const WithLabel: Story = {
   render: () => (
-    <FormField>
-      <Label htmlFor="field-label">Full name</Label>
-      <TextInput id="field-label" placeholder="Jane Doe" />
-    </FormField>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <label htmlFor="name-input" style={{ fontWeight: 500, fontSize: 14 }}>
+        Full Name
+      </label>
+      <TextInput id="name-input" placeholder="John Doe" />
+    </div>
   ),
 };
 
-// ── With Helper Text ──────────────────────────────────────────────────────
+export const WithError: Story = {
+  render: () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <label htmlFor="email-error" style={{ fontWeight: 500, fontSize: 14 }}>
+        Email
+      </label>
+      <TextInput
+        id="email-error"
+        type="email"
+        defaultValue="not-an-email"
+        validationState="error"
+        aria-invalid={true}
+        aria-describedby="email-error-msg"
+      />
+      <span id="email-error-msg" style={{ color: '#ef4444', fontSize: 13 }}>
+        Please enter a valid email address.
+      </span>
+    </div>
+  ),
+};
+
+export const WithSuccess: Story = {
+  render: () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <label htmlFor="user-success" style={{ fontWeight: 500, fontSize: 14 }}>
+        Username
+      </label>
+      <TextInput
+        id="user-success"
+        defaultValue="johndoe"
+        validationState="success"
+        aria-describedby="user-success-msg"
+      />
+      <span id="user-success-msg" style={{ color: '#22c55e', fontSize: 13 }}>
+        Username is available!
+      </span>
+    </div>
+  ),
+};
 
 export const WithHelper: Story = {
-  render: () => {
-    const helperId = 'helper-1';
-    return (
-      <FormField helperId={helperId}>
-        <Label htmlFor="field-helper">Username</Label>
-        <TextInput id="field-helper" placeholder="johndoe" />
-        <HelperText id={helperId}>Must be unique across the platform.</HelperText>
-      </FormField>
-    );
-  },
+  render: () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <label htmlFor="pass-input" style={{ fontWeight: 500, fontSize: 14 }}>
+        Password
+      </label>
+      <TextInput
+        id="pass-input"
+        type="password"
+        aria-describedby="pass-helper"
+      />
+      <span id="pass-helper" style={{ color: '#6b7280', fontSize: 13 }}>
+        Must be at least 8 characters.
+      </span>
+    </div>
+  ),
 };
-
-// ── With Error ────────────────────────────────────────────────────────────
-
-export const WithError: Story = {
-  render: () => {
-    const errorId = 'error-1';
-    return (
-      <FormField hasError errorId={errorId}>
-        <Label htmlFor="field-error">Email</Label>
-        <TextInput id="field-error" type="email" placeholder="you@example.com" />
-        <ErrorMessage id={errorId}>Please enter a valid email address.</ErrorMessage>
-      </FormField>
-    );
-  },
-};
-
-// ── With Character Count ──────────────────────────────────────────────────
 
 export const WithCharCount: Story = {
   render: () => {
+    const MAX = 100;
     const [value, setValue] = useState('');
-    const MAX = 140;
     return (
-      <FormField>
-        <Label htmlFor="field-charcount">Bio</Label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <label htmlFor="bio-input" style={{ fontWeight: 500, fontSize: 14 }}>
+          Bio
+        </label>
         <TextInput
-          id="field-charcount"
+          id="bio-input"
+          maxLength={MAX}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          maxLength={MAX}
-          placeholder="Tell us about yourself…"
+          placeholder="Tell us about yourself..."
         />
         <CharacterCount current={value.length} max={MAX} />
-      </FormField>
+      </div>
     );
   },
 };
 
-// ── Disabled ──────────────────────────────────────────────────────────────
-
 export const Disabled: Story = {
   args: {
-    placeholder: 'Cannot edit',
-    'aria-label': 'Disabled field',
+    defaultValue: 'Cannot edit this',
     disabled: true,
-    defaultValue: 'Disabled value',
+    'aria-label': 'Disabled input',
   },
 };
-
-// ── Readonly ──────────────────────────────────────────────────────────────
 
 export const Readonly: Story = {
   args: {
-    'aria-label': 'Readonly field',
+    defaultValue: 'Read only value',
     readOnly: true,
-    defaultValue: 'Read-only value',
+    'aria-label': 'Read-only input',
   },
 };
 
-// ── With Prefix Icon ──────────────────────────────────────────────────────
-
-export const WithPrefixIcon: Story = {
+export const WithPrefix: Story = {
   render: () => (
-    <FormField>
-      <Label htmlFor="field-prefix">Search</Label>
-      <TextInput
-        id="field-prefix"
-        placeholder="Search…"
-        prefix={
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        }
-      />
-    </FormField>
+    <TextInput
+      placeholder="0.00"
+      inputMode="decimal"
+      aria-label="Amount"
+      prefix={<span style={{ fontSize: 16 }}>$</span>}
+    />
   ),
 };
 
-// ── With Suffix Icon ──────────────────────────────────────────────────────
-
-export const WithSuffixIcon: Story = {
+export const WithSuffix: Story = {
   render: () => (
-    <FormField>
-      <Label htmlFor="field-suffix">Password</Label>
-      <TextInput
-        id="field-suffix"
-        type="password"
-        placeholder="••••••••"
-        suffix={
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        }
-      />
-    </FormField>
+    <TextInput
+      placeholder="username"
+      aria-label="Username with domain"
+      suffix={<span style={{ fontSize: 14, color: '#6b7280' }}>@example.com</span>}
+    />
   ),
 };
 
-// ── All Input Types ───────────────────────────────────────────────────────
+export const WithPrefixAndSuffix: Story = {
+  render: () => (
+    <TextInput
+      placeholder="0.00"
+      inputMode="decimal"
+      aria-label="Price in USD"
+      prefix={<span style={{ fontSize: 16 }}>$</span>}
+      suffix={<span style={{ fontSize: 13, color: '#6b7280' }}>USD</span>}
+    />
+  ),
+};
 
 export const AllInputTypes: Story = {
   render: () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {(['text', 'email', 'url', 'tel', 'number', 'password', 'search', 'date'] as const).map(
-        (type) => (
-          <FormField key={type}>
-            <Label htmlFor={`type-${type}`}>{type}</Label>
-            <TextInput id={`type-${type}`} type={type} placeholder={`type="${type}"`} />
-          </FormField>
-        ),
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {(
+        [
+          { type: 'text', label: 'Text', placeholder: 'text input' },
+          { type: 'email', label: 'Email', placeholder: 'you@example.com', inputMode: 'email' as const },
+          { type: 'url', label: 'URL', placeholder: 'https://', inputMode: 'url' as const },
+          { type: 'tel', label: 'Phone', placeholder: '+1 (555) 000-0000', inputMode: 'tel' as const },
+          { type: 'number', label: 'Number', placeholder: '42', inputMode: 'numeric' as const },
+          { type: 'password', label: 'Password', placeholder: '••••••••' },
+          { type: 'search', label: 'Search', placeholder: 'Search...', inputMode: 'search' as const },
+        ] as const
+      ).map(({ type, label, placeholder, inputMode }) => (
+        <div key={type} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label htmlFor={`type-${type}`} style={{ fontWeight: 500, fontSize: 14 }}>
+            {label}
+          </label>
+          <TextInput
+            id={`type-${type}`}
+            type={type}
+            placeholder={placeholder}
+            inputMode={inputMode}
+          />
+        </div>
+      ))}
     </div>
   ),
 };

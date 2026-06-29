@@ -1,68 +1,97 @@
 import React, { forwardRef, useContext, useId } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
 import styles from './TextInput.module.css';
-import { classNames } from '../../utils/classNames';
 
-export type InputMode = 'none' | 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url';
+export type TextInputInputMode =
+  | 'none'
+  | 'text'
+  | 'decimal'
+  | 'numeric'
+  | 'tel'
+  | 'search'
+  | 'email'
+  | 'url';
 
-export interface TextInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
-  /** Visual variant */
-  variant?: 'default' | 'error' | 'success';
-  /** Element(s) rendered before the input (e.g. icon) */
+export interface TextInputProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
+  /** Visual state */
+  validationState?: 'error' | 'success' | 'warning' | 'none';
+  /** Slot rendered before the input text */
   prefix?: React.ReactNode;
-  /** Element(s) rendered after the input (e.g. icon) */
+  /** Slot rendered after the input text */
   suffix?: React.ReactNode;
-  /** Override inputMode explicitly */
-  inputMode?: InputMode;
-  /** Extra class for the wrapper div */
+  /** Maps to the inputmode attribute for virtual keyboards */
+  inputMode?: TextInputInputMode;
+  /** Additional class name for the wrapper */
   wrapperClassName?: string;
 }
 
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   (
     {
-      variant,
+      validationState,
       prefix,
       suffix,
-      inputMode,
-      className,
       wrapperClassName,
-      'aria-describedby': ariaDescribedby,
+      className,
+      'aria-describedby': ariaDescribedBy,
       'aria-invalid': ariaInvalid,
       'aria-required': ariaRequired,
+      disabled,
       id: idProp,
       ...rest
     },
-    ref,
+    ref
   ) => {
-    const ctx = useContext(FormFieldContext);
     const generatedId = useId();
-    const id = idProp ?? ctx?.inputId ?? generatedId;
+    const fieldCtx = useContext(FormFieldContext);
 
-    // Build aria-describedby from context + any caller-supplied value
+    const inputId = idProp ?? fieldCtx?.inputId ?? generatedId;
+
+    // Merge aria-describedby from context and prop
     const describedByParts: string[] = [];
-    if (ctx?.helperId) describedByParts.push(ctx.helperId);
-    if (ctx?.errorId) describedByParts.push(ctx.errorId);
-    if (ariaDescribedby) describedByParts.push(ariaDescribedby);
-    const computedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
+    if (fieldCtx?.helperId) describedByParts.push(fieldCtx.helperId);
+    if (fieldCtx?.errorId) describedByParts.push(fieldCtx.errorId);
+    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
+    const mergedDescribedBy =
+      describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
 
-    const isInvalid = ariaInvalid ?? (ctx?.hasError ? true : undefined);
-    const isRequired = ariaRequired ?? ctx?.required ?? undefined;
+    const isInvalid =
+      ariaInvalid !== undefined
+        ? ariaInvalid
+        : fieldCtx?.hasError
+        ? true
+        : undefined;
 
-    const resolvedVariant = variant ?? (ctx?.hasError ? 'error' : 'default');
+    const isRequired =
+      ariaRequired !== undefined
+        ? ariaRequired
+        : fieldCtx?.required
+        ? true
+        : undefined;
 
-    const wrapperClass = classNames(
+    const resolvedValidationState =
+      validationState ?? (fieldCtx?.hasError ? 'error' : 'none');
+
+    const wrapperClasses = [
       styles.wrapper,
-      prefix ? styles.hasPrefix : undefined,
-      suffix ? styles.hasSuffix : undefined,
-      styles[resolvedVariant] ?? undefined,
-      wrapperClassName,
-    );
+      resolvedValidationState !== 'none'
+        ? styles[`wrapper--${resolvedValidationState}`]
+        : '',
+      disabled ? styles['wrapper--disabled'] : '',
+      prefix ? styles['wrapper--has-prefix'] : '',
+      suffix ? styles['wrapper--has-suffix'] : '',
+      wrapperClassName ?? '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
-    const inputClass = classNames(styles.input, className);
+    const inputClasses = [styles.input, className ?? '']
+      .filter(Boolean)
+      .join(' ');
 
     return (
-      <div className={wrapperClass}>
+      <div className={wrapperClasses}>
         {prefix && (
           <span className={styles.prefix} aria-hidden="true">
             {prefix}
@@ -70,10 +99,10 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
         )}
         <input
           ref={ref}
-          id={id}
-          className={inputClass}
-          inputMode={inputMode}
-          aria-describedby={computedDescribedBy}
+          id={inputId}
+          className={inputClasses}
+          disabled={disabled}
+          aria-describedby={mergedDescribedBy}
           aria-invalid={isInvalid}
           aria-required={isRequired}
           {...rest}
@@ -85,7 +114,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
         )}
       </div>
     );
-  },
+  }
 );
 
 TextInput.displayName = 'TextInput';
