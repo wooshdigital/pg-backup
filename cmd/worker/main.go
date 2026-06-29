@@ -4,90 +4,84 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 
-	"github.com/smnzlnsk/backup-worker/internal/backup"
-	"github.com/smnzlnsk/backup-worker/internal/compress"
-	"github.com/smnzlnsk/backup-worker/internal/config"
-	"github.com/smnzlnsk/backup-worker/internal/dumper"
-	"github.com/smnzlnsk/backup-worker/internal/storage"
+	"github.com/soapboxsys/ombudslib/internal/backup"
+	"github.com/soapboxsys/ombudslib/internal/compress"
+	"github.com/soapboxsys/ombudslib/internal/config"
+	"github.com/soapboxsys/ombudslib/internal/dumper"
+	"github.com/soapboxsys/ombudslib/internal/storage"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
-	slog.SetDefault(logger)
 
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error("failed to load config", "error", err)
+		logger.Error("failed to load config", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	ctx := context.Background()
 
-	// Build dumper
-	d, err := dumper.New(dumper.Config{DSN: cfg.Database.DSN})
+	// Build dumper from DSN
+	pgDumper, err := dumper.New(cfg.Database.DSN)
 	if err != nil {
-		logger.Error("failed to create dumper", "error", err)
+		logger.Error("failed to create dumper", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
 	// Build compressor
-	factory := compress.NewFactory()
-	c, err := factory.Get(cfg.Compress.Algorithm)
+	compressor, err := compress.NewFromConfig(cfg.Compression)
 	if err != nil {
-		logger.Error("failed to create compressor", "error", err)
+		logger.Error("failed to create compressor", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
 	// Build storage backend
-	s3Cfg := storage.S3Config{
-		Bucket:          cfg.Storage.Bucket,
-		Region:          cfg.Storage.Region,
-		Endpoint:        cfg.Storage.Endpoint,
-		AccessKeyID:     cfg.Storage.AccessKeyID,
-		SecretAccessKey: cfg.Storage.SecretAccessKey,
-		ForcePathStyle:  cfg.Storage.ForcePathStyle,
-	}
-	s3Backend, err := storage.NewS3(ctx, s3Cfg)
-	if err != nil {
-		logger.Error("failed to create S3 backend", "error", err)
+	var storageBackend storage.Backend
+	switch cfg.Storage.Type {
+	case "s3":
+		storageBackend, err = storage.NewS3(ctx, storage.S3Config{
+			Bucket:          cfg.Storage.S3.Bucket,
+			Endpoint:        cfg.Storage.S3.Endpoint,
+			Region:          cfg.Storage.S3.Region,
+			AccessKeyID:     cfg.Storage.S3.AccessKeyID,
+			SecretAccessKey: cfg.Storage.S3.SecretAccessKey,
+			ForcePathStyle:  cfg.Storage.S3.ForcePathStyle,
+		})
+		if err != nil {
+			logger.Error("failed to create S3 backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	case "local":
+		storageBackend, err = storage.NewLocal(cfg.Storage.Local.Path)
+		if err != nil {
+			logger.Error("failed to create local backend", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	default:
+		logger.Error("unknown storage type", slog.String("type", cfg.Storage.Type))
 		os.Exit(1)
 	}
 
-	// Ensure bucket exists
-	if err := s3Backend.EnsureBucket(ctx); err != nil {
-		logger.Error("failed to ensure S3 bucket", "error", err)
-		os.Exit(1)
-	}
+	// Construct and run backup job
+	job := backup.NewJob(pgDumper, compressor, storageBackend, cfg.StreamDirect, logger)
 
-	// Build and run backup job
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   c,
-		Storage:      s3Backend,
-		StreamDirect: cfg.Backup.StreamDirect,
-		Logger:       logger,
-	}
-
-	logger.Info("starting backup job", "stream_direct", cfg.Backup.StreamDirect)
-
+	logger.Info("starting backup job")
 	result := job.Run(ctx)
-	if result.Err != nil {
+	if result.Error != nil {
 		logger.Error("backup job failed",
-			"error", result.Err,
-			"duration", result.Duration,
+			slog.String("error", result.Error.Error()),
+			slog.Duration("duration", result.Duration),
 		)
 		os.Exit(1)
 	}
 
 	logger.Info("backup job succeeded",
-		"key", result.Key,
-		"size_bytes", result.Size,
-		"duration", result.Duration,
+		slog.String("key", result.Key),
+		slog.Int64("size_bytes", result.Size),
+		slog.Duration("duration", result.Duration),
 	)
 }

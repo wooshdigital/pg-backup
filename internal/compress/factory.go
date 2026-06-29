@@ -1,26 +1,27 @@
 package compress
 
-import "fmt"
+import (
+	"fmt"
+)
 
-// Factory creates Compressor instances by name.
-type Factory struct{}
-
-// NewFactory returns a new Factory.
-func NewFactory() *Factory {
-	return &Factory{}
+// Config holds configuration for selecting and tuning the compressor.
+type Config struct {
+	Algorithm string `yaml:"algorithm"`
+	Level     int    `yaml:"level"`
 }
 
-// Get returns a Compressor for the given algorithm name.
-// Supported: "gzip", "zstd", "none".
-func (f *Factory) Get(algorithm string) (Compressor, error) {
-	switch algorithm {
+// NewFromConfig creates a Compressor from a Config.
+func NewFromConfig(cfg Config) (Compressor, error) {
+	switch cfg.Algorithm {
 	case "gzip", "":
-		return &GzipCompressor{}, nil
+		level := cfg.Level
+		if level == 0 {
+			level = DefaultLevel
+		}
+		return NewGzip(level)
 	case "zstd":
-		return &ZstdCompressor{}, nil
-	case "none":
-		return &NoopCompressor{}, nil
+		return NewZstd(cfg.Level)
 	default:
-		return nil, fmt.Errorf("unsupported compression algorithm: %q", algorithm)
+		return nil, fmt.Errorf("unknown compression algorithm: %q", cfg.Algorithm)
 	}
 }

@@ -2,6 +2,5 @@
 
 package backup_test
 
-// This file intentionally left minimal. Integration helpers are co-located with
-// integration_test.go. Additional shared helpers can be added here as the
-// integration suite grows.
+// This file contains shared helpers for integration tests in the backup package.
+// Actual integration test logic lives in integration_test.go.

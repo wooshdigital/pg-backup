@@ -1,19 +1,25 @@
+# Example configuration for the backup worker.
+# Copy this file to config.yaml and fill in your values.
+
 database:
   dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
 storage:
-  bucket: "my-backups"
-  region: "us-east-1"
-  # endpoint is optional; set for LocalStack or other S3-compatible services
-  endpoint: ""
-  access_key_id: ""
-  secret_access_key: ""
-  force_path_style: false
+  type: s3   # "s3" or "local"
 
-compress:
-  # Supported algorithms: gzip, zstd, none
-  algorithm: "gzip"
+  s3:
+    bucket: my-backup-bucket
+    region: us-east-1
+    # endpoint: http://localhost:4566   # Override for LocalStack / MinIO
+    # access_key_id: test
+    # secret_access_key: test
+    # force_path_style: true
 
-backup:
-  # stream_direct: if true, skip the temp file and pipe dump→compress→upload directly
-  stream_direct: false
+  local:
+    path: /var/backups
+
+compression:
+  algorithm: gzip   # "gzip" or "zstd"
+  level: -1         # -1 = default level
+
+# stream_direct: false   # Set to true to skip temp file and stream directly to storage

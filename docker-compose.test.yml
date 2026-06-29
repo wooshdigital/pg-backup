@@ -1,16 +1,16 @@
-version: "3.8"
+version: "3.9"
 
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: testuser
-      POSTGRES_PASSWORD: testpassword
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: testdb
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,15 +19,31 @@ services:
   localstack:
     image: localstack/localstack:3
     environment:
-      - SERVICES=s3
-      - DEFAULT_REGION=us-east-1
-      - AWS_DEFAULT_REGION=us-east-1
-      - EDGE_PORT=4566
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      LOCALSTACK_HOST: localstack
     ports:
       - "4566:4566"
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:4566/_localstack/health | grep '\"s3\": \"available\"'"]
+      test: ["CMD-SHELL", "awslocal s3 ls || exit 1"]
       interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 20s
+
+  setup:
+    image: amazon/aws-cli:2.15.0
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: >
+      /bin/sh -c "
+        aws --endpoint-url=http://localstack:4566 s3 mb s3://test-bucket --region us-east-1 &&
+        echo 'Bucket created successfully'
+      "
+    restart: "no"

@@ -6,34 +6,58 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/smnzlnsk/backup-worker/internal/compress"
-	"github.com/smnzlnsk/backup-worker/internal/dumper"
-	"github.com/smnzlnsk/backup-worker/internal/storage"
+	"github.com/soapboxsys/ombudslib/internal/compress"
+	"github.com/soapboxsys/ombudslib/internal/dumper"
+	"github.com/soapboxsys/ombudslib/internal/storage"
 )
 
-// RunStreamPipeline connects pg_dump → compressor → uploader using io.Pipe,
-// avoiding the need for a temporary file on disk.
-func RunStreamPipeline(
-	ctx context.Context,
-	d dumper.Dumper,
-	c compress.Compressor,
-	s storage.Backend,
-	key string,
-	logger *slog.Logger,
-) (int64, error) {
-	// Pipe 1: dump output → compressor input
-	dumpReader, dumpWriter := io.Pipe()
+// Pipeline represents a streaming backup pipeline that connects a Dumper,
+// Compressor, and StorageBackend via io.Pipe without intermediate temp files.
+type Pipeline struct {
+	Dumper     dumper.Dumper
+	Compressor compress.Compressor
+	Storage    storage.Backend
+	Logger     *slog.Logger
+}
 
-	// Pipe 2: compressor output → uploader input
-	uploadReader, uploadWriter := io.Pipe()
+// NewPipeline creates a new streaming Pipeline.
+func NewPipeline(d dumper.Dumper, c compress.Compressor, s storage.Backend, logger *slog.Logger) *Pipeline {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Pipeline{
+		Dumper:     d,
+		Compressor: c,
+		Storage:    s,
+		Logger:     logger,
+	}
+}
+
+// PipelineResult holds the outcome of a streaming pipeline run.
+type PipelineResult struct {
+	Key  string
+	Size int64
+}
+
+// Run executes the streaming pipeline:
+//
+//	pg_dump → [pipe1] → compressor → [pipe2] → storage upload
+func (p *Pipeline) Run(ctx context.Context) (PipelineResult, error) {
+	key := storage.GenerateKey(p.Compressor.Extension())
+
+	// pipe1 connects dumper output to compressor input
+	dumpReader, dumpWriter := io.Pipe()
+	// pipe2 connects compressor output to storage input
+	compReader, compWriter := io.Pipe()
 
 	dumpErrCh := make(chan error, 1)
-	compressErrCh := make(chan error, 1)
+	compErrCh := make(chan error, 1)
 
-	// Stage 1: run pg_dump into dumpWriter
+	// Stage 1: run dump into dumpWriter
 	go func() {
 		defer dumpWriter.Close()
-		if err := d.Dump(ctx, dumpWriter); err != nil {
+		p.Logger.InfoContext(ctx, "pipeline: starting dump stage")
+		if err := p.Dumper.Dump(ctx, dumpWriter); err != nil {
 			dumpWriter.CloseWithError(err)
 			dumpErrCh <- fmt.Errorf("dump stage: %w", err)
 			return
@@ -41,44 +65,42 @@ func RunStreamPipeline(
 		dumpErrCh <- nil
 	}()
 
-	// Stage 2: compress dumpReader output into uploadWriter
+	// Stage 2: compress dumpReader → compWriter
 	go func() {
-		defer uploadWriter.Close()
-		_, err := c.Compress(dumpReader, uploadWriter)
-		if err != nil {
-			dumpReader.CloseWithError(err)
-			uploadWriter.CloseWithError(err)
-			compressErrCh <- fmt.Errorf("compress stage: %w", err)
+		defer compWriter.Close()
+		p.Logger.InfoContext(ctx, "pipeline: starting compress stage")
+		if err := p.Compressor.Compress(ctx, dumpReader, compWriter); err != nil {
+			compWriter.CloseWithError(err)
+			compErrCh <- fmt.Errorf("compress stage: %w", err)
 			return
 		}
-		compressErrCh <- nil
+		compErrCh <- nil
 	}()
 
-	// Stage 3: upload from uploadReader (blocking)
-	if logger != nil {
-		logger.Info("streaming upload started", "key", key)
-	}
-	size, uploadErr := s.Upload(ctx, key, uploadReader)
-	// Drain the pipe so goroutines can finish
+	// Stage 3: upload compReader to storage (runs in current goroutine)
+	p.Logger.InfoContext(ctx, "pipeline: starting upload stage", slog.String("key", key))
+	size, uploadErr := p.Storage.Upload(ctx, key, compReader)
 	if uploadErr != nil {
-		uploadReader.CloseWithError(uploadErr)
+		compReader.CloseWithError(uploadErr)
+		// drain channels
+		<-dumpErrCh
+		<-compErrCh
+		return PipelineResult{}, fmt.Errorf("upload stage: %w", uploadErr)
 	}
 
-	compressErr := <-compressErrCh
-	dumpErr := <-dumpErrCh
-
-	if dumpErr != nil {
-		return 0, dumpErr
+	// Collect errors from goroutines
+	if err := <-compErrCh; err != nil {
+		<-dumpErrCh
+		return PipelineResult{}, err
 	}
-	if compressErr != nil {
-		return 0, compressErr
-	}
-	if uploadErr != nil {
-		return 0, fmt.Errorf("upload stage: %w", uploadErr)
+	if err := <-dumpErrCh; err != nil {
+		return PipelineResult{}, err
 	}
 
-	if logger != nil {
-		logger.Info("streaming upload complete", "key", key, "bytes", size)
-	}
-	return size, nil
+	p.Logger.InfoContext(ctx, "pipeline: all stages complete",
+		slog.String("key", key),
+		slog.Int64("size_bytes", size),
+	)
+
+	return PipelineResult{Key: key, Size: size}, nil
 }

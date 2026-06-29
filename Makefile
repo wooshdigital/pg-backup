@@ -1,33 +1,55 @@
-.PHONY: build test test-unit test-integration lint docker-up docker-down
+.PHONY: build test test-unit test-integration lint fmt vet docker-test clean
 
-# Build the worker binary
+BINARY := bin/worker
+GOFLAGS := -trimpath
+LDFLAGS := -s -w
+
+## build: Compile the worker binary
 build:
-	go build -o bin/worker ./cmd/worker
+	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/worker
 
-# Run all unit tests (no integration tag)
+## test-unit: Run unit tests (no external dependencies)
 test-unit:
-	go test ./... -count=1 -race
+	go test -race -count=1 ./...
 
-# Run integration tests (requires docker-compose.test.yml services to be running)
-test-integration: docker-up
-	POSTGRES_DSN="postgres://testuser:testpassword@localhost:5432/testdb?sslmode=disable" \
+## test: Alias for test-unit
+test: test-unit
+
+## test-integration: Run integration tests using docker-compose
+test-integration:
+	docker compose -f docker-compose.test.yml up -d --wait postgres localstack setup
+	@echo "Waiting for services to be healthy..."
+	@sleep 5
+	POSTGRES_DSN="postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable" \
+	S3_BUCKET="test-bucket" \
 	S3_ENDPOINT="http://localhost:4566" \
-	S3_BUCKET="test-backups" \
 	AWS_REGION="us-east-1" \
 	AWS_ACCESS_KEY="test" \
 	AWS_SECRET_KEY="test" \
-	go test ./... -tags integration -count=1 -v -timeout 5m
+	go test -v -race -count=1 -tags=integration ./internal/backup/...
+	docker compose -f docker-compose.test.yml down
 
-# Alias
-test: test-unit
+## docker-test: Run all tests inside Docker
+docker-test:
+	docker compose -f docker-compose.test.yml run --rm setup
+	$(MAKE) test-integration
 
-# Spin up the test services
-docker-up:
-	docker compose -f docker-compose.test.yml up -d --wait
-
-# Tear down the test services
-docker-down:
-	docker compose -f docker-compose.test.yml down -v
-
+## lint: Run golangci-lint
 lint:
 	golangci-lint run ./...
+
+## fmt: Format Go source files
+fmt:
+	gofmt -w .
+
+## vet: Run go vet
+vet:
+	go vet ./...
+
+## clean: Remove build artifacts
+clean:
+	rm -rf bin/
+
+## help: Show this help
+help:
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## //'

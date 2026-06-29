@@ -4,200 +4,157 @@ package backup_test
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/smnzlnsk/backup-worker/internal/backup"
-	"github.com/smnzlnsk/backup-worker/internal/compress"
-	"github.com/smnzlnsk/backup-worker/internal/dumper"
-	"github.com/smnzlnsk/backup-worker/internal/storage"
+	"github.com/soapboxsys/ombudslib/internal/backup"
+	"github.com/soapboxsys/ombudslib/internal/compress"
+	"github.com/soapboxsys/ombudslib/internal/dumper"
+	"github.com/soapboxsys/ombudslib/internal/storage"
 )
 
-// TestBackupJob_Integration runs a full backup cycle against a real Postgres
-// and LocalStack S3 instance. It expects the services defined in
-// docker-compose.test.yml to already be running (started by the Makefile target).
+// TestBackupJob_Integration runs a full backup cycle using real Postgres
+// and LocalStack containers. It requires the following environment variables
+// to be set (typically provided by docker-compose.test.yml):
 //
-// Required environment variables (set by docker-compose or CI):
-//
-//	POSTGRES_DSN   - e.g. postgres://user:pass@localhost:5432/testdb?sslmode=disable
+//	POSTGRES_DSN   - e.g. postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
+//	S3_BUCKET      - e.g. test-bucket
 //	S3_ENDPOINT    - e.g. http://localhost:4566
-//	S3_BUCKET      - e.g. test-backups
 //	AWS_REGION     - e.g. us-east-1
 //	AWS_ACCESS_KEY - e.g. test
 //	AWS_SECRET_KEY - e.g. test
 func TestBackupJob_Integration(t *testing.T) {
-	pgDSN := os.Getenv("POSTGRES_DSN")
-	if pgDSN == "" {
-		t.Skip("POSTGRES_DSN not set; skipping integration test")
-	}
-
-	s3Endpoint := os.Getenv("S3_ENDPOINT")
-	if s3Endpoint == "" {
-		t.Skip("S3_ENDPOINT not set; skipping integration test")
-	}
-
-	bucket := os.Getenv("S3_BUCKET")
-	if bucket == "" {
-		bucket = "test-backups"
-	}
-
-	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = "us-east-1"
-	}
-
-	accessKey := os.Getenv("AWS_ACCESS_KEY")
-	secretKey := os.Getenv("AWS_SECRET_KEY")
-	if accessKey == "" {
-		accessKey = "test"
-	}
-	if secretKey == "" {
-		secretKey = "test"
-	}
+	pgDSN := requireEnv(t, "POSTGRES_DSN")
+	s3Bucket := requireEnv(t, "S3_BUCKET")
+	s3Endpoint := requireEnv(t, "S3_ENDPOINT")
+	awsRegion := requireEnv(t, "AWS_REGION")
+	awsAccess := requireEnv(t, "AWS_ACCESS_KEY")
+	awsSecret := requireEnv(t, "AWS_SECRET_KEY")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	// Build dumper
-	d, err := dumper.New(dumper.Config{DSN: pgDSN})
+	pgDumper, err := dumper.New(pgDSN)
 	if err != nil {
 		t.Fatalf("failed to create dumper: %v", err)
 	}
 
 	// Build compressor (gzip)
-	c, err := compress.NewFactory().Get("gzip")
+	gzipCompressor, err := compress.NewGzip(compress.DefaultLevel)
 	if err != nil {
 		t.Fatalf("failed to create compressor: %v", err)
 	}
 
-	// Build S3 storage backend (pointing at LocalStack)
-	s3Cfg := storage.S3Config{
-		Bucket:          bucket,
-		Region:          region,
+	// Build S3 storage backend
+	s3Backend, err := storage.NewS3(ctx, storage.S3Config{
+		Bucket:          s3Bucket,
 		Endpoint:        s3Endpoint,
-		AccessKeyID:     accessKey,
-		SecretAccessKey: secretKey,
+		Region:          awsRegion,
+		AccessKeyID:     awsAccess,
+		SecretAccessKey: awsSecret,
 		ForcePathStyle:  true,
-	}
-	s3Backend, err := storage.NewS3(ctx, s3Cfg)
+	})
 	if err != nil {
 		t.Fatalf("failed to create S3 backend: %v", err)
 	}
 
-	// Ensure bucket exists (LocalStack does not pre-create buckets)
-	if err := s3Backend.EnsureBucket(ctx); err != nil {
-		t.Fatalf("failed to ensure bucket: %v", err)
-	}
+	// Run via temp file
+	t.Run("via_temp_file", func(t *testing.T) {
+		job := backup.NewJob(pgDumper, gzipCompressor, s3Backend, false, logger)
+		result := job.Run(ctx)
+		if result.Error != nil {
+			t.Fatalf("backup job failed: %v", result.Error)
+		}
+		t.Logf("backup complete: key=%s size=%d duration=%s", result.Key, result.Size, result.Duration)
+		if result.Key == "" {
+			t.Error("expected non-empty key")
+		}
+		if result.Size == 0 {
+			t.Error("expected non-zero size")
+		}
+	})
 
-	job := &backup.Job{
-		Dumper:     d,
-		Compressor: c,
-		Storage:    s3Backend,
-		Logger:     logger,
-	}
-
-	result := job.Run(ctx)
-	if result.Err != nil {
-		t.Fatalf("backup job failed: %v", result.Err)
-	}
-
-	t.Logf("Backup completed: key=%s size=%d duration=%s", result.Key, result.Size, result.Duration)
-
-	if result.Key == "" {
-		t.Error("expected non-empty key")
-	}
-	if result.Size <= 0 {
-		t.Error("expected positive upload size")
-	}
-	if result.Duration <= 0 {
-		t.Error("expected positive duration")
-	}
+	// Run via direct stream
+	t.Run("stream_direct", func(t *testing.T) {
+		job := backup.NewJob(pgDumper, gzipCompressor, s3Backend, true, logger)
+		result := job.Run(ctx)
+		if result.Error != nil {
+			t.Fatalf("backup job (stream direct) failed: %v", result.Error)
+		}
+		t.Logf("backup complete (stream): key=%s size=%d duration=%s", result.Key, result.Size, result.Duration)
+		if result.Key == "" {
+			t.Error("expected non-empty key")
+		}
+		if result.Size == 0 {
+			t.Error("expected non-zero size")
+		}
+	})
 }
 
-// TestBackupJob_Integration_StreamDirect mirrors TestBackupJob_Integration but
-// exercises the StreamDirect path.
-func TestBackupJob_Integration_StreamDirect(t *testing.T) {
-	pgDSN := os.Getenv("POSTGRES_DSN")
-	if pgDSN == "" {
-		t.Skip("POSTGRES_DSN not set; skipping integration test")
+func requireEnv(t *testing.T, key string) string {
+	t.Helper()
+	val := os.Getenv(key)
+	if val == "" {
+		t.Skipf("skipping integration test: %s not set", key)
 	}
+	return val
+}
 
-	s3Endpoint := os.Getenv("S3_ENDPOINT")
-	if s3Endpoint == "" {
-		t.Skip("S3_ENDPOINT not set; skipping integration test")
-	}
-
-	bucket := os.Getenv("S3_BUCKET")
-	if bucket == "" {
-		bucket = "test-backups"
-	}
+// TestPipeline_Integration tests the three-stage streaming pipeline.
+func TestPipeline_Integration(t *testing.T) {
+	pgDSN := requireEnv(t, "POSTGRES_DSN")
+	s3Bucket := requireEnv(t, "S3_BUCKET")
+	s3Endpoint := requireEnv(t, "S3_ENDPOINT")
+	awsRegion := requireEnv(t, "AWS_REGION")
+	awsAccess := requireEnv(t, "AWS_ACCESS_KEY")
+	awsSecret := requireEnv(t, "AWS_SECRET_KEY")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	d, err := dumper.New(dumper.Config{DSN: pgDSN})
+	pgDumper, err := dumper.New(pgDSN)
 	if err != nil {
 		t.Fatalf("failed to create dumper: %v", err)
 	}
 
-	c, err := compress.NewFactory().Get("gzip")
+	gzipCompressor, err := compress.NewGzip(compress.DefaultLevel)
 	if err != nil {
 		t.Fatalf("failed to create compressor: %v", err)
 	}
 
-	region := getEnvOrDefault("AWS_REGION", "us-east-1")
-	accessKey := getEnvOrDefault("AWS_ACCESS_KEY", "test")
-	secretKey := getEnvOrDefault("AWS_SECRET_KEY", "test")
-
-	s3Cfg := storage.S3Config{
-		Bucket:          bucket,
-		Region:          region,
+	s3Backend, err := storage.NewS3(ctx, storage.S3Config{
+		Bucket:          s3Bucket,
 		Endpoint:        s3Endpoint,
-		AccessKeyID:     accessKey,
-		SecretAccessKey: secretKey,
+		Region:          awsRegion,
+		AccessKeyID:     awsAccess,
+		SecretAccessKey: awsSecret,
 		ForcePathStyle:  true,
-	}
-	s3Backend, err := storage.NewS3(ctx, s3Cfg)
+	})
 	if err != nil {
 		t.Fatalf("failed to create S3 backend: %v", err)
 	}
 
-	if err := s3Backend.EnsureBucket(ctx); err != nil {
-		t.Fatalf("failed to ensure bucket: %v", err)
+	pipeline := backup.NewPipeline(pgDumper, gzipCompressor, s3Backend, logger)
+	result, err := pipeline.Run(ctx)
+	if err != nil {
+		t.Fatalf("pipeline failed: %v", err)
 	}
-
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   c,
-		Storage:      s3Backend,
-		StreamDirect: true,
-		Logger:       logger,
-	}
-
-	result := job.Run(ctx)
-	if result.Err != nil {
-		t.Fatalf("stream-direct backup job failed: %v", result.Err)
-	}
-
-	t.Logf("Stream-direct backup completed: key=%s size=%d duration=%s", result.Key, result.Size, result.Duration)
-
+	t.Logf("pipeline complete: key=%s size=%d", result.Key, result.Size)
 	if result.Key == "" {
 		t.Error("expected non-empty key")
 	}
-	if result.Size <= 0 {
-		t.Error("expected positive upload size")
+	if result.Size == 0 {
+		t.Error("expected non-zero size")
 	}
 }
 
-func getEnvOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
+// Ensure discarded output doesn't cause issues in non-integration mode.
+var _ io.Writer = io.Discard
