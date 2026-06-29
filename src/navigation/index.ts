@@ -1,3 +1,3 @@
-export { default as RootNavigator } from './RootNavigator';
-export { default as TripDetailTabs } from './TripDetailTabs';
-export { default as TripStackNavigator } from './TripStackNavigator';
+export { RootNavigator } from './RootNavigator';
+export { TripStackNavigator } from './TripStackNavigator';
+export { TripDetailTabs } from './TripDetailTabs';

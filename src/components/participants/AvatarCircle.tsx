@@ -9,8 +9,14 @@ interface AvatarCircleProps {
   fontSize?: number;
 }
 
-export function AvatarCircle({ name, color, size = 44, fontSize = 16 }: AvatarCircleProps) {
+export function AvatarCircle({
+  name,
+  color,
+  size = 44,
+  fontSize,
+}: AvatarCircleProps) {
   const initials = getInitials(name);
+  const computedFontSize = fontSize ?? Math.round(size * 0.38);
 
   return (
     <View
@@ -24,7 +30,9 @@ export function AvatarCircle({ name, color, size = 44, fontSize = 16 }: AvatarCi
         },
       ]}
     >
-      <Text style={[styles.initials, { fontSize }]}>{initials}</Text>
+      <Text style={[styles.initials, { fontSize: computedFontSize }]}>
+        {initials}
+      </Text>
     </View>
   );
 }
@@ -40,5 +48,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
-
-export default AvatarCircle;

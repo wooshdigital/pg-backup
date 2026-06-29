@@ -1,37 +1,56 @@
 import React, { useLayoutEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { useTrips } from '../hooks/useTrips';
 import { TripDetailTabs } from '../navigation/TripDetailTabs';
-import { RootStackParamList } from '../types';
 
-type TripDetailRouteProp = RouteProp<RootStackParamList, 'TripDetail'>;
-type TripDetailNavProp = NativeStackNavigationProp<RootStackParamList, 'TripDetail'>;
+interface TripDetailScreenProps {
+  route: {
+    params: {
+      tripId: string;
+    };
+  };
+  navigation: any;
+}
 
-export function TripDetailScreen() {
-  const route = useRoute<TripDetailRouteProp>();
-  const navigation = useNavigation<TripDetailNavProp>();
-  const { tripId, tripName } = route.params;
+export function TripDetailScreen({ route, navigation }: TripDetailScreenProps) {
+  const { tripId } = route.params;
+  const { getTripById, loading } = useTrips();
+  const trip = getTripById(tripId);
 
   useLayoutEffect(() => {
-    navigation.setOptions({
-      title: tripName,
-      headerBackTitle: 'Trips',
-    });
-  }, [navigation, tripName]);
+    if (trip) {
+      navigation.setOptions({ title: trip.name });
+    }
+  }, [trip, navigation]);
 
-  return (
-    <View style={styles.container}>
-      <TripDetailTabs tripId={tripId} />
-    </View>
-  );
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#6C63FF" />
+      </View>
+    );
+  }
+
+  if (!trip) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Trip not found.</Text>
+      </View>
+    );
+  }
+
+  return <TripDetailTabs tripId={tripId} />;
 }
 
 const styles = StyleSheet.create({
-  container: {
+  centered: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6B7280',
   },
 });
-
-export default TripDetailScreen;

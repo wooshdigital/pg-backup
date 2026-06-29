@@ -1,16 +1,16 @@
 export const AVATAR_COLOR_PALETTE: string[] = [
-  '#F87171', // red-400
-  '#FB923C', // orange-400
-  '#FBBF24', // amber-400
-  '#A3E635', // lime-400
-  '#34D399', // emerald-400
-  '#22D3EE', // cyan-400
-  '#60A5FA', // blue-400
-  '#818CF8', // indigo-400
-  '#C084FC', // purple-400
-  '#F472B6', // pink-400
-  '#2DD4BF', // teal-400
-  '#E879F9', // fuchsia-400
+  '#F94144',
+  '#F3722C',
+  '#F8961E',
+  '#F9C74F',
+  '#90BE6D',
+  '#43AA8B',
+  '#4D908E',
+  '#577590',
+  '#277DA1',
+  '#9B5DE5',
+  '#F15BB5',
+  '#00BBF9',
 ];
 
 export function getRandomAvatarColor(): string {

@@ -1,26 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Trip } from '../types';
 
-export async function loadData<T>(key: string): Promise<T | null> {
+const TRIPS_KEY = '@splitease/trips';
+
+export async function loadTrips(): Promise<Trip[]> {
   try {
-    const raw = await AsyncStorage.getItem(key);
-    if (raw === null) return null;
-    return JSON.parse(raw) as T;
+    const raw = await AsyncStorage.getItem(TRIPS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Trip[];
+    return parsed.map((t) => ({ ...t, participants: t.participants ?? [] }));
   } catch {
-    return null;
+    return [];
   }
 }
 
-export async function saveData<T>(key: string, data: T): Promise<void> {
+export async function saveTrips(trips: Trip[]): Promise<void> {
   try {
-    await AsyncStorage.setItem(key, JSON.stringify(data));
-  } catch {
-    // silently fail
-  }
-}
-
-export async function removeData(key: string): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(key);
+    await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(trips));
   } catch {
     // silently fail
   }

@@ -5,44 +5,40 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
-  ListRenderItemInfo,
+  ListRenderItem,
 } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useParticipants } from '../hooks/useParticipants';
-import { ParticipantRow } from '../components/participants/ParticipantRow';
-import { AddParticipantSheet, AddParticipantSheetRef } from '../components/participants/AddParticipantSheet';
 import { Participant } from '../types';
-import { TripDetailTabParamList } from '../types';
+import {
+  ParticipantRow,
+  AddParticipantSheet,
+  AddParticipantSheetRef,
+} from '../components/participants';
 
-type ParticipantsRouteProp = RouteProp<TripDetailTabParamList, 'Participants'>;
+interface ParticipantsScreenProps {
+  route: {
+    params: {
+      tripId: string;
+    };
+  };
+}
 
-export function ParticipantsScreen() {
-  const route = useRoute<ParticipantsRouteProp>();
+export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
   const { tripId } = route.params;
   const { participants, addParticipant, removeParticipant } = useParticipants(tripId);
   const sheetRef = useRef<AddParticipantSheetRef>(null);
 
-  const handleOpenSheet = useCallback(() => {
-    sheetRef.current?.open();
-  }, []);
-
-  const handleAdd = useCallback(
-    (name: string) => {
-      addParticipant(name);
-    },
-    [addParticipant]
-  );
-
   const handleRemove = useCallback(
-    (participantId: string) => {
-      removeParticipant(participantId);
+    (participant: Participant) => {
+      // Pass empty array – expense validation will be wired in Phase 4
+      removeParticipant(participant.id, []);
     },
     [removeParticipant]
   );
 
-  const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<Participant>) => (
+  const renderItem: ListRenderItem<Participant> = useCallback(
+    ({ item }) => (
       <ParticipantRow participant={item} onRemove={handleRemove} />
     ),
     [handleRemove]
@@ -51,92 +47,100 @@ export function ParticipantsScreen() {
   const keyExtractor = useCallback((item: Participant) => item.id, []);
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={participants}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        contentContainerStyle={participants.length === 0 ? styles.emptyContainer : undefined}
-        ListEmptyComponent={
+    <GestureHandlerRootView style={styles.root}>
+      <View style={styles.container}>
+        {participants.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>👥</Text>
             <Text style={styles.emptyTitle}>No participants yet</Text>
             <Text style={styles.emptySubtitle}>
-              Tap the + button below to add friends to this trip.
+              Tap the + button to add people to this trip.
             </Text>
           </View>
-        }
-      />
+        ) : (
+          <FlatList
+            data={participants}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+        )}
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={handleOpenSheet}
-        accessibilityLabel="Add participant"
-        accessibilityRole="button"
-      >
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
+        {/* FAB */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => sheetRef.current?.open()}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.fabIcon}>+</Text>
+        </TouchableOpacity>
 
-      <AddParticipantSheet ref={sheetRef} onAdd={handleAdd} />
-    </View>
+        <AddParticipantSheet ref={sheetRef} onAdd={addParticipant} />
+      </View>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F8F9FA',
   },
-  emptyContainer: {
-    flex: 1,
+  list: {
+    paddingVertical: 8,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E7EB',
+    marginLeft: 72,
   },
   emptyState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    paddingTop: 80,
+    gap: 8,
   },
   emptyIcon: {
-    fontSize: 56,
-    marginBottom: 16,
+    fontSize: 48,
+    marginBottom: 8,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#1A1A2E',
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
   },
   fab: {
     position: 'absolute',
+    bottom: 28,
     right: 24,
-    bottom: 32,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#6C63FF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#6366F1',
+    elevation: 6,
+    shadowColor: '#6C63FF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
-    elevation: 6,
   },
   fabIcon: {
-    fontSize: 28,
     color: '#FFFFFF',
-    lineHeight: 30,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: '400',
   },
 });
-
-export default ParticipantsScreen;
