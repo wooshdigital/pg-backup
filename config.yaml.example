@@ -1,79 +1,20 @@
-# Example configuration for dbworker.
-# Copy this file to config.yaml and adjust the values for your environment.
+# Example configuration for the backup worker.
+# Copy to config.yaml and fill in your values.
 
 database:
-  # DSN is the full data-source name for the database to be dumped.
-  # Supported formats depend on the dumper in use (PostgreSQL / MySQL).
   dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
-  # Alternatively, supply individual connection parameters:
-  # host: localhost
-  # port: 5432
-  # name: mydb
-  # user: myuser
-  # password: mypassword
-
 storage:
-  # backend selects where dump artifacts are stored.
-  # Supported values: "s3", "local"
-  backend: s3
+  endpoint: ""            # Leave empty for real AWS S3; set for LocalStack, e.g. http://localhost:4566
+  bucket: "my-backups"
+  region: "us-east-1"
+  access_key_id: ""       # Uses AWS_ACCESS_KEY_ID env var if empty
+  secret_access_key: ""   # Uses AWS_SECRET_ACCESS_KEY env var if empty
+  force_path_style: false # Set to true when using LocalStack or MinIO
+  key_prefix: "backups"   # Object key prefix, e.g. "prod/postgres"
 
-  s3:
-    # bucket is the S3 bucket name.
-    bucket: my-backup-bucket
+compress:
+  level: 6  # gzip compression level 1-9 (default 6)
 
-    # region is the AWS region.
-    region: us-east-1
-
-    # endpoint overrides the default S3 endpoint.
-    # Leave empty for real AWS. Set for LocalStack or MinIO:
-    # endpoint: "http://localhost:4566"
-
-    # force_path_style forces path-style S3 URLs (required for LocalStack/MinIO).
-    # force_path_style: true
-
-    # key_template defines the S3 object key naming scheme.
-    # Supported placeholders:
-    #   {db}        – database name
-    #   {date}      – UTC date, YYYY-MM-DD
-    #   {timestamp} – UTC Unix timestamp (seconds)
-    #   {hostname}  – machine hostname
-    key_template: "backups/{db}/{date}/{timestamp}-dump.sql.gz"
-
-    # part_size is the size in bytes of each multipart upload part.
-    # Default: 5242880 (5 MB). Minimum allowed by AWS is 5 MB.
-    part_size: 5242880
-
-    # concurrency is the number of parallel goroutines for multipart upload.
-    # Default: 5
-    concurrency: 5
-
-    # max_retries is the maximum number of retry attempts for transient errors.
-    # Default: 3
-    max_retries: 3
-
-    # credentials contains explicit AWS credentials.
-    # RECOMMENDED: leave this section empty and use IAM roles or environment
-    # variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY) instead.
-    credentials:
-      access_key_id: ""
-      secret_access_key: ""
-
-  # local backend configuration (used in development / testing).
-  local:
-    base_dir: "/tmp/dbworker-backups"
-
-dump:
-  # compress selects the compression algorithm.
-  # Supported values: "gzip", "zstd", "none"
-  compress: gzip
-
-  # schedule is a cron expression controlling dump frequency.
-  # Examples:
-  #   "0 2 * * *"   – daily at 02:00 UTC
-  #   "0 */6 * * *" – every 6 hours
-  schedule: "0 2 * * *"
-
-  # timeout is the maximum allowed duration for a single dump operation.
-  # Uses Go duration syntax: "30m", "1h", "2h30m", etc.
-  timeout: 30m
+# stream_direct: true  # Stream directly from pg_dump → compressor → S3 without a temp file
+stream_direct: false

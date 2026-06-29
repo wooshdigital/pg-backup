@@ -1,49 +1,35 @@
 package compress
 
 import (
+	"compress/gzip"
 	"fmt"
-
-	"github.com/klauspost/compress/zstd"
+	"io"
 )
 
-// Format identifies a compression algorithm.
-type Format string
+const DefaultGzipLevel = gzip.DefaultCompression
 
-const (
-	FormatNone Format = "none"
-	FormatGzip Format = "gzip"
-	FormatZstd Format = "zstd"
-)
-
-// Config holds parameters used by NewCompressor.
-type Config struct {
-	// Format selects the compression algorithm.
-	Format Format
-	// Level is an algorithm-specific compression level. When zero, a sensible
-	// default is chosen for the selected format.
-	Level int
+// gzipCompressor implements Compressor using the standard library gzip package.
+type gzipCompressor struct {
+	level int
 }
 
-// NewCompressor returns a Compressor configured according to cfg.
-// An error is returned if the format is unrecognised.
-func NewCompressor(cfg Config) (Compressor, error) {
-	switch cfg.Format {
-	case FormatNone, "":
-		return &NopCompressor{}, nil
-
-	case FormatGzip:
-		return &GzipCompressor{Level: cfg.Level}, nil
-
-	case FormatZstd:
-		var level zstd.EncoderLevel
-		if cfg.Level == 0 {
-			level = zstd.SpeedDefault
-		} else {
-			level = zstd.EncoderLevelFromZstd(cfg.Level)
-		}
-		return &ZstdCompressor{Level: level}, nil
-
-	default:
-		return nil, fmt.Errorf("compress: unknown format %q (valid: none, gzip, zstd)", cfg.Format)
+// NewGzip returns a Compressor that applies gzip compression at the given
+// level. Use compress.DefaultGzipLevel for the standard default.
+func NewGzip(level int) Compressor {
+	if level == 0 {
+		level = DefaultGzipLevel
 	}
+	return &gzipCompressor{level: level}
 }
+
+// Wrap returns a *gzip.Writer that compresses writes and forwards them to w.
+func (g *gzipCompressor) Wrap(w io.Writer) (io.WriteCloser, error) {
+	gw, err := gzip.NewWriterLevel(w, g.level)
+	if err != nil {
+		return nil, fmt.Errorf("create gzip writer (level %d): %w", g.level, err)
+	}
+	return gw, nil
+}
+
+// Extension returns ".gz".
+func (g *gzipCompressor) Extension() string { return ".gz" }
