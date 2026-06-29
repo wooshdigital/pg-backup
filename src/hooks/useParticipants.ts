@@ -2,13 +2,13 @@ import { useMemo } from 'react';
 import { useTripContext } from '../context/TripContext';
 import { Participant } from '../types';
 
-interface UseParticipantsReturn {
+interface UseParticipantsResult {
   participants: Participant[];
   addParticipant: (name: string) => void;
-  removeParticipant: (participantId: string, expenseParticipantIds?: string[]) => void;
+  removeParticipant: (participantId: string) => void;
 }
 
-export function useParticipants(tripId: string): UseParticipantsReturn {
+export function useParticipants(tripId: string): UseParticipantsResult {
   const { state, addParticipant, removeParticipant } = useTripContext();
 
   const participants = useMemo<Participant[]>(() => {
@@ -19,7 +19,7 @@ export function useParticipants(tripId: string): UseParticipantsReturn {
   return {
     participants,
     addParticipant: (name: string) => addParticipant(tripId, name),
-    removeParticipant: (participantId: string, expenseParticipantIds?: string[]) =>
-      removeParticipant(tripId, participantId, expenseParticipantIds),
+    removeParticipant: (participantId: string) =>
+      removeParticipant(tripId, participantId),
   };
 }

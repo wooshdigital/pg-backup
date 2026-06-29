@@ -16,7 +16,7 @@ export function AvatarCircle({
   fontSize,
 }: AvatarCircleProps) {
   const initials = getInitials(name);
-  const computedFontSize = fontSize ?? Math.round(size * 0.38);
+  const computedFontSize = fontSize ?? Math.floor(size * 0.38);
 
   return (
     <View
@@ -29,6 +29,8 @@ export function AvatarCircle({
           backgroundColor: color,
         },
       ]}
+      accessible
+      accessibilityLabel={`Avatar for ${name}`}
     >
       <Text style={[styles.initials, { fontSize: computedFontSize }]}>
         {initials}
@@ -48,3 +50,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+export default AvatarCircle;
