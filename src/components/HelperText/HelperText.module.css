@@ -1,6 +1,6 @@
 .helperText {
-  margin: 0;
+  display: block;
   font-size: var(--font-size-sm, 0.875rem);
   color: var(--color-text-muted, #6b7280);
-  line-height: 1.4;
+  margin-top: var(--spacing-1, 4px);
 }

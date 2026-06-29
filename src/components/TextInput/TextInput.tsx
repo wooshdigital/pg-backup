@@ -7,14 +7,14 @@ export type InputMode = 'none' | 'text' | 'decimal' | 'numeric' | 'tel' | 'searc
 export interface TextInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
   /** Visual validation state */
   validationState?: 'error' | 'success' | 'warning';
-  /** Element rendered before the input (e.g. an icon) */
+  /** Element to render before the input (icon, symbol, etc.) */
   prefix?: React.ReactNode;
-  /** Element rendered after the input (e.g. an icon or button) */
+  /** Element to render after the input (icon, button, etc.) */
   suffix?: React.ReactNode;
-  /** Maps to the inputmode attribute for virtual keyboard hints */
+  /** Full width */
+  fullWidth?: boolean;
+  /** inputMode for virtual keyboard hint */
   inputMode?: InputMode;
-  /** Additional className for the wrapper div */
-  wrapperClassName?: string;
 }
 
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
@@ -23,55 +23,51 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       validationState,
       prefix,
       suffix,
-      inputMode,
+      fullWidth = false,
       className,
-      wrapperClassName,
-      'aria-describedby': ariaDescribedBy,
-      'aria-invalid': ariaInvalid,
-      'aria-required': ariaRequired,
-      disabled,
-      required,
       id: idProp,
+      'aria-describedby': ariaDescribedByProp,
+      'aria-invalid': ariaInvalidProp,
+      'aria-required': ariaRequiredProp,
+      disabled,
       ...rest
     },
     ref
   ) => {
-    const fallbackId = useId();
+    const generatedId = useId();
     const fieldCtx = useContext(FormFieldContext);
 
-    // Auto-wire from FormFieldContext when available
-    const id = idProp ?? fieldCtx?.inputId ?? fallbackId;
+    const id = idProp ?? fieldCtx?.inputId ?? generatedId;
 
-    // Build aria-describedby by merging context ids + caller-supplied value
+    // Combine describedby from prop and context
     const describedByParts: string[] = [];
+    if (ariaDescribedByProp) describedByParts.push(ariaDescribedByProp);
     if (fieldCtx?.helperId) describedByParts.push(fieldCtx.helperId);
     if (fieldCtx?.errorId) describedByParts.push(fieldCtx.errorId);
-    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
-    const mergedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
+    const ariaDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
 
     const isInvalid =
-      ariaInvalid !== undefined
-        ? ariaInvalid
+      ariaInvalidProp != null
+        ? ariaInvalidProp
         : validationState === 'error' || fieldCtx?.hasError
         ? true
         : undefined;
 
-    const isRequired = ariaRequired !== undefined ? ariaRequired : required ?? fieldCtx?.required;
+    const isRequired = ariaRequiredProp ?? fieldCtx?.required;
 
     const wrapperClasses = [
       styles.wrapper,
+      fullWidth ? styles.fullWidth : '',
+      disabled ? styles.disabled : '',
+      validationState === 'error' || fieldCtx?.hasError ? styles.error : '',
+      validationState === 'success' ? styles.success : '',
+      validationState === 'warning' ? styles.warning : '',
       prefix ? styles.hasPrefix : '',
       suffix ? styles.hasSuffix : '',
-      validationState === 'error' || fieldCtx?.hasError ? styles.stateError : '',
-      validationState === 'success' ? styles.stateSuccess : '',
-      validationState === 'warning' ? styles.stateWarning : '',
-      disabled ? styles.disabled : '',
-      wrapperClassName ?? '',
+      className ?? '',
     ]
       .filter(Boolean)
       .join(' ');
-
-    const inputClasses = [styles.input, className ?? ''].filter(Boolean).join(' ');
 
     return (
       <div className={wrapperClasses}>
@@ -81,16 +77,14 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
           </span>
         )}
         <input
+          {...rest}
           ref={ref}
           id={id}
-          className={inputClasses}
           disabled={disabled}
-          required={required}
-          aria-describedby={mergedDescribedBy}
+          className={styles.input}
+          aria-describedby={ariaDescribedBy}
           aria-invalid={isInvalid}
           aria-required={isRequired}
-          inputMode={inputMode}
-          {...rest}
         />
         {suffix && (
           <span className={styles.suffix} aria-hidden="true">

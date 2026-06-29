@@ -1,18 +1,18 @@
-import React, { forwardRef, useCallback, useContext, useEffect, useId, useRef } from 'react';
+import React, { forwardRef, useContext, useEffect, useId, useRef, useCallback } from 'react';
 import { FormFieldContext } from '../FormField/FormFieldContext';
 import styles from './Textarea.module.css';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   /** Visual validation state */
   validationState?: 'error' | 'success' | 'warning';
-  /** Automatically resize the textarea to fit its content */
+  /** Automatically grow textarea to fit content */
   autoResize?: boolean;
-  /** Minimum height in pixels when autoResize is enabled */
-  minHeight?: number;
-  /** Maximum height in pixels when autoResize is enabled (scrolls beyond this) */
-  maxHeight?: number;
-  /** Additional className for the wrapper div */
-  wrapperClassName?: string;
+  /** Minimum number of visible rows */
+  minRows?: number;
+  /** Maximum number of visible rows (only meaningful with autoResize) */
+  maxRows?: number;
+  /** Full width */
+  fullWidth?: boolean;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
@@ -20,128 +20,134 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     {
       validationState,
       autoResize = false,
-      minHeight = 80,
-      maxHeight,
+      minRows = 3,
+      maxRows,
+      fullWidth = false,
       className,
-      wrapperClassName,
-      'aria-describedby': ariaDescribedBy,
-      'aria-invalid': ariaInvalid,
-      'aria-required': ariaRequired,
-      disabled,
-      required,
       id: idProp,
+      'aria-describedby': ariaDescribedByProp,
+      'aria-invalid': ariaInvalidProp,
+      'aria-required': ariaRequiredProp,
+      disabled,
       style,
       onChange,
       ...rest
     },
-    forwardedRef
+    ref
   ) => {
-    const fallbackId = useId();
+    const generatedId = useId();
     const fieldCtx = useContext(FormFieldContext);
     const internalRef = useRef<HTMLTextAreaElement | null>(null);
-    const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
-    const id = idProp ?? fieldCtx?.inputId ?? fallbackId;
+    const id = idProp ?? fieldCtx?.inputId ?? generatedId;
 
+    // Combine describedby from prop and context
     const describedByParts: string[] = [];
+    if (ariaDescribedByProp) describedByParts.push(ariaDescribedByProp);
     if (fieldCtx?.helperId) describedByParts.push(fieldCtx.helperId);
     if (fieldCtx?.errorId) describedByParts.push(fieldCtx.errorId);
-    if (ariaDescribedBy) describedByParts.push(ariaDescribedBy);
-    const mergedDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
+    const ariaDescribedBy = describedByParts.length > 0 ? describedByParts.join(' ') : undefined;
 
     const isInvalid =
-      ariaInvalid !== undefined
-        ? ariaInvalid
+      ariaInvalidProp != null
+        ? ariaInvalidProp
         : validationState === 'error' || fieldCtx?.hasError
         ? true
         : undefined;
 
-    const isRequired = ariaRequired !== undefined ? ariaRequired : required ?? fieldCtx?.required;
+    const isRequired = ariaRequiredProp ?? fieldCtx?.required;
 
-    // Auto-resize logic
-    const syncHeight = useCallback(
-      (el: HTMLTextAreaElement) => {
-        if (!autoResize) return;
-        el.style.height = 'auto';
-        const scrollHeight = el.scrollHeight;
-        const newHeight = maxHeight ? Math.min(scrollHeight, maxHeight) : scrollHeight;
-        el.style.height = `${Math.max(newHeight, minHeight)}px`;
-        el.style.overflowY = maxHeight && scrollHeight > maxHeight ? 'auto' : 'hidden';
-      },
-      [autoResize, minHeight, maxHeight]
-    );
-
-    // Assign both the forwarded ref and our internal ref
     const setRef = useCallback(
       (node: HTMLTextAreaElement | null) => {
         internalRef.current = node;
-        if (typeof forwardedRef === 'function') {
-          forwardedRef(node);
-        } else if (forwardedRef) {
-          (forwardedRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref) {
+          (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
         }
       },
-      [forwardedRef]
+      [ref]
     );
 
-    // Set up ResizeObserver to sync height when content changes externally
-    useEffect(() => {
-      if (!autoResize || !internalRef.current) return;
-
+    const adjustHeight = useCallback(() => {
       const el = internalRef.current;
-      syncHeight(el);
+      if (!el || !autoResize) return;
 
-      resizeObserverRef.current = new ResizeObserver(() => {
-        syncHeight(el);
+      // Reset height to auto to get the real scrollHeight
+      el.style.height = 'auto';
+
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
+      const paddingTop = parseFloat(getComputedStyle(el).paddingTop) || 0;
+      const paddingBottom = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+      const extraPadding = paddingTop + paddingBottom;
+
+      const minHeight = minRows * lineHeight + extraPadding;
+      const maxHeight = maxRows ? maxRows * lineHeight + extraPadding : Infinity;
+      const newHeight = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
+
+      el.style.height = `${newHeight}px`;
+      el.style.overflowY = maxRows && el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }, [autoResize, minRows, maxRows]);
+
+    // Adjust on mount and when content changes
+    useEffect(() => {
+      adjustHeight();
+    }, [adjustHeight, rest.value, rest.defaultValue]);
+
+    // Use ResizeObserver to detect external size changes
+    useEffect(() => {
+      if (!autoResize) return;
+      const el = internalRef.current;
+      if (!el) return;
+
+      const observer = new ResizeObserver(() => {
+        adjustHeight();
       });
-      resizeObserverRef.current.observe(el);
-
-      return () => {
-        resizeObserverRef.current?.disconnect();
-      };
-    }, [autoResize, syncHeight]);
+      observer.observe(el);
+      return () => observer.disconnect();
+    }, [autoResize, adjustHeight]);
 
     const handleChange = useCallback(
       (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        if (autoResize) syncHeight(e.target);
+        adjustHeight();
         onChange?.(e);
       },
-      [autoResize, syncHeight, onChange]
+      [adjustHeight, onChange]
     );
 
     const wrapperClasses = [
       styles.wrapper,
-      validationState === 'error' || fieldCtx?.hasError ? styles.stateError : '',
-      validationState === 'success' ? styles.stateSuccess : '',
-      validationState === 'warning' ? styles.stateWarning : '',
+      fullWidth ? styles.fullWidth : '',
       disabled ? styles.disabled : '',
+      validationState === 'error' || fieldCtx?.hasError ? styles.error : '',
+      validationState === 'success' ? styles.success : '',
+      validationState === 'warning' ? styles.warning : '',
       autoResize ? styles.autoResize : '',
-      wrapperClassName ?? '',
+      className ?? '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const textareaClasses = [styles.textarea, className ?? ''].filter(Boolean).join(' ');
-
-    const computedStyle: React.CSSProperties = {
-      ...(autoResize ? { minHeight, ...(maxHeight ? { maxHeight } : {}), overflowY: 'hidden' } : {}),
+    const textareaStyle: React.CSSProperties = {
       ...style,
+      ...(minRows ? { minHeight: `calc(${minRows} * 1.5em + 1rem)` } : {}),
+      ...(maxRows && !autoResize ? { maxHeight: `calc(${maxRows} * 1.5em + 1rem)` } : {}),
     };
 
     return (
       <div className={wrapperClasses}>
         <textarea
+          {...rest}
           ref={setRef}
           id={id}
-          className={textareaClasses}
           disabled={disabled}
-          required={required}
-          aria-describedby={mergedDescribedBy}
+          rows={minRows}
+          className={styles.textarea}
+          style={textareaStyle}
+          aria-describedby={ariaDescribedBy}
           aria-invalid={isInvalid}
           aria-required={isRequired}
-          style={computedStyle}
           onChange={handleChange}
-          {...rest}
         />
       </div>
     );

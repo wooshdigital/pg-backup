@@ -2,143 +2,153 @@ import React, { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { TextInput } from './TextInput';
 import { CharacterCount } from './CharacterCount';
+import { FormField } from '../FormField/FormField';
+import { Label } from '../Label/Label';
+import { HelperText } from '../HelperText/HelperText';
+import { ErrorMessage } from '../ErrorMessage/ErrorMessage';
 
 const meta: Meta<typeof TextInput> = {
   title: 'Components/TextInput',
   component: TextInput,
-  parameters: { layout: 'centered' },
-  tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <div style={{ width: 360, fontFamily: 'system-ui, sans-serif' }}>
-        <Story />
-      </div>
-    ),
-  ],
+  parameters: {
+    layout: 'padded',
+  },
+  argTypes: {
+    validationState: {
+      control: 'select',
+      options: [undefined, 'error', 'success', 'warning'],
+    },
+    disabled: { control: 'boolean' },
+    readOnly: { control: 'boolean' },
+    fullWidth: { control: 'boolean' },
+  },
 };
 
 export default meta;
 type Story = StoryObj<typeof TextInput>;
 
-// ── Stories ───────────────────────────────────────────────────────────────────
-
 export const Default: Story = {
   args: {
     placeholder: 'Enter text…',
+    'aria-label': 'Default input',
   },
 };
 
 export const WithLabel: Story = {
   render: () => (
-    <div>
-      <label htmlFor="story-label" style={{ display: 'block', marginBottom: 4, fontWeight: 600 }}>
-        Full name
-      </label>
-      <TextInput id="story-label" placeholder="Jane Smith" />
-    </div>
-  ),
-};
-
-export const WithError: Story = {
-  render: () => (
-    <div>
-      <label htmlFor="story-error" style={{ display: 'block', marginBottom: 4 }}>
-        Email
-      </label>
-      <TextInput id="story-error" validationState="error" defaultValue="not-an-email" aria-describedby="story-err-msg" />
-      <span id="story-err-msg" role="alert" style={{ color: '#dc2626', fontSize: '0.875rem' }}>
-        Please enter a valid email address.
-      </span>
-    </div>
-  ),
-};
-
-export const WithSuccess: Story = {
-  render: () => (
-    <div>
-      <label htmlFor="story-success" style={{ display: 'block', marginBottom: 4 }}>
-        Username
-      </label>
-      <TextInput id="story-success" validationState="success" defaultValue="janedoe" />
-    </div>
+    <FormField>
+      <Label>Full Name</Label>
+      <TextInput placeholder="Jane Doe" />
+    </FormField>
   ),
 };
 
 export const WithHelper: Story = {
   render: () => (
-    <div>
-      <label htmlFor="story-helper" style={{ display: 'block', marginBottom: 4 }}>
-        Password
-      </label>
-      <TextInput id="story-helper" type="password" aria-describedby="story-help" />
-      <span id="story-help" style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-        Minimum 8 characters.
-      </span>
-    </div>
+    <FormField>
+      <Label>Email</Label>
+      <TextInput type="email" placeholder="jane@example.com" />
+      <HelperText>We will never share your email.</HelperText>
+    </FormField>
+  ),
+};
+
+export const WithError: Story = {
+  render: () => (
+    <FormField>
+      <Label>Email</Label>
+      <TextInput type="email" defaultValue="not-an-email" validationState="error" />
+      <ErrorMessage>Please enter a valid email address.</ErrorMessage>
+    </FormField>
+  ),
+};
+
+export const WithSuccess: Story = {
+  render: () => (
+    <FormField>
+      <Label>Username</Label>
+      <TextInput defaultValue="janedoe" validationState="success" />
+      <HelperText>Username is available!</HelperText>
+    </FormField>
   ),
 };
 
 export const WithCharCount: Story = {
   render: () => {
     const MAX = 100;
-    const [val, setVal] = useState('');
+    const [value, setValue] = useState('');
     return (
-      <div>
-        <label htmlFor="story-charcount" style={{ display: 'block', marginBottom: 4 }}>
-          Bio
-        </label>
+      <FormField>
+        <Label>Bio</Label>
         <TextInput
-          id="story-charcount"
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
           maxLength={MAX}
-          aria-describedby="story-cc"
+          placeholder="Tell us about yourself…"
+          fullWidth
         />
-        <CharacterCount id="story-cc" current={val.length} max={MAX} />
-      </div>
+        <CharacterCount current={value.length} max={MAX} />
+      </FormField>
     );
   },
 };
 
 export const Disabled: Story = {
-  args: {
-    disabled: true,
-    defaultValue: 'Cannot edit this',
-  },
+  render: () => (
+    <FormField>
+      <Label>Email</Label>
+      <TextInput type="email" defaultValue="jane@example.com" disabled />
+    </FormField>
+  ),
 };
 
 export const Readonly: Story = {
-  args: {
-    readOnly: true,
-    defaultValue: 'Read-only value',
-  },
+  render: () => (
+    <FormField>
+      <Label>API Key</Label>
+      <TextInput value="sk-xxxx-yyyy-zzzz" readOnly onChange={() => {}} />
+      <HelperText>This key is read-only.</HelperText>
+    </FormField>
+  ),
 };
 
 export const WithPrefix: Story = {
-  args: {
-    prefix: '🔍',
-    placeholder: 'Search…',
-  },
+  render: () => (
+    <FormField>
+      <Label>Website</Label>
+      <TextInput
+        type="url"
+        placeholder="example.com"
+        prefix={<span style={{ fontSize: '0.875rem' }}>https://</span>}
+        fullWidth
+      />
+    </FormField>
+  ),
 };
 
 export const WithSuffix: Story = {
-  args: {
-    suffix: '✓',
-    defaultValue: 'Valid value',
-  },
+  render: () => (
+    <FormField>
+      <Label>Search</Label>
+      <TextInput
+        type="search"
+        placeholder="Search…"
+        suffix={<span>🔍</span>}
+        fullWidth
+      />
+    </FormField>
+  ),
 };
 
 export const AllInputTypes: Story = {
   render: () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {(['text', 'email', 'url', 'tel', 'number', 'password', 'search', 'date'] as const).map(
-        (t) => (
-          <div key={t}>
-            <label htmlFor={`type-${t}`} style={{ display: 'block', fontSize: '0.875rem', marginBottom: 2 }}>
-              type="{t}"
-            </label>
-            <TextInput id={`type-${t}`} type={t} placeholder={t} />
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {(['text', 'email', 'password', 'number', 'tel', 'url', 'search', 'date'] as const).map(
+        (type) => (
+          <FormField key={type}>
+            <Label>{type}</Label>
+            <TextInput type={type} placeholder={`Enter ${type}`} />
+          </FormField>
         )
       )}
     </div>
@@ -146,8 +156,11 @@ export const AllInputTypes: Story = {
 };
 
 export const NumericInputMode: Story = {
-  args: {
-    inputMode: 'numeric',
-    placeholder: 'Numeric keyboard on mobile',
-  },
+  render: () => (
+    <FormField>
+      <Label>Quantity</Label>
+      <TextInput inputMode="numeric" pattern="[0-9]*" placeholder="0" />
+      <HelperText>Numbers only on mobile keyboards.</HelperText>
+    </FormField>
+  ),
 };

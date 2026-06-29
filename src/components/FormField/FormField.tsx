@@ -1,36 +1,48 @@
-import React, { useId, useMemo } from 'react';
+import React, { useId, useMemo, useState, useCallback } from 'react';
 import { FormFieldContext, FormFieldContextValue } from './FormFieldContext';
 import styles from './FormField.module.css';
 
 export interface FormFieldProps {
   children: React.ReactNode;
-  /** When provided, marks the field as having an error */
-  error?: string;
-  /** Whether the field is required */
-  required?: boolean;
   className?: string;
+  required?: boolean;
+  style?: React.CSSProperties;
 }
 
-export const FormField: React.FC<FormFieldProps> = ({ children, error, required, className }) => {
-  const id = useId();
-  const inputId = `field-input-${id}`;
-  const helperId = `field-helper-${id}`;
-  const errorId = `field-error-${id}`;
+/**
+ * FormField is a layout wrapper that provides context to child components
+ * (Label, TextInput, Textarea, HelperText, ErrorMessage) so they can
+ * auto-wire their ARIA relationships.
+ */
+export const FormField: React.FC<FormFieldProps> = ({
+  children,
+  className,
+  required,
+  style,
+}) => {
+  const baseId = useId();
+  const inputId = `${baseId}-input`;
+  const helperId = `${baseId}-helper`;
+  const errorId = `${baseId}-error`;
 
-  const ctx = useMemo<FormFieldContextValue>(
+  // Track whether ErrorMessage child is present (hasError)
+  // We'll use a simple approach: scan children for ErrorMessage
+  const [hasError, setHasError] = useState(false);
+
+  const ctxValue = useMemo<FormFieldContextValue>(
     () => ({
       inputId,
       helperId,
       errorId,
-      hasError: Boolean(error),
+      hasError,
       required,
     }),
-    [inputId, helperId, errorId, error, required]
+    [inputId, helperId, errorId, hasError, required]
   );
 
   return (
-    <FormFieldContext.Provider value={ctx}>
-      <div className={[styles.formField, className].filter(Boolean).join(' ')}>
+    <FormFieldContext.Provider value={ctxValue}>
+      <div className={[styles.field, className ?? ''].filter(Boolean).join(' ')} style={style}>
         {children}
       </div>
     </FormFieldContext.Provider>

@@ -3,15 +3,10 @@
   font-size: var(--font-size-sm, 0.875rem);
   font-weight: 500;
   color: var(--color-text, #111827);
-  line-height: 1.4;
+  margin-bottom: var(--spacing-1, 4px);
 }
 
-.required::after {
-  content: ' *';
-  color: var(--color-error, #dc2626);
-}
-
-.optional {
-  font-weight: 400;
-  color: var(--color-text-muted, #6b7280);
+.required {
+  color: var(--color-error, #ef4444);
+  font-weight: 600;
 }

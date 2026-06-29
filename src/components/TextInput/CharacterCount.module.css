@@ -1,19 +1,19 @@
 .count {
   display: block;
   font-size: var(--font-size-sm, 0.875rem);
-  line-height: var(--line-height-tight, 1.25);
   color: var(--color-text-muted, #6b7280);
-  margin-top: var(--spacing-1, 4px);
   text-align: right;
+  margin-top: var(--spacing-1, 4px);
   transition: color 0.15s ease;
+  /* Visually hidden until there's something to announce, but still in DOM for aria-live */
 }
 
-.warning {
+.count.warning {
   color: var(--color-warning, #d97706);
   font-weight: 500;
 }
 
-.error {
-  color: var(--color-error, #dc2626);
+.count.error {
+  color: var(--color-error, #ef4444);
   font-weight: 600;
 }
