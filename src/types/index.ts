@@ -14,13 +14,12 @@ export interface Trip {
   participants: Participant[];
 }
 
-export interface Expense {
-  id: string;
-  tripId: string;
-  description: string;
-  amount: number;
-  currency: string;
-  paidBy: string; // participantId
-  splitBetween: string[]; // participantIds
-  createdAt: string;
-}
+export type RootStackParamList = {
+  Trips: undefined;
+  TripDetail: { tripId: string; tripName: string };
+};
+
+export type TripDetailTabParamList = {
+  Participants: { tripId: string };
+  Expenses: { tripId: string };
+};

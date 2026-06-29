@@ -7,7 +7,8 @@ export function ExpensesPlaceholderScreen() {
       <Text style={styles.icon}>💸</Text>
       <Text style={styles.title}>Expenses Coming Soon</Text>
       <Text style={styles.subtitle}>
-        Phase 4 will bring full expense tracking, splitting, and settlement features.
+        Track shared expenses and split costs with your trip participants.
+        This feature is coming in the next phase!
       </Text>
       <View style={styles.badge}>
         <Text style={styles.badgeText}>Phase 4</Text>
@@ -22,17 +23,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F2F2F7',
-    paddingHorizontal: 32,
-    gap: 12,
+    paddingHorizontal: 40,
   },
   icon: {
-    fontSize: 56,
-    marginBottom: 8,
+    fontSize: 64,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1C1C1E',
+    marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
@@ -40,18 +41,18 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 24,
   },
   badge: {
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
     backgroundColor: '#007AFF',
     borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
   },
   badgeText: {
     color: '#FFFFFF',
-    fontWeight: '600',
     fontSize: 13,
+    fontWeight: '700',
   },
 });
 

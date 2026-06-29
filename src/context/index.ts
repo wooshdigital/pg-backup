@@ -1,2 +1,4 @@
 export { TripProvider, useTripContext } from './TripContext';
-export { ThemeContext } from './ThemeContext';
+export { default as TripContext } from './TripContext';
+export { ThemeProvider, useTheme } from './ThemeContext';
+export { default as ThemeContext } from './ThemeContext';

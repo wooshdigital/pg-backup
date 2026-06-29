@@ -14,12 +14,16 @@ export const AVATAR_COLOR_PALETTE: string[] = [
 ];
 
 export function getRandomAvatarColor(): string {
-  return AVATAR_COLOR_PALETTE[Math.floor(Math.random() * AVATAR_COLOR_PALETTE.length)];
+  const index = Math.floor(Math.random() * AVATAR_COLOR_PALETTE.length);
+  return AVATAR_COLOR_PALETTE[index];
 }
 
-export function getAvatarInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0 || !parts[0]) return '?';
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+export function getInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase();
+  }
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }

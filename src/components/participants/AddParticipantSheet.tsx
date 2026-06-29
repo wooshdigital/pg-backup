@@ -1,29 +1,68 @@
-import React, { useRef, useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
+  TextInput,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import BottomSheet, {
-  BottomSheetBackdrop,
   BottomSheetView,
+  BottomSheetBackdrop,
+  BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 
 interface AddParticipantSheetProps {
-  sheetRef: React.RefObject<BottomSheet>;
+  visible: boolean;
+  onClose: () => void;
   onAdd: (name: string) => void;
 }
 
-export function AddParticipantSheet({ sheetRef, onAdd }: AddParticipantSheetProps) {
-  const [name, setName] = useState('');
+export function AddParticipantSheet({
+  visible,
+  onClose,
+  onAdd,
+}: AddParticipantSheetProps) {
+  const bottomSheetRef = useRef<BottomSheet>(null);
   const inputRef = useRef<TextInput>(null);
+  const [name, setName] = useState('');
 
   const snapPoints = useMemo(() => ['40%'], []);
+
+  useEffect(() => {
+    if (visible) {
+      bottomSheetRef.current?.expand();
+      // Delay focus to let sheet animate in
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 300);
+    } else {
+      bottomSheetRef.current?.close();
+      setName('');
+    }
+  }, [visible]);
+
+  const handleSheetChange = useCallback(
+    (index: number) => {
+      if (index === -1) {
+        setName('');
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
+  const handleAdd = useCallback(() => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setName('');
+    Keyboard.dismiss();
+    bottomSheetRef.current?.close();
+  }, [name, onAdd]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -37,52 +76,48 @@ export function AddParticipantSheet({ sheetRef, onAdd }: AddParticipantSheetProp
     []
   );
 
-  const handleAdd = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    onAdd(trimmed);
-    setName('');
-    sheetRef.current?.close();
-  };
-
-  const handleSheetChange = useCallback((index: number) => {
-    if (index === 0) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    } else if (index === -1) {
-      setName('');
-    }
-  }, []);
-
   return (
     <BottomSheet
-      ref={sheetRef}
+      ref={bottomSheetRef}
       index={-1}
       snapPoints={snapPoints}
       enablePanDownToClose
       backdropComponent={renderBackdrop}
       onChange={handleSheetChange}
-      keyboardBehavior="interactive"
+      keyboardBehavior="fillParent"
       keyboardBlurBehavior="restore"
     >
       <BottomSheetView style={styles.container}>
-        <Text style={styles.title}>Add Participant</Text>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          placeholder="Participant name"
-          placeholderTextColor="#8E8E93"
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          returnKeyType="done"
-          onSubmitEditing={handleAdd}
-        />
+        <View style={styles.header}>
+          <Text style={styles.title}>Add Participant</Text>
+          <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} hitSlop={8}>
+            <Text style={styles.closeButton}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Name</Text>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder="e.g. Alice Johnson"
+            placeholderTextColor="#8E8E93"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+            returnKeyType="done"
+            onSubmitEditing={handleAdd}
+            maxLength={60}
+          />
+        </View>
+
         <TouchableOpacity
           style={[styles.addButton, !name.trim() && styles.addButtonDisabled]}
           onPress={handleAdd}
           disabled={!name.trim()}
+          activeOpacity={0.8}
         >
-          <Text style={styles.addButtonText}>Add</Text>
+          <Text style={styles.addButtonText}>Add Participant</Text>
         </TouchableOpacity>
       </BottomSheetView>
     </BottomSheet>
@@ -92,34 +127,50 @@ export function AddParticipantSheet({ sheetRef, onAdd }: AddParticipantSheetProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 24,
-    gap: 16,
+    paddingBottom: 32,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1C1C1E',
-    textAlign: 'center',
-    marginBottom: 4,
+  },
+  closeButton: {
+    fontSize: 18,
+    color: '#8E8E93',
+    padding: 4,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B6B6B',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  inputContainer: {
+    marginBottom: 24,
   },
   input: {
-    height: 50,
-    borderWidth: 1.5,
-    borderColor: '#E5E5EA',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 16,
     color: '#1C1C1E',
-    backgroundColor: '#F9F9F9',
   },
   addButton: {
-    height: 50,
     backgroundColor: '#007AFF',
     borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   addButtonDisabled: {
     backgroundColor: '#C7C7CC',
@@ -127,7 +178,7 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
 

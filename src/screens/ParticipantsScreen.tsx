@@ -1,121 +1,143 @@
-import React, { useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  Text,
+  TouchableOpacity,
+  ListRenderItem,
 } from 'react-native';
-import BottomSheet from '@gorhom/bottom-sheet';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useParticipants } from '../hooks/useParticipants';
 import { ParticipantRow } from '../components/participants/ParticipantRow';
 import { AddParticipantSheet } from '../components/participants/AddParticipantSheet';
 import { Participant } from '../types';
 
 interface ParticipantsScreenProps {
-  tripId: string;
+  route: {
+    params: {
+      tripId: string;
+    };
+  };
 }
 
-export function ParticipantsScreen({ tripId }: ParticipantsScreenProps) {
+export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
+  const { tripId } = route.params;
   const { participants, addParticipant, removeParticipant } = useParticipants(tripId);
-  const bottomSheetRef = useRef<BottomSheet>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
 
-  const openSheet = () => {
-    bottomSheetRef.current?.expand();
-  };
-
-  const handleAdd = (name: string) => {
-    addParticipant(name);
-  };
-
-  const handleRemove = (participantId: string) => {
-    // In a future phase, pass hasExpenses based on actual expense data
-    removeParticipant(participantId, false);
-  };
-
-  const renderItem = ({ item }: { item: Participant }) => (
-    <ParticipantRow participant={item} onRemove={handleRemove} />
+  const handleAdd = useCallback(
+    (name: string) => {
+      addParticipant(name);
+      setSheetVisible(false);
+    },
+    [addParticipant]
   );
 
-  const renderEmpty = () => (
+  const renderItem: ListRenderItem<Participant> = useCallback(
+    ({ item }) => (
+      <ParticipantRow participant={item} onRemove={removeParticipant} />
+    ),
+    [removeParticipant]
+  );
+
+  const keyExtractor = useCallback((item: Participant) => item.id, []);
+
+  const ItemSeparator = () => <View style={styles.separator} />;
+
+  const EmptyComponent = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyIcon}>👥</Text>
       <Text style={styles.emptyTitle}>No participants yet</Text>
       <Text style={styles.emptySubtitle}>
-        Tap the + button to add people to this trip
+        Tap the + button to add friends to this trip.
       </Text>
     </View>
   );
 
-  const renderSeparator = () => <View style={styles.separator} />;
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <GestureHandlerRootView style={styles.root}>
       <View style={styles.container}>
         <FlatList
           data={participants}
-          keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          ListEmptyComponent={renderEmpty}
-          ItemSeparatorComponent={renderSeparator}
-          contentContainerStyle={participants.length === 0 ? styles.emptyList : undefined}
+          keyExtractor={keyExtractor}
+          ItemSeparatorComponent={ItemSeparator}
+          ListEmptyComponent={EmptyComponent}
+          contentContainerStyle={
+            participants.length === 0 ? styles.emptyList : styles.list
+          }
         />
 
         {/* FAB */}
-        <TouchableOpacity style={styles.fab} onPress={openSheet} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => setSheetVisible(true)}
+          activeOpacity={0.85}
+          accessibilityLabel="Add participant"
+          accessibilityRole="button"
+        >
           <Text style={styles.fabIcon}>+</Text>
         </TouchableOpacity>
 
-        <AddParticipantSheet sheetRef={bottomSheetRef} onAdd={handleAdd} />
+        <AddParticipantSheet
+          visible={sheetVisible}
+          onClose={() => setSheetVisible(false)}
+          onAdd={handleAdd}
+        />
       </View>
-    </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
   },
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
   },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 8,
+  list: {
+    paddingTop: 12,
+    paddingBottom: 100,
   },
   emptyList: {
     flex: 1,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#8E8E93',
-    textAlign: 'center',
-    lineHeight: 20,
   },
   separator: {
     height: 1,
     backgroundColor: '#E5E5EA',
     marginLeft: 72,
   },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingBottom: 80,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
   fab: {
     position: 'absolute',
-    bottom: 28,
-    right: 24,
+    right: 20,
+    bottom: 32,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -124,15 +146,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 8,
   },
   fabIcon: {
-    color: '#FFFFFF',
     fontSize: 28,
-    fontWeight: '300',
+    color: '#FFFFFF',
     lineHeight: 32,
+    fontWeight: '400',
   },
 });
 
