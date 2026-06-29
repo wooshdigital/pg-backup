@@ -1,5 +1,5 @@
-import React, { useLayoutEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { TripDetailTabs } from '../navigation/TripDetailTabs';
 
 interface TripDetailScreenProps {
@@ -15,14 +15,18 @@ interface TripDetailScreenProps {
 export function TripDetailScreen({ route, navigation }: TripDetailScreenProps) {
   const { tripId, tripName } = route.params;
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title: tripName,
-      headerBackTitle: 'Trips',
-    });
-  }, [navigation, tripName]);
-
-  return <TripDetailTabs tripId={tripId} />;
+  return (
+    <View style={styles.container}>
+      <TripDetailTabs tripId={tripId} tripName={tripName} />
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+});
 
 export default TripDetailScreen;

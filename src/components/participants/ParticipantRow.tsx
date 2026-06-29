@@ -2,11 +2,11 @@ import React, { useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
   Animated,
-  PanResponder,
   Alert,
+  PanResponder,
 } from 'react-native';
 import { AvatarCircle } from './AvatarCircle';
 import { Participant } from '../../types';
@@ -20,13 +20,13 @@ const SWIPE_THRESHOLD = -80;
 
 export function ParticipantRow({ participant, onRemove }: ParticipantRowProps) {
   const translateX = useRef(new Animated.Value(0)).current;
-  const rowHeight = useRef(new Animated.Value(68)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
+  const rowOpacity = useRef(new Animated.Value(1)).current;
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 5 && Math.abs(gestureState.dy) < 10,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 20;
+      },
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dx < 0) {
           translateX.setValue(gestureState.dx);
@@ -34,78 +34,83 @@ export function ParticipantRow({ participant, onRemove }: ParticipantRowProps) {
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx < SWIPE_THRESHOLD) {
-          confirmRemove();
+          // Confirm removal
+          Alert.alert(
+            'Remove Participant',
+            `Remove ${participant.name} from this trip?`,
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                  Animated.spring(translateX, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                  }).start();
+                },
+              },
+              {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: () => {
+                  Animated.parallel([
+                    Animated.timing(translateX, {
+                      toValue: -400,
+                      duration: 200,
+                      useNativeDriver: true,
+                    }),
+                    Animated.timing(rowOpacity, {
+                      toValue: 0,
+                      duration: 200,
+                      useNativeDriver: true,
+                    }),
+                  ]).start(() => {
+                    onRemove(participant.id);
+                  });
+                },
+              },
+            ]
+          );
         } else {
           Animated.spring(translateX, {
             toValue: 0,
-            useNativeDriver: false,
+            useNativeDriver: true,
           }).start();
         }
       },
     })
   ).current;
 
-  function confirmRemove() {
+  const handleRemovePress = () => {
     Alert.alert(
       'Remove Participant',
-      `Remove "${participant.name}" from this trip?`,
+      `Remove ${participant.name} from this trip?`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => {
-            Animated.spring(translateX, {
-              toValue: 0,
-              useNativeDriver: false,
-            }).start();
-          },
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
-            Animated.parallel([
-              Animated.timing(rowHeight, {
-                toValue: 0,
-                duration: 250,
-                useNativeDriver: false,
-              }),
-              Animated.timing(opacity, {
-                toValue: 0,
-                duration: 200,
-                useNativeDriver: false,
-              }),
-            ]).start(() => {
-              onRemove(participant.id);
-            });
-          },
+          onPress: () => onRemove(participant.id),
         },
       ]
     );
-  }
+  };
 
   return (
-    <Animated.View style={[styles.wrapper, { height: rowHeight, opacity }]}>
-      {/* Delete background */}
+    <View style={styles.wrapper}>
       <View style={styles.deleteBackground}>
         <Text style={styles.deleteText}>Remove</Text>
       </View>
-
-      {/* Swipeable row */}
       <Animated.View
-        style={[styles.row, { transform: [{ translateX }] }]}
+        style={[styles.row, { transform: [{ translateX }], opacity: rowOpacity }]}
         {...panResponder.panHandlers}
       >
-        <AvatarCircle
-          name={participant.name}
-          color={participant.avatarColor}
-          size={44}
-        />
+        <AvatarCircle name={participant.name} color={participant.avatarColor} size={44} fontSize={16} />
         <Text style={styles.name} numberOfLines={1}>
           {participant.name}
         </Text>
         <TouchableOpacity
-          onPress={confirmRemove}
+          onPress={handleRemovePress}
           style={styles.removeButton}
           accessibilityLabel={`Remove ${participant.name}`}
           accessibilityRole="button"
@@ -113,22 +118,27 @@ export function ParticipantRow({ participant, onRemove }: ParticipantRowProps) {
           <Text style={styles.removeButtonText}>✕</Text>
         </TouchableOpacity>
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#FF3B30',
   },
   deleteBackground: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#EF4444',
-    alignItems: 'flex-end',
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
     justifyContent: 'center',
-    paddingRight: 24,
+    alignItems: 'flex-end',
+    paddingRight: 20,
+    width: '100%',
   },
   deleteText: {
     color: '#FFFFFF',
@@ -138,23 +148,30 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   name: {
     flex: 1,
+    marginLeft: 12,
     fontSize: 16,
-    color: '#1F2937',
     fontWeight: '500',
+    color: '#1C1C1E',
   },
   removeButton: {
     padding: 8,
+    marginLeft: 8,
   },
   removeButtonText: {
-    color: '#9CA3AF',
     fontSize: 16,
+    color: '#FF3B30',
     fontWeight: '600',
   },
 });

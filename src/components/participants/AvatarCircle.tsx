@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { getInitials } from '../../utils/avatarColors';
+import { getAvatarInitials } from '../../utils/avatarColors';
 
 interface AvatarCircleProps {
   name: string;
@@ -9,19 +9,13 @@ interface AvatarCircleProps {
   fontSize?: number;
 }
 
-export function AvatarCircle({
-  name,
-  color,
-  size = 44,
-  fontSize,
-}: AvatarCircleProps) {
-  const initials = getInitials(name);
-  const computedFontSize = fontSize ?? Math.floor(size * 0.38);
+export function AvatarCircle({ name, color, size = 44, fontSize = 16 }: AvatarCircleProps) {
+  const initials = getAvatarInitials(name);
 
   return (
     <View
       style={[
-        styles.circle,
+        styles.container,
         {
           width: size,
           height: size,
@@ -29,18 +23,15 @@ export function AvatarCircle({
           backgroundColor: color,
         },
       ]}
-      accessible
       accessibilityLabel={`Avatar for ${name}`}
     >
-      <Text style={[styles.initials, { fontSize: computedFontSize }]}>
-        {initials}
-      </Text>
+      <Text style={[styles.initials, { fontSize }]}>{initials}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  circle: {
+  container: {
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,18 +1,38 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-export function ExpensesPlaceholderScreen() {
+interface ExpensesPlaceholderScreenProps {
+  route?: {
+    params?: {
+      tripId?: string;
+    };
+  };
+}
+
+export function ExpensesPlaceholderScreen({ route }: ExpensesPlaceholderScreenProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.icon}>💸</Text>
       <Text style={styles.title}>Expenses Coming Soon</Text>
       <Text style={styles.subtitle}>
-        In the next phase you'll be able to log shared expenses, split costs
-        between participants, and see a running balance — all in one place.
+        Track shared expenses and split bills with your trip participants.
+        This feature is coming in the next phase!
       </Text>
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>Phase 4</Text>
+      <View style={styles.featureList}>
+        <FeatureItem emoji="➕" text="Add and categorize expenses" />
+        <FeatureItem emoji="🔄" text="Split costs evenly or by custom amounts" />
+        <FeatureItem emoji="📊" text="See who owes what at a glance" />
+        <FeatureItem emoji="✅" text="Settle up with ease" />
       </View>
+    </View>
+  );
+}
+
+function FeatureItem({ emoji, text }: { emoji: string; text: string }) {
+  return (
+    <View style={styles.featureItem}>
+      <Text style={styles.featureEmoji}>{emoji}</Text>
+      <Text style={styles.featureText}>{text}</Text>
     </View>
   );
 }
@@ -20,40 +40,51 @@ export function ExpensesPlaceholderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F2F2F7',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    gap: 16,
+    paddingHorizontal: 32,
   },
   icon: {
     fontSize: 64,
-    marginBottom: 8,
+    marginBottom: 20,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1C1C1E',
+    marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B7280',
+    color: '#8E8E93',
     textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 32,
   },
-  badge: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 20,
+  featureList: {
+    alignSelf: 'stretch',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
   },
-  badgeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6366F1',
-    letterSpacing: 0.5,
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  featureEmoji: {
+    fontSize: 20,
+    width: 28,
+    textAlign: 'center',
+  },
+  featureText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#3C3C43',
+    fontWeight: '500',
   },
 });
 

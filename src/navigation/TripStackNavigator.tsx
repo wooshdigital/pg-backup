@@ -2,7 +2,6 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TripsListScreen } from '../screens/TripsListScreen';
 import { TripDetailScreen } from '../screens/TripDetailScreen';
-import { CreateTripScreen } from '../screens/CreateTripScreen';
 import { RootStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -14,25 +13,26 @@ export function TripStackNavigator() {
         headerStyle: {
           backgroundColor: '#FFFFFF',
         },
-        headerTintColor: '#6366F1',
+        headerTintColor: '#007AFF',
         headerTitleStyle: {
           fontWeight: '700',
-          color: '#111827',
+          color: '#1C1C1E',
         },
         headerShadowVisible: false,
+        headerBackTitle: 'Back',
       }}
     >
       <Stack.Screen
-        name="TripsList"
+        name="Trips"
         component={TripsListScreen}
-        options={{ title: 'My Trips' }}
+        options={{ title: 'My Trips', headerLargeTitle: true }}
       />
       <Stack.Screen
         name="TripDetail"
         component={TripDetailScreen}
         options={({ route }) => ({
-          title: (route.params as any)?.tripName ?? 'Trip Detail',
-          headerBackTitle: 'Trips',
+          title: route.params.tripName,
+          headerLargeTitle: false,
         })}
       />
     </Stack.Navigator>

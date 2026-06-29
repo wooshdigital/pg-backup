@@ -1,16 +1,15 @@
 import React, { useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   FlatList,
+  Text,
   StyleSheet,
   TouchableOpacity,
-  ListRenderItemInfo,
+  SafeAreaView,
 } from 'react-native';
-import BottomSheet from '@gorhom/bottom-sheet';
 import { useParticipants } from '../hooks/useParticipants';
 import { ParticipantRow } from '../components/participants/ParticipantRow';
-import { AddParticipantSheet } from '../components/participants/AddParticipantSheet';
+import { AddParticipantSheet, AddParticipantSheetRef } from '../components/participants/AddParticipantSheet';
 import { Participant } from '../types';
 
 interface ParticipantsScreenProps {
@@ -23,12 +22,11 @@ interface ParticipantsScreenProps {
 
 export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
   const { tripId } = route.params;
-  const { participants, addParticipant, removeParticipant } =
-    useParticipants(tripId);
-  const sheetRef = useRef<BottomSheet>(null);
+  const { participants, addParticipant, removeParticipant } = useParticipants(tripId);
+  const sheetRef = useRef<AddParticipantSheetRef>(null);
 
-  const openSheet = useCallback(() => {
-    sheetRef.current?.expand();
+  const handleOpenSheet = useCallback(() => {
+    sheetRef.current?.open();
   }, []);
 
   const handleAdd = useCallback(
@@ -46,7 +44,7 @@ export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
   );
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<Participant>) => (
+    ({ item }: { item: Participant }) => (
       <ParticipantRow participant={item} onRemove={handleRemove} />
     ),
     [handleRemove]
@@ -57,40 +55,37 @@ export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyIcon}>👥</Text>
-      <Text style={styles.emptyTitle}>No participants yet</Text>
+      <Text style={styles.emptyTitle}>No Participants Yet</Text>
       <Text style={styles.emptySubtitle}>
-        Tap the + button below to add people to this trip.
+        Add friends and family to split expenses on this trip.
       </Text>
     </View>
   );
-
-  const renderSeparator = () => <View style={styles.separator} />;
 
   return (
     <View style={styles.container}>
       <FlatList
         data={participants}
-        keyExtractor={keyExtractor}
         renderItem={renderItem}
-        ItemSeparatorComponent={renderSeparator}
+        keyExtractor={keyExtractor}
         ListEmptyComponent={renderEmpty}
-        contentContainerStyle={
-          participants.length === 0 ? styles.emptyList : styles.list
-        }
+        contentContainerStyle={[
+          styles.listContent,
+          participants.length === 0 && styles.listContentEmpty,
+        ]}
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Floating Action Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={openSheet}
+        onPress={handleOpenSheet}
         accessibilityLabel="Add participant"
         accessibilityRole="button"
       >
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
 
-      <AddParticipantSheet sheetRef={sheetRef} onAdd={handleAdd} />
+      <AddParticipantSheet ref={sheetRef} onAdd={handleAdd} />
     </View>
   );
 }
@@ -98,58 +93,54 @@ export function ParticipantsScreen({ route }: ParticipantsScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F2F2F7',
   },
-  list: {
-    paddingTop: 8,
+  listContent: {
+    paddingTop: 12,
     paddingBottom: 100,
   },
-  emptyList: {
+  listContentEmpty: {
     flexGrow: 1,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-    marginLeft: 74,
   },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
-    gap: 12,
+    paddingHorizontal: 32,
+    paddingTop: 80,
   },
   emptyIcon: {
-    fontSize: 52,
-    marginBottom: 4,
+    fontSize: 56,
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1C1C1E',
+    marginBottom: 8,
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 15,
+    color: '#8E8E93',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
   fab: {
     position: 'absolute',
-    bottom: 28,
+    bottom: 32,
     right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
-    shadowColor: '#6366F1',
+    shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
+    elevation: 6,
   },
   fabIcon: {
     color: '#FFFFFF',

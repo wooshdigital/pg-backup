@@ -8,44 +8,45 @@ const Tab = createMaterialTopTabNavigator<TripDetailTabParamList>();
 
 interface TripDetailTabsProps {
   tripId: string;
+  tripName: string;
 }
 
-export function TripDetailTabs({ tripId }: TripDetailTabsProps) {
+export function TripDetailTabs({ tripId, tripName }: TripDetailTabsProps) {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: '#6366F1',
-        tabBarInactiveTintColor: '#6B7280',
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: '#8E8E93',
         tabBarIndicatorStyle: {
-          backgroundColor: '#6366F1',
-          height: 3,
-          borderRadius: 2,
+          backgroundColor: '#007AFF',
+          height: 2,
         },
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
           elevation: 0,
           shadowOpacity: 0,
           borderBottomWidth: 1,
-          borderBottomColor: '#E5E7EB',
+          borderBottomColor: '#E5E5EA',
         },
         tabBarLabelStyle: {
           fontSize: 14,
           fontWeight: '600',
           textTransform: 'none',
         },
+        tabBarPressColor: '#E5F1FF',
       }}
     >
       <Tab.Screen
         name="Participants"
         component={ParticipantsScreen}
         initialParams={{ tripId }}
-        options={{ title: 'Participants' }}
+        options={{ tabBarLabel: 'Participants' }}
       />
       <Tab.Screen
         name="Expenses"
         component={ExpensesPlaceholderScreen}
         initialParams={{ tripId }}
-        options={{ title: 'Expenses' }}
+        options={{ tabBarLabel: 'Expenses' }}
       />
     </Tab.Navigator>
   );

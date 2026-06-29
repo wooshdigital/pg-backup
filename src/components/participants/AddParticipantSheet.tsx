@@ -1,188 +1,185 @@
-import React, { useCallback, useRef, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
 } from 'react-native';
-import BottomSheet, {
-  BottomSheetView,
-  BottomSheetBackdrop,
-  BottomSheetTextInput,
-} from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+
+export interface AddParticipantSheetRef {
+  open: () => void;
+  close: () => void;
+}
 
 interface AddParticipantSheetProps {
-  sheetRef: React.RefObject<BottomSheet>;
   onAdd: (name: string) => void;
 }
 
-export function AddParticipantSheet({
-  sheetRef,
-  onAdd,
-}: AddParticipantSheetProps) {
-  const [name, setName] = useState('');
-  const snapPoints = useMemo(() => ['40%'], []);
+export const AddParticipantSheet = forwardRef<AddParticipantSheetRef, AddParticipantSheetProps>(
+  ({ onAdd }, ref) => {
+    const bottomSheetRef = useRef<BottomSheet>(null);
+    const [name, setName] = useState('');
+    const inputRef = useRef<TextInput>(null);
 
-  const handleAdd = useCallback(() => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    onAdd(trimmed);
-    setName('');
-    Keyboard.dismiss();
-    sheetRef.current?.close();
-  }, [name, onAdd, sheetRef]);
+    const snapPoints = ['50%'];
 
-  const handleClose = useCallback(() => {
-    setName('');
-    Keyboard.dismiss();
-    sheetRef.current?.close();
-  }, [sheetRef]);
+    useImperativeHandle(ref, () => ({
+      open: () => {
+        bottomSheetRef.current?.expand();
+        setTimeout(() => inputRef.current?.focus(), 300);
+      },
+      close: () => {
+        bottomSheetRef.current?.close();
+      },
+    }));
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        onPress={handleClose}
-      />
-    ),
-    [handleClose]
-  );
+    const handleAdd = useCallback(() => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      onAdd(trimmed);
+      setName('');
+      Keyboard.dismiss();
+      bottomSheetRef.current?.close();
+    }, [name, onAdd]);
 
-  return (
-    <BottomSheet
-      ref={sheetRef}
-      index={-1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      backdropComponent={renderBackdrop}
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
-      handleIndicatorStyle={styles.handleIndicator}
-      backgroundStyle={styles.sheetBackground}
-    >
-      <BottomSheetView style={styles.content}>
-        <Text style={styles.title}>Add Participant</Text>
-        <Text style={styles.subtitle}>
-          Enter the name of the person joining this trip.
-        </Text>
+    const handleClose = useCallback(() => {
+      setName('');
+      Keyboard.dismiss();
+    }, []);
 
-        <BottomSheetTextInput
-          style={styles.input}
-          placeholder="Full name"
-          placeholderTextColor="#9CA3AF"
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={handleAdd}
-          accessibilityLabel="Participant name input"
+    const renderBackdrop = useCallback(
+      (props: BottomSheetBackdropProps) => (
+        <BottomSheetBackdrop
+          {...props}
+          disappearsOnIndex={-1}
+          appearsOnIndex={0}
+          opacity={0.5}
         />
+      ),
+      []
+    );
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleClose}
-            accessibilityLabel="Cancel"
-            accessibilityRole="button"
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
+    return (
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={-1}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        onClose={handleClose}
+        keyboardBehavior={Platform.OS === 'ios' ? 'extend' : 'interactive'}
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
+      >
+        <BottomSheetView style={styles.content}>
+          <Text style={styles.title}>Add Participant</Text>
+          <Text style={styles.subtitle}>Enter the name of the person joining this trip.</Text>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              placeholder="Full name"
+              placeholderTextColor="#8E8E93"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              returnKeyType="done"
+              onSubmitEditing={handleAdd}
+              accessibilityLabel="Participant name input"
+            />
+          </View>
 
           <TouchableOpacity
-            style={[
-              styles.addButton,
-              !name.trim() && styles.addButtonDisabled,
-            ]}
+            style={[styles.addButton, !name.trim() && styles.addButtonDisabled]}
             onPress={handleAdd}
             disabled={!name.trim()}
             accessibilityLabel="Add participant"
             accessibilityRole="button"
           >
-            <Text style={styles.addText}>Add</Text>
+            <Text style={styles.addButtonText}>Add Participant</Text>
           </TouchableOpacity>
-        </View>
-      </BottomSheetView>
-    </BottomSheet>
-  );
-}
+
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => {
+              handleClose();
+              bottomSheetRef.current?.close();
+            }}
+            accessibilityLabel="Cancel"
+            accessibilityRole="button"
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </BottomSheetView>
+      </BottomSheet>
+    );
+  }
+);
+
+AddParticipantSheet.displayName = 'AddParticipantSheet';
 
 const styles = StyleSheet.create({
-  sheetBackground: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  handleIndicator: {
-    backgroundColor: '#D1D5DB',
-    width: 40,
-  },
   content: {
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 32,
   },
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 6,
+    color: '#1C1C1E',
+    marginBottom: 4,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 20,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  inputContainer: {
+    borderWidth: 1.5,
+    borderColor: '#E5E5EA',
+    borderRadius: 12,
+    backgroundColor: '#F9F9F9',
+    marginBottom: 16,
   },
   input: {
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
-    marginBottom: 20,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  cancelText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
+    color: '#1C1C1E',
   },
   addButton: {
-    flex: 1,
-    paddingVertical: 14,
+    backgroundColor: '#007AFF',
     borderRadius: 12,
-    backgroundColor: '#6366F1',
+    paddingVertical: 15,
     alignItems: 'center',
+    marginBottom: 12,
   },
   addButtonDisabled: {
-    backgroundColor: '#C7D2FE',
+    backgroundColor: '#C7C7CC',
   },
-  addText: {
-    fontSize: 16,
-    fontWeight: '700',
+  addButtonText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#8E8E93',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 
