@@ -5,14 +5,13 @@ import (
 	"time"
 )
 
-// NewKey generates a storage key based on the provided timestamp.
-// Example: backups/2026/06/29/20260629T150405Z.sql.gz
-func NewKey(t time.Time) string {
-	utc := t.UTC()
-	return fmt.Sprintf("backups/%d/%02d/%02d/%sZ.sql.gz",
-		utc.Year(),
-		utc.Month(),
-		utc.Day(),
-		utc.Format("20060102T150405"),
+// GenerateKey produces a time-based object key for a backup file.
+// Format: backups/YYYY/MM/DD/backup-YYYYMMDD-HHMMSS.dump.gz
+func GenerateKey(t time.Time) string {
+	return fmt.Sprintf(
+		"backups/%04d/%02d/%02d/backup-%04d%02d%02d-%02d%02d%02d.dump.gz",
+		t.Year(), t.Month(), t.Day(),
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second(),
 	)
 }

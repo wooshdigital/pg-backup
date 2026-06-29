@@ -1,16 +1,16 @@
-version: "3.9"
+version: "3.8"
 
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
       POSTGRES_DB: testdb
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,34 +19,15 @@ services:
   localstack:
     image: localstack/localstack:3
     environment:
-      SERVICES: s3
-      DEFAULT_REGION: us-east-1
-      AWS_DEFAULT_REGION: us-east-1
-      LOCALSTACK_HOST: localstack
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - EDGE_PORT=4566
     ports:
       - "4566:4566"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\"'"]
+      test: ["CMD-SHELL", "curl -s http://localhost:4566/_localstack/health | grep '\"s3\": \"available\"'"]
       interval: 5s
-      timeout: 10s
-      retries: 15
+      timeout: 5s
+      retries: 20
       start_period: 15s
-
-  test-runner:
-    build:
-      context: .
-      dockerfile: Dockerfile.test
-    environment:
-      POSTGRES_DSN: "postgres://postgres:postgres@postgres:5432/testdb?sslmode=disable"
-      S3_ENDPOINT: "http://localstack:4566"
-      S3_BUCKET: "test-backups"
-      S3_REGION: "us-east-1"
-      AWS_ACCESS_KEY_ID: "test"
-      AWS_SECRET_ACCESS_KEY: "test"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      localstack:
-        condition: service_healthy
-    command: >
-      go test -v -tags integration -timeout 5m ./internal/backup/...

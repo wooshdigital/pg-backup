@@ -1,23 +1,33 @@
-.PHONY: build test test-unit test-integration lint clean
+.PHONY: build test test-unit test-integration lint docker-up docker-down
 
-# Build the worker binary.
+# Build the worker binary
 build:
 	go build -o bin/worker ./cmd/worker
 
-# Run all unit tests (no integration tag).
+# Run all unit tests (no integration tag)
+test-unit:
+	go test ./... -count=1 -race
+
+# Run integration tests (requires docker-compose.test.yml services to be running)
+test-integration: docker-up
+	POSTGRES_DSN="postgres://testuser:testpassword@localhost:5432/testdb?sslmode=disable" \
+	S3_ENDPOINT="http://localhost:4566" \
+	S3_BUCKET="test-backups" \
+	AWS_REGION="us-east-1" \
+	AWS_ACCESS_KEY="test" \
+	AWS_SECRET_KEY="test" \
+	go test ./... -tags integration -count=1 -v -timeout 5m
+
+# Alias
 test: test-unit
 
-test-unit:
-	go test -v -race ./...
+# Spin up the test services
+docker-up:
+	docker compose -f docker-compose.test.yml up -d --wait
 
-# Run integration tests using Docker Compose.
-test-integration:
-	docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from test-runner
+# Tear down the test services
+docker-down:
+	docker compose -f docker-compose.test.yml down -v
 
-# Lint using golangci-lint.
 lint:
 	golangci-lint run ./...
-
-clean:
-	rm -rf bin/
-	docker-compose -f docker-compose.test.yml down -v

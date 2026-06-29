@@ -1,19 +1,19 @@
 database:
-  dsn: "postgres://postgres:password@localhost:5432/mydb?sslmode=disable"
+  dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
 storage:
   bucket: "my-backups"
   region: "us-east-1"
-  # Optional: set for LocalStack or other S3-compatible services.
+  # endpoint is optional; set for LocalStack or other S3-compatible services
   endpoint: ""
-  force_path_style: false
-  # Optional: leave empty to use IAM roles / environment credentials.
   access_key_id: ""
   secret_access_key: ""
+  force_path_style: false
 
-compression:
-  algorithm: "gzip"   # supported: "gzip"
+compress:
+  # Supported algorithms: gzip, zstd, none
+  algorithm: "gzip"
 
 backup:
-  # When true, compressed data is piped directly to S3 without a temp file.
+  # stream_direct: if true, skip the temp file and pipe dump→compress→upload directly
   stream_direct: false

@@ -3,40 +3,58 @@ package compress
 import (
 	"compress/gzip"
 	"io"
+
+	"github.com/klauspost/compress/zstd"
 )
 
-// Compressor wraps an io.Reader with compression.
+// Compressor is the interface for compression implementations.
 type Compressor interface {
-	Compress(r io.Reader) (io.Reader, error)
+	// Compress reads from r, compresses the data, and writes to w.
+	// Returns the number of bytes written to w.
+	Compress(r io.Reader, w io.Writer) (int64, error)
 }
 
-// GzipCompressor compresses data using gzip.
+// GzipCompressor compresses using gzip.
 type GzipCompressor struct {
-	level int
+	Level int // 0 means default
 }
 
-// NewGzip creates a GzipCompressor with the given compression level.
-// Use gzip.DefaultCompression (-1) for the default.
-func NewGzip(level int) *GzipCompressor {
-	return &GzipCompressor{level: level}
-}
-
-// Compress wraps r with gzip compression and returns the compressed reader.
-func (g *GzipCompressor) Compress(r io.Reader) (io.Reader, error) {
-	pr, pw := io.Pipe()
-
-	gz, err := gzip.NewWriterLevel(pw, g.level)
-	if err != nil {
-		return nil, err
+func (g *GzipCompressor) Compress(r io.Reader, w io.Writer) (int64, error) {
+	level := g.Level
+	if level == 0 {
+		level = gzip.DefaultCompression
 	}
+	gz, err := gzip.NewWriterLevel(w, level)
+	if err != nil {
+		return 0, err
+	}
+	n, err := io.Copy(gz, r)
+	if err != nil {
+		gz.Close()
+		return n, err
+	}
+	return n, gz.Close()
+}
 
-	go func() {
-		_, copyErr := io.Copy(gz, r)
-		if closeErr := gz.Close(); closeErr != nil && copyErr == nil {
-			copyErr = closeErr
-		}
-		pw.CloseWithError(copyErr)
-	}()
+// ZstdCompressor compresses using zstd.
+type ZstdCompressor struct{}
 
-	return pr, nil
+func (z *ZstdCompressor) Compress(r io.Reader, w io.Writer) (int64, error) {
+	enc, err := zstd.NewWriter(w)
+	if err != nil {
+		return 0, err
+	}
+	n, err := io.Copy(enc, r)
+	if err != nil {
+		enc.Close()
+		return n, err
+	}
+	return n, enc.Close()
+}
+
+// NoopCompressor passes data through without compression.
+type NoopCompressor struct{}
+
+func (n *NoopCompressor) Compress(r io.Reader, w io.Writer) (int64, error) {
+	return io.Copy(w, r)
 }

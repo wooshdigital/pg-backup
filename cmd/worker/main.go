@@ -4,91 +4,90 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"time"
+	"os/signal"
+	"syscall"
 
-	"github.com/sgorgun/go-backup/internal/backup"
-	"github.com/sgorgun/go-backup/internal/compress"
-	"github.com/sgorgun/go-backup/internal/config"
-	"github.com/sgorgun/go-backup/internal/dumper"
-	"github.com/sgorgun/go-backup/internal/storage"
+	"github.com/smnzlnsk/backup-worker/internal/backup"
+	"github.com/smnzlnsk/backup-worker/internal/compress"
+	"github.com/smnzlnsk/backup-worker/internal/config"
+	"github.com/smnzlnsk/backup-worker/internal/dumper"
+	"github.com/smnzlnsk/backup-worker/internal/storage"
 )
 
 func main() {
-	// Structured JSON logging.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
 
-	slog.Info("backup worker starting")
-
-	// Load configuration.
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
+		logger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	// Build the dumper.
-	d, err := dumper.New(cfg.Database.DSN)
+	// Build dumper
+	d, err := dumper.New(dumper.Config{DSN: cfg.Database.DSN})
 	if err != nil {
-		slog.Error("failed to create dumper", "error", err)
+		logger.Error("failed to create dumper", "error", err)
 		os.Exit(1)
 	}
 
-	// Build the compressor.
+	// Build compressor
 	factory := compress.NewFactory()
-	c, err := factory.Create(cfg.Compression.Algorithm)
+	c, err := factory.Get(cfg.Compress.Algorithm)
 	if err != nil {
-		slog.Error("failed to create compressor", "error", err, "algorithm", cfg.Compression.Algorithm)
+		logger.Error("failed to create compressor", "error", err)
 		os.Exit(1)
 	}
 
-	// Build the storage backend.
-	s3cfg := storage.S3Config{
+	// Build storage backend
+	s3Cfg := storage.S3Config{
 		Bucket:          cfg.Storage.Bucket,
 		Region:          cfg.Storage.Region,
 		Endpoint:        cfg.Storage.Endpoint,
-		ForcePathStyle:  cfg.Storage.ForcePathStyle,
 		AccessKeyID:     cfg.Storage.AccessKeyID,
 		SecretAccessKey: cfg.Storage.SecretAccessKey,
+		ForcePathStyle:  cfg.Storage.ForcePathStyle,
 	}
-	st, err := storage.NewS3(ctx, s3cfg)
+	s3Backend, err := storage.NewS3(ctx, s3Cfg)
 	if err != nil {
-		slog.Error("failed to create storage backend", "error", err)
+		logger.Error("failed to create S3 backend", "error", err)
 		os.Exit(1)
 	}
 
-	// Ensure the bucket exists.
-	if err := st.EnsureBucket(ctx); err != nil {
-		slog.Warn("could not ensure bucket exists", "error", err)
+	// Ensure bucket exists
+	if err := s3Backend.EnsureBucket(ctx); err != nil {
+		logger.Error("failed to ensure S3 bucket", "error", err)
+		os.Exit(1)
 	}
 
-	// Construct and run the backup job.
+	// Build and run backup job
 	job := &backup.Job{
 		Dumper:       d,
 		Compressor:   c,
-		Storage:      st,
+		Storage:      s3Backend,
 		StreamDirect: cfg.Backup.StreamDirect,
+		Logger:       logger,
 	}
 
-	slog.Info("running backup job", "stream_direct", cfg.Backup.StreamDirect)
-	result := job.Run(ctx)
+	logger.Info("starting backup job", "stream_direct", cfg.Backup.StreamDirect)
 
+	result := job.Run(ctx)
 	if result.Err != nil {
-		slog.Error("backup job failed",
+		logger.Error("backup job failed",
 			"error", result.Err,
-			"duration_ms", result.Duration.Milliseconds(),
+			"duration", result.Duration,
 		)
 		os.Exit(1)
 	}
 
-	slog.Info("backup job succeeded",
+	logger.Info("backup job succeeded",
 		"key", result.Key,
 		"size_bytes", result.Size,
-		"duration_ms", result.Duration.Milliseconds(),
+		"duration", result.Duration,
 	)
 }

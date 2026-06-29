@@ -6,64 +6,79 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/sgorgun/go-backup/internal/compress"
-	"github.com/sgorgun/go-backup/internal/dumper"
-	"github.com/sgorgun/go-backup/internal/storage"
+	"github.com/smnzlnsk/backup-worker/internal/compress"
+	"github.com/smnzlnsk/backup-worker/internal/dumper"
+	"github.com/smnzlnsk/backup-worker/internal/storage"
 )
 
-// RunPipeline streams dump output through the compressor and directly into the
-// storage backend using an io.Pipe, avoiding any temp file on disk.
-//
-// The pipeline looks like:
-//
-//	pg_dump → compressor → io.Pipe → storage.Put
-func RunPipeline(
+// RunStreamPipeline connects pg_dump → compressor → uploader using io.Pipe,
+// avoiding the need for a temporary file on disk.
+func RunStreamPipeline(
 	ctx context.Context,
 	d dumper.Dumper,
 	c compress.Compressor,
 	s storage.Backend,
 	key string,
+	logger *slog.Logger,
 ) (int64, error) {
-	slog.Debug("pipeline: starting direct-stream backup", "key", key)
+	// Pipe 1: dump output → compressor input
+	dumpReader, dumpWriter := io.Pipe()
 
-	// Start the dump.
-	dumpReader, err := d.Dump(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("pipeline: start dump: %w", err)
-	}
+	// Pipe 2: compressor output → uploader input
+	uploadReader, uploadWriter := io.Pipe()
 
-	// Wrap the dump reader with the compressor.
-	compressedReader, err := c.Compress(dumpReader)
-	if err != nil {
-		return 0, fmt.Errorf("pipeline: compress: %w", err)
-	}
+	dumpErrCh := make(chan error, 1)
+	compressErrCh := make(chan error, 1)
 
-	// Create an io.Pipe so we can stream the compressor output into storage.Put
-	// without buffering everything in memory or on disk.
-	pr, pw := io.Pipe()
-
-	// Goroutine: copy compressed data into the pipe writer.
-	copyErrCh := make(chan error, 1)
+	// Stage 1: run pg_dump into dumpWriter
 	go func() {
-		_, copyErr := io.Copy(pw, compressedReader)
-		// Close the writer; this signals EOF (or error) to the reader side.
-		pw.CloseWithError(copyErr)
-		copyErrCh <- copyErr
+		defer dumpWriter.Close()
+		if err := d.Dump(ctx, dumpWriter); err != nil {
+			dumpWriter.CloseWithError(err)
+			dumpErrCh <- fmt.Errorf("dump stage: %w", err)
+			return
+		}
+		dumpErrCh <- nil
 	}()
 
-	// Upload from the pipe reader side; this blocks until the writer goroutine finishes.
-	slog.Debug("pipeline: uploading", "key", key)
-	size, uploadErr := s.Put(ctx, key, pr)
-	// Drain copy error (writer goroutine should have already finished at this point).
-	copyErr := <-copyErrCh
+	// Stage 2: compress dumpReader output into uploadWriter
+	go func() {
+		defer uploadWriter.Close()
+		_, err := c.Compress(dumpReader, uploadWriter)
+		if err != nil {
+			dumpReader.CloseWithError(err)
+			uploadWriter.CloseWithError(err)
+			compressErrCh <- fmt.Errorf("compress stage: %w", err)
+			return
+		}
+		compressErrCh <- nil
+	}()
 
+	// Stage 3: upload from uploadReader (blocking)
+	if logger != nil {
+		logger.Info("streaming upload started", "key", key)
+	}
+	size, uploadErr := s.Upload(ctx, key, uploadReader)
+	// Drain the pipe so goroutines can finish
 	if uploadErr != nil {
-		return 0, fmt.Errorf("pipeline: upload: %w", uploadErr)
-	}
-	if copyErr != nil {
-		return 0, fmt.Errorf("pipeline: compress copy: %w", copyErr)
+		uploadReader.CloseWithError(uploadErr)
 	}
 
-	slog.Debug("pipeline: direct-stream complete", "key", key, "size_bytes", size)
+	compressErr := <-compressErrCh
+	dumpErr := <-dumpErrCh
+
+	if dumpErr != nil {
+		return 0, dumpErr
+	}
+	if compressErr != nil {
+		return 0, compressErr
+	}
+	if uploadErr != nil {
+		return 0, fmt.Errorf("upload stage: %w", uploadErr)
+	}
+
+	if logger != nil {
+		logger.Info("streaming upload complete", "key", key, "bytes", size)
+	}
 	return size, nil
 }
