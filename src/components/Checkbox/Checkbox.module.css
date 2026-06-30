@@ -3,7 +3,7 @@
   align-items: flex-start;
   gap: 0.5rem;
   cursor: pointer;
-  user-select: none;
+  position: relative;
 }
 
 .wrapper.disabled {
@@ -27,38 +27,16 @@
 /* Custom indicator */
 .indicator {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 1.125rem;
   height: 1.125rem;
+  border-radius: 0.25rem;
   border: 2px solid var(--color-border, #6b7280);
-  border-radius: 3px;
   background-color: var(--color-surface, #ffffff);
-  transition: background-color 150ms ease, border-color 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   margin-top: 0.125rem;
-}
-
-/* Checkmark SVG icon */
-.checkmark {
-  display: none;
-  width: 0.75rem;
-  height: 0.75rem;
-  color: #ffffff;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* Indeterminate dash */
-.dash {
-  display: none;
-  width: 0.625rem;
-  height: 2px;
-  background-color: #ffffff;
-  border-radius: 1px;
 }
 
 /* Checked state */
@@ -67,65 +45,68 @@
   border-color: var(--color-primary, #4f46e5);
 }
 
-.input:checked + .indicator .checkmark {
-  display: block;
-}
-
 /* Indeterminate state */
-.indicator.indeterminate {
+.input:indeterminate + .indicator {
   background-color: var(--color-primary, #4f46e5);
   border-color: var(--color-primary, #4f46e5);
-}
-
-.indicator.indeterminate .dash {
-  display: block;
-}
-
-.indicator.indeterminate .checkmark {
-  display: none;
 }
 
 /* Focus ring */
 .input:focus-visible + .indicator {
   outline: 2px solid var(--color-focus-ring, #4f46e5);
   outline-offset: 2px;
+  box-shadow: 0 0 0 3px var(--color-focus-ring-alpha, rgba(79, 70, 229, 0.3));
 }
 
-/* Disabled */
+/* Checkmark icon */
+.checkmark {
+  display: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  color: #ffffff;
+}
+
+.input:checked + .indicator .checkmark {
+  display: block;
+}
+
+/* Indeterminate dash */
+.indeterminateDash {
+  display: none;
+  width: 0.625rem;
+  height: 0.125rem;
+  background-color: #ffffff;
+  border-radius: 1px;
+}
+
+.input:indeterminate + .indicator .indeterminateDash {
+  display: block;
+}
+
+.input:indeterminate + .indicator .checkmark {
+  display: none;
+}
+
+/* Label text */
+.label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-text, #111827);
+  user-select: none;
+}
+
+/* Error state */
+.wrapper.hasError .indicator {
+  border-color: var(--color-error, #dc2626);
+}
+
+/* Disabled native input targets */
 .input:disabled + .indicator {
   background-color: var(--color-surface-disabled, #f3f4f6);
   border-color: var(--color-border-disabled, #d1d5db);
 }
 
 .input:disabled:checked + .indicator {
-  background-color: var(--color-primary-disabled, #a5b4fc);
-  border-color: var(--color-primary-disabled, #a5b4fc);
-}
-
-.label {
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--color-text, #111827);
-}
-
-.wrapper.disabled .label {
-  color: var(--color-text-disabled, #9ca3af);
-}
-
-.helperText {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #6b7280);
-  margin-top: 0.125rem;
-}
-
-.error {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--color-error, #dc2626);
-  margin-top: 0.125rem;
-}
-
-.indicator.hasError {
-  border-color: var(--color-error, #dc2626);
+  background-color: var(--color-border-disabled, #d1d5db);
+  border-color: var(--color-border-disabled, #d1d5db);
 }

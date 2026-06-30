@@ -1,39 +1,31 @@
-import React, {
-  useCallback,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type KeyboardEvent,
-} from 'react';
+import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { RadioGroupContext, RadioGroupContextValue } from './RadioGroupContext';
 import styles from './RadioGroup.module.css';
-import { classNames } from '../../utils/classNames';
-import { RadioGroupContext } from './RadioGroupContext';
 
 export interface RadioGroupProps {
-  /** Group label rendered as a legend */
-  legend: ReactNode;
+  /** Group label shown as legend */
+  legend: React.ReactNode;
   /** Shared name for all radio inputs */
   name?: string;
-  /** Controlled value */
+  /** Controlled selected value */
   value?: string;
-  /** Default (uncontrolled) value */
+  /** Default selected value (uncontrolled) */
   defaultValue?: string;
-  /** Change handler */
+  /** onChange handler — receives the new value */
   onChange?: (value: string) => void;
-  /** Disables all radio inputs */
+  /** Whether all radios are disabled */
   disabled?: boolean;
-  /** Required group */
+  /** Whether the group is required */
   required?: boolean;
-  /** Layout orientation */
+  /** Layout direction */
   orientation?: 'vertical' | 'horizontal';
-  /** Helper text */
-  helperText?: string;
   /** Error message */
-  error?: string;
+  errorMessage?: React.ReactNode;
+  /** Helper text */
+  helperText?: React.ReactNode;
   /** Radio children */
-  children: ReactNode;
+  children: React.ReactNode;
+  /** Additional class name */
   className?: string;
 }
 
@@ -46,143 +38,146 @@ export const RadioGroup: React.FC<RadioGroupProps> = ({
   disabled = false,
   required = false,
   orientation = 'vertical',
+  errorMessage,
   helperText,
-  error,
   children,
   className,
 }) => {
   const generatedName = useId();
   const name = nameProp ?? generatedName;
+  const errorId = useId();
+  const helperId = useId();
+  const legendId = useId();
+  const groupRef = useRef<HTMLDivElement>(null);
 
-  const groupId = useId();
-  const legendId = `${groupId}-legend`;
-  const helperTextId = helperText ? `${groupId}-helper` : undefined;
-  const errorId = error ? `${groupId}-error` : undefined;
-
-  // Internal value state for uncontrolled usage
+  // Internal value for uncontrolled mode
   const [internalValue, setInternalValue] = useState<string | undefined>(defaultValue);
+
+  // Determine effective value (controlled vs uncontrolled)
   const isControlled = valueProp !== undefined;
-  const currentValue = isControlled ? valueProp : internalValue;
+  const effectiveValue = isControlled ? valueProp : internalValue;
 
-  // Collect radio values for arrow-key navigation
-  const radioValuesRef = useRef<string[]>([]);
-
-  // Roving tabindex state — track which radio should be focusable
-  const [focusedValue, setFocusedValueState] = useState<string | undefined>(
-    currentValue ?? defaultValue
+  // Roving tabindex: track which radio value is the current tab stop
+  // Default: selected value, or first radio
+  const [focusedValue, setFocusedValue] = useState<string | undefined>(
+    effectiveValue
   );
-
-  const setFocusedValue = useCallback((value: string) => {
-    setFocusedValueState(value);
-  }, []);
 
   const handleChange = useCallback(
-    (value: string) => {
+    (val: string) => {
       if (!isControlled) {
-        setInternalValue(value);
+        setInternalValue(val);
       }
-      setFocusedValue(value);
-      onChange?.(value);
+      setFocusedValue(val);
+      onChange?.(val);
     },
-    [isControlled, onChange, setFocusedValue]
+    [isControlled, onChange]
   );
 
-  // Gather radio values by inspecting children
-  const radioValues = useMemo(() => {
-    const values: string[] = [];
-    const collectValues = (node: ReactNode) => {
-      React.Children.forEach(node, (child) => {
-        if (React.isValidElement(child)) {
-          if (child.props.value !== undefined) {
-            values.push(child.props.value as string);
-          }
-          if (child.props.children) {
-            collectValues(child.props.children);
-          }
-        }
-      });
-    };
-    collectValues(children);
-    return values;
-  }, [children]);
+  const handleFocus = useCallback((val: string) => {
+    setFocusedValue(val);
+  }, []);
 
-  radioValuesRef.current = radioValues;
-
+  // Keyboard navigation: arrow keys move between enabled radio options
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      const values = radioValuesRef.current;
-      if (!values.length) return;
-
-      const currentIndex = focusedValue ? values.indexOf(focusedValue) : -1;
-
-      let nextIndex: number | undefined;
-
-      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-        e.preventDefault();
-        nextIndex = currentIndex < values.length - 1 ? currentIndex + 1 : 0;
-      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        e.preventDefault();
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : values.length - 1;
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+        return;
       }
 
-      if (nextIndex !== undefined) {
-        const nextValue = values[nextIndex];
-        setFocusedValue(nextValue);
-        handleChange(nextValue);
+      event.preventDefault();
 
-        // Focus the input element for the next value
-        // We find it in the DOM by name + value attributes
-        const groupEl = e.currentTarget;
-        const nextInput = groupEl.querySelector<HTMLInputElement>(
-          `input[type="radio"][value="${CSS.escape(nextValue)}"]`
-        );
-        nextInput?.focus();
+      // Collect all enabled radio inputs in the group
+      const inputs = Array.from(
+        groupRef.current?.querySelectorAll<HTMLInputElement>(
+          'input[type="radio"]:not(:disabled)'
+        ) ?? []
+      );
+
+      if (inputs.length === 0) return;
+
+      const currentIndex = inputs.findIndex(
+        (input) => input === document.activeElement || input.value === focusedValue
+      );
+
+      let nextIndex: number;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+        nextIndex = (currentIndex + 1) % inputs.length;
+      } else {
+        nextIndex = (currentIndex - 1 + inputs.length) % inputs.length;
       }
+
+      const nextInput = inputs[nextIndex];
+      nextInput.focus();
+
+      // Also select the focused radio on arrow key navigation (standard radio behavior)
+      const nextValue = nextInput.value;
+      if (!isControlled) {
+        setInternalValue(nextValue);
+      }
+      setFocusedValue(nextValue);
+      onChange?.(nextValue);
     },
-    [focusedValue, handleChange, setFocusedValue]
+    [focusedValue, isControlled, onChange]
   );
 
-  const contextValue = useMemo(
+  const hasError = Boolean(errorMessage);
+  const describedby = [hasError ? errorId : '', helperText && !hasError ? helperId : '']
+    .filter(Boolean)
+    .join(' ') || undefined;
+
+  const groupClass = [
+    styles.group,
+    orientation === 'horizontal' ? styles.horizontal : styles.vertical,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const fieldsetClass = [styles.fieldset, className ?? ''].filter(Boolean).join(' ');
+
+  const contextValue: RadioGroupContextValue = useMemo(
     () => ({
       name,
-      value: currentValue,
+      value: effectiveValue,
       onChange: handleChange,
       disabled,
-      focusedValue: focusedValue ?? radioValues[0],
-      setFocusedValue,
+      required,
+      focusedValue: focusedValue ?? effectiveValue,
+      onFocus: handleFocus,
     }),
-    [name, currentValue, handleChange, disabled, focusedValue, radioValues, setFocusedValue]
+    [name, effectiveValue, handleChange, disabled, required, focusedValue, handleFocus]
   );
 
   return (
     <RadioGroupContext.Provider value={contextValue}>
       <fieldset
-        className={classNames(styles.fieldset, className)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={[helperTextId, errorId].filter(Boolean).join(' ') || undefined}
-        aria-required={required || undefined}
+        className={fieldsetClass}
+        aria-required={required ? true : undefined}
+        aria-describedby={describedby}
+        aria-invalid={hasError ? true : undefined}
       >
-        <legend id={legendId} className={classNames(styles.legend, required && styles.required)}>
+        <legend id={legendId} className={styles.legend}>
           {legend}
+          {required && <span aria-hidden="true"> *</span>}
         </legend>
         <div
+          ref={groupRef}
           role="radiogroup"
           aria-labelledby={legendId}
-          aria-orientation={orientation}
-          className={classNames(styles.group, orientation === 'horizontal' && styles.horizontal)}
+          className={groupClass}
           onKeyDown={handleKeyDown}
         >
           {children}
         </div>
-        {helperText && !error && (
-          <span id={helperTextId} className={styles.helperText}>
+        {helperText && !hasError && (
+          <p id={helperId} className={styles.helperText}>
             {helperText}
-          </span>
+          </p>
         )}
-        {error && (
-          <span id={errorId} className={styles.error} role="alert">
-            {error}
-          </span>
+        {hasError && (
+          <p id={errorId} className={styles.errorMessage} role="alert">
+            {errorMessage}
+          </p>
         )}
       </fieldset>
     </RadioGroupContext.Provider>

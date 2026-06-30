@@ -1,82 +1,79 @@
-import React, {
-  forwardRef,
-  useRef,
-  type InputHTMLAttributes,
-  type KeyboardEvent,
-} from 'react';
-import styles from './RadioGroup.module.css';
-import { classNames } from '../../utils/classNames';
+import React, { useId, useRef } from 'react';
 import { useRadioGroup } from './RadioGroupContext';
+import styles from './RadioGroup.module.css';
 
-export interface RadioProps
-  extends Omit<
-    InputHTMLAttributes<HTMLInputElement>,
-    'type' | 'name' | 'checked' | 'onChange'
-  > {
-  /** The value this radio represents */
+export interface RadioProps {
+  /** Value of this radio option */
   value: string;
   /** Label text */
   label: React.ReactNode;
-  /** Error styling on the indicator */
-  error?: boolean;
-  /** Individual radio can be disabled (group disabled also applies) */
+  /** Whether this specific radio is disabled (overrides group disabled) */
   disabled?: boolean;
+  /** Whether this radio has an error */
+  hasError?: boolean;
+  /** Additional class name */
+  className?: string;
 }
 
-export const Radio = forwardRef<HTMLInputElement, RadioProps>(
-  ({ value, label, error, disabled: itemDisabled, id, className, ...rest }, ref) => {
-    const { name, value: groupValue, onChange, disabled: groupDisabled, focusedValue, setFocusedValue } =
-      useRadioGroup();
+export const Radio: React.FC<RadioProps> = ({
+  value,
+  label,
+  disabled: disabledProp,
+  hasError = false,
+  className,
+}) => {
+  const { name, value: groupValue, onChange, disabled: groupDisabled, focusedValue, onFocus } =
+    useRadioGroup();
+  const generatedId = useId();
+  const id = `radio-${name}-${value}-${generatedId}`;
+  const inputRef = useRef<HTMLInputElement>(null);
 
-    const disabled = itemDisabled || groupDisabled;
-    const isChecked = groupValue === value;
+  const isDisabled = disabledProp ?? groupDisabled ?? false;
+  const isChecked = groupValue === value;
+  // Roving tabindex: only the selected radio (or first if none selected) gets tabIndex=0
+  // focusedValue tracks which is currently focused for roving tabindex
+  const isTabStop = focusedValue === value;
 
-    const generatedId = React.useId();
-    const inputId = id ?? generatedId;
+  const wrapperClasses = [
+    styles.radioWrapper,
+    isDisabled ? styles.disabled : '',
+    hasError ? styles.hasError : '',
+    className ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
-    // Roving tabindex: only checked (or first) radio has tabIndex=0
-    const tabIndex = focusedValue === value ? 0 : -1;
+  const handleChange = () => {
+    if (!isDisabled && onChange) {
+      onChange(value);
+      onFocus?.(value);
+    }
+  };
 
-    const handleChange = () => {
-      if (!disabled) {
-        onChange?.(value);
-        setFocusedValue?.(value);
-      }
-    };
+  const handleFocus = () => {
+    onFocus?.(value);
+  };
 
-    const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        // Navigation handled by RadioGroup
-      }
-    };
-
-    return (
-      <label
-        className={classNames(styles.radioWrapper, disabled && styles.disabled, className)}
-        htmlFor={inputId}
-      >
-        <input
-          {...rest}
-          ref={ref}
-          id={inputId}
-          type="radio"
-          name={name}
-          value={value}
-          checked={isChecked}
-          disabled={disabled}
-          tabIndex={tabIndex}
-          className={styles.radioInput}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-        />
-        <div
-          className={classNames(styles.radioIndicator, error && styles.hasError)}
-          aria-hidden="true"
-        />
-        <span className={styles.radioLabel}>{label}</span>
-      </label>
-    );
-  }
-);
+  return (
+    <label htmlFor={id} className={wrapperClasses}>
+      <input
+        ref={inputRef}
+        type="radio"
+        id={id}
+        name={name}
+        value={value}
+        checked={isChecked}
+        disabled={isDisabled}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        tabIndex={isTabStop ? 0 : -1}
+        className={styles.radioInput}
+        aria-invalid={hasError ? true : undefined}
+      />
+      <div className={styles.radioIndicator} aria-hidden="true" />
+      <span className={styles.radioLabel}>{label}</span>
+    </label>
+  );
+};
 
 Radio.displayName = 'Radio';

@@ -1,119 +1,123 @@
-import React, {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  type ChangeEvent,
-  type InputHTMLAttributes,
-} from 'react';
+import React, { useEffect, useRef, forwardRef, useId } from 'react';
 import styles from './Checkbox.module.css';
-import { classNames } from '../../utils/classNames';
 
-export interface CheckboxProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange'> {
-  /** Label text for the checkbox */
+export interface CheckboxProps {
+  /** Label text shown beside the checkbox */
   label?: React.ReactNode;
-  /** Helper text displayed below the label */
-  helperText?: string;
-  /** Error message — also sets aria-invalid */
-  error?: string;
-  /** Indeterminate state (mixed) */
+  /** Controlled checked state */
+  checked?: boolean;
+  /** Uncontrolled default checked state */
+  defaultChecked?: boolean;
+  /** Whether the checkbox is in an indeterminate state */
   indeterminate?: boolean;
-  /** Change handler receives the new checked boolean */
-  onChange?: (checked: boolean, event: ChangeEvent<HTMLInputElement>) => void;
+  /** Whether the checkbox is disabled */
+  disabled?: boolean;
+  /** Whether the checkbox has an error */
+  hasError?: boolean;
+  /** Name attribute for form submission */
+  name?: string;
+  /** Value attribute for form submission */
+  value?: string;
+  /** onChange handler */
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  /** Additional class name */
+  className?: string;
+  /** ID for the input element */
+  id?: string;
+  /** aria-describedby */
+  'aria-describedby'?: string;
+  /** aria-required */
+  'aria-required'?: boolean;
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
   (
     {
       label,
-      helperText,
-      error,
-      indeterminate = false,
-      disabled = false,
       checked,
       defaultChecked,
+      indeterminate = false,
+      disabled = false,
+      hasError = false,
+      name,
+      value,
       onChange,
-      id,
       className,
+      id: idProp,
       'aria-describedby': ariaDescribedby,
-      ...rest
+      'aria-required': ariaRequired,
     },
     ref
   ) => {
-    const inputRef = useRef<HTMLInputElement>(null);
+    const generatedId = useId();
+    const id = idProp ?? generatedId;
+    const internalRef = useRef<HTMLInputElement>(null);
 
-    // Expose the underlying input element via ref
-    useImperativeHandle(ref, () => inputRef.current!);
+    // Merge refs
+    const setRef = (node: HTMLInputElement | null) => {
+      (internalRef as React.MutableRefObject<HTMLInputElement | null>).current = node;
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        (ref as React.MutableRefObject<HTMLInputElement | null>).current = node;
+      }
+    };
 
-    // Sync indeterminate property (not an HTML attribute, must be set via JS)
+    // Set indeterminate via ref since it's not an HTML attribute
     useEffect(() => {
-      if (inputRef.current) {
-        inputRef.current.indeterminate = indeterminate;
+      if (internalRef.current) {
+        internalRef.current.indeterminate = indeterminate;
       }
     }, [indeterminate]);
 
-    const generatedId = React.useId();
-    const inputId = id ?? generatedId;
-    const helperTextId = helperText ? `${inputId}-helper` : undefined;
-    const errorId = error ? `${inputId}-error` : undefined;
-
-    const describedByIds = [ariaDescribedby, helperTextId, errorId]
+    const wrapperClasses = [
+      styles.wrapper,
+      disabled ? styles.disabled : '',
+      hasError ? styles.hasError : '',
+      className ?? '',
+    ]
       .filter(Boolean)
       .join(' ');
 
-    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-      onChange?.(e.target.checked, e);
-    };
-
     return (
-      <div className={classNames(styles.wrapper, disabled && styles.disabled, className)}>
-        <label
-          htmlFor={inputId}
-          className={classNames(styles.wrapper, disabled && styles.disabled)}
-          style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
-        >
-          <input
-            {...rest}
-            ref={inputRef}
-            id={inputId}
-            type="checkbox"
-            className={styles.input}
-            checked={checked}
-            defaultChecked={defaultChecked}
-            disabled={disabled}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={describedByIds || undefined}
-            onChange={handleChange}
-          />
-          <div
-            className={classNames(
-              styles.indicator,
-              indeterminate && styles.indeterminate,
-              error && styles.hasError
-            )}
+      <label htmlFor={id} className={wrapperClasses}>
+        <input
+          ref={setRef}
+          type="checkbox"
+          id={id}
+          name={name}
+          value={value}
+          checked={checked}
+          defaultChecked={defaultChecked}
+          disabled={disabled}
+          onChange={onChange}
+          className={styles.input}
+          aria-describedby={ariaDescribedby}
+          aria-required={ariaRequired}
+          aria-invalid={hasError ? true : undefined}
+        />
+        <div className={styles.indicator} aria-hidden="true">
+          {/* Checkmark SVG */}
+          <svg
+            className={styles.checkmark}
+            viewBox="0 0 10 10"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
             aria-hidden="true"
           >
-            {/* Checkmark */}
-            <svg className={styles.checkmark} viewBox="0 0 12 12" aria-hidden="true">
-              <polyline points="1.5,6 4.5,9 10.5,3" />
-            </svg>
-            {/* Indeterminate dash */}
-            <div className={styles.dash} />
-          </div>
-          {label && <span className={styles.label}>{label}</span>}
-        </label>
-        {helperText && !error && (
-          <span id={helperTextId} className={styles.helperText}>
-            {helperText}
-          </span>
-        )}
-        {error && (
-          <span id={errorId} className={styles.error} role="alert">
-            {error}
-          </span>
-        )}
-      </div>
+            <path
+              d="M1.5 5L4 7.5L8.5 2.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {/* Indeterminate dash */}
+          <div className={styles.indeterminateDash} aria-hidden="true" />
+        </div>
+        {label && <span className={styles.label}>{label}</span>}
+      </label>
     );
   }
 );

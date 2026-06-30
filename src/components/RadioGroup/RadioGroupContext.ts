@@ -1,26 +1,28 @@
 import { createContext, useContext } from 'react';
 
 export interface RadioGroupContextValue {
-  /** Shared name attribute for all radio inputs in the group */
+  /** Shared name attribute for all radios in the group */
   name: string;
   /** Currently selected value */
   value?: string;
-  /** Called when a radio is selected */
+  /** Callback when a radio is selected */
   onChange?: (value: string) => void;
-  /** Whether the entire group is disabled */
+  /** Whether all radios in the group are disabled */
   disabled?: boolean;
-  /** The id of the focusable radio (roving tabindex) */
+  /** Whether the group is required */
+  required?: boolean;
+  /** The currently focused radio value (for roving tabindex) */
   focusedValue?: string;
-  /** Set which radio should have tabIndex=0 */
-  setFocusedValue?: (value: string) => void;
+  /** Callback to set the currently focused value */
+  onFocus?: (value: string) => void;
 }
 
-const RadioGroupContext = createContext<RadioGroupContextValue>({
-  name: '',
-});
+export const RadioGroupContext = createContext<RadioGroupContextValue | null>(null);
 
-export { RadioGroupContext };
-
-export const useRadioGroup = (): RadioGroupContextValue => {
-  return useContext(RadioGroupContext);
-};
+export function useRadioGroup(): RadioGroupContextValue {
+  const context = useContext(RadioGroupContext);
+  if (!context) {
+    throw new Error('useRadioGroup must be used within a RadioGroup');
+  }
+  return context;
+}

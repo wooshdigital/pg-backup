@@ -1,60 +1,73 @@
-import React, { type ReactNode } from 'react';
+import React, { useId } from 'react';
 import styles from './CheckboxGroup.module.css';
-import { classNames } from '../../utils/classNames';
 
 export interface CheckboxGroupProps {
-  /** Group label rendered as a legend */
-  legend: ReactNode;
-  /** Whether at least one checkbox is required */
-  required?: boolean;
-  /** Helper text for the group */
-  helperText?: string;
-  /** Error message for the group */
-  error?: string;
+  /** Legend / label for the group */
+  legend: React.ReactNode;
   /** Layout direction */
   orientation?: 'vertical' | 'horizontal';
-  /** Checkbox children */
-  children: ReactNode;
+  /** Whether the group is required */
+  required?: boolean;
+  /** Error message to display */
+  errorMessage?: React.ReactNode;
+  /** Helper text */
+  helperText?: React.ReactNode;
+  /** Children (Checkbox components) */
+  children: React.ReactNode;
+  /** Additional class name */
   className?: string;
 }
 
 export const CheckboxGroup: React.FC<CheckboxGroupProps> = ({
   legend,
-  required = false,
-  helperText,
-  error,
   orientation = 'vertical',
+  required = false,
+  errorMessage,
+  helperText,
   children,
   className,
 }) => {
-  const groupId = React.useId();
-  const helperTextId = helperText ? `${groupId}-helper` : undefined;
-  const errorId = error ? `${groupId}-error` : undefined;
+  const errorId = useId();
+  const helperId = useId();
 
-  const describedByIds = [helperTextId, errorId].filter(Boolean).join(' ');
+  const hasError = Boolean(errorMessage);
+  const itemsClass = [
+    styles.items,
+    orientation === 'horizontal' ? styles.horizontal : styles.vertical,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const groupClass = [styles.group, className ?? ''].filter(Boolean).join(' ');
+
+  // Build aria-describedby from active descriptors
+  const describedby = [hasError ? errorId : '', helperText ? helperId : '']
+    .filter(Boolean)
+    .join(' ') || undefined;
 
   return (
     <fieldset
-      className={classNames(styles.group, className)}
-      aria-required={required || undefined}
-      aria-describedby={describedByIds || undefined}
-      aria-invalid={error ? true : undefined}
+      className={groupClass}
+      aria-required={required ? true : undefined}
+      aria-describedby={describedby}
+      aria-invalid={hasError ? true : undefined}
     >
-      <legend className={classNames(styles.legend, required && styles.required)}>
+      <legend className={styles.legend}>
         {legend}
+        {required && <span aria-hidden="true"> *</span>}
       </legend>
-      <div className={classNames(styles.items, orientation === 'horizontal' && styles.horizontal)}>
+      <div className={itemsClass} role="group">
         {children}
       </div>
-      {helperText && !error && (
-        <span id={helperTextId} className={styles.helperText}>
+      {helperText && !hasError && (
+        <p id={helperId} className={styles.helperText}>
           {helperText}
-        </span>
+        </p>
       )}
-      {error && (
-        <span id={errorId} className={styles.error} role="alert">
-          {error}
-        </span>
+      {hasError && (
+        <p id={errorId} className={styles.errorMessage} role="alert">
+          {errorMessage}
+        </p>
       )}
     </fieldset>
   );
