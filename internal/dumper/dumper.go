@@ -7,41 +7,50 @@ import (
 	"os/exec"
 )
 
-// Dumper defines the interface for database dumpers.
+// Dumper produces a PostgreSQL dump.
 type Dumper interface {
-	// Dump writes a database dump to w.
 	Dump(ctx context.Context, w io.Writer) error
 }
 
-// PgDumper implements Dumper using pg_dump.
+// PgDumper invokes the pg_dump binary to stream a database dump.
 type PgDumper struct {
 	dsn string
-	env []string
 }
 
-// New creates a new PgDumper for the given DSN.
+// New creates a PgDumper for the given DSN.
 func New(dsn string) (*PgDumper, error) {
 	if dsn == "" {
 		return nil, fmt.Errorf("DSN must not be empty")
 	}
-	env, err := dsnToEnv(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("parse DSN: %w", err)
-	}
-	return &PgDumper{dsn: dsn, env: env}, nil
+	return &PgDumper{dsn: dsn}, nil
 }
 
-// Dump runs pg_dump and writes the output to w.
+// Dump runs pg_dump and writes its output to w.
 func (d *PgDumper) Dump(ctx context.Context, w io.Writer) error {
-	cmd := exec.CommandContext(ctx, "pg_dump", "--no-password")
-	cmd.Env = d.env
+	// pg_dump accepts a DSN directly as the positional argument.
+	cmd := exec.CommandContext(ctx, "pg_dump",
+		"--no-password",
+		"--format=custom",
+		d.dsn,
+	)
 	cmd.Stdout = w
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("stderr pipe: %w", err)
+	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("pg_dump: %w: %s", err, stderr.String())
+	if err = cmd.Start(); err != nil {
+		return fmt.Errorf("start pg_dump: %w", err)
+	}
+
+	stderrBytes, _ := io.ReadAll(stderrPipe)
+
+	if err = cmd.Wait(); err != nil {
+		if len(stderrBytes) > 0 {
+			return fmt.Errorf("pg_dump: %w: %s", err, stderrBytes)
+		}
+		return fmt.Errorf("pg_dump: %w", err)
 	}
 	return nil
 }

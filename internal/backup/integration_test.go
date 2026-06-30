@@ -5,134 +5,136 @@ package backup_test
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/smlgh/smarti/internal/backup"
-	"github.com/smlgh/smarti/internal/compress"
-	"github.com/smlgh/smarti/internal/dumper"
-	"github.com/smlgh/smarti/internal/storage"
+	"github.com/sdreger/cmd-worker/internal/backup"
+	"github.com/sdreger/cmd-worker/internal/compress"
+	"github.com/sdreger/cmd-worker/internal/config"
+	"github.com/sdreger/cmd-worker/internal/dumper"
+	"github.com/sdreger/cmd-worker/internal/storage"
 )
 
-// Integration test prerequisites (provided by docker-compose.test.yml):
+// TestBackupJob_Integration runs a complete backup cycle against real
+// Postgres and LocalStack S3 containers.
 //
-//   - POSTGRES_DSN   – e.g. postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable
-//   - S3_ENDPOINT    – e.g. http://localhost:4566
-//   - S3_BUCKET      – e.g. test-bucket
-//   - AWS_ACCESS_KEY – e.g. test
-//   - AWS_SECRET_KEY – e.g. test
-//   - AWS_REGION     – e.g. us-east-1
+// It expects the following environment variables (set by docker-compose or the
+// CI environment):
+//
+//	POSTGRES_DSN   – e.g. postgres://user:pass@localhost:5432/testdb?sslmode=disable
+//	S3_ENDPOINT    – e.g. http://localhost:4566
+//	S3_BUCKET      – e.g. backup-test
+//	AWS_REGION     – e.g. us-east-1
+//	AWS_ACCESS_KEY_ID
+//	AWS_SECRET_ACCESS_KEY
+func TestBackupJob_Integration(t *testing.T) {
+	t.Helper()
 
-func TestBackupJob_Integration_TempFile(t *testing.T) {
+	pgDSN := requireEnv(t, "POSTGRES_DSN")
+	s3Endpoint := requireEnv(t, "S3_ENDPOINT")
+	s3Bucket := requireEnv(t, "S3_BUCKET")
+	awsRegion := requireEnvWithDefault("AWS_REGION", "us-east-1")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	pgDSN := requireEnv(t, "POSTGRES_DSN")
-	endpoint := requireEnv(t, "S3_ENDPOINT")
-	bucket := requireEnv(t, "S3_BUCKET")
-	accessKey := requireEnv(t, "AWS_ACCESS_KEY")
-	secretKey := requireEnv(t, "AWS_SECRET_KEY")
-	region := requireEnvWithDefault("AWS_REGION", "us-east-1")
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	d, err := dumper.New(pgDSN)
-	if err != nil {
-		t.Fatalf("dumper.New: %v", err)
+	// Build config
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			DSN: pgDSN,
+		},
+		Storage: config.StorageConfig{
+			Bucket:   s3Bucket,
+			Endpoint: s3Endpoint,
+			Region:   awsRegion,
+		},
+		Compress: config.CompressConfig{
+			Algorithm: "gzip",
+		},
 	}
 
-	comp := compress.NewGzip(compress.DefaultGzipLevel)
+	// Build dumper
+	d, err := dumper.New(cfg.Database.DSN)
+	if err != nil {
+		t.Fatalf("create dumper: %v", err)
+	}
 
-	s3, err := storage.NewS3(ctx, storage.S3Config{
-		Endpoint:        endpoint,
-		Bucket:          bucket,
-		AccessKeyID:     accessKey,
-		SecretAccessKey: secretKey,
-		Region:          region,
-		ForcePathStyle:  true,
+	// Build compressor
+	c, err := compress.New(cfg.Compress.Algorithm)
+	if err != nil {
+		t.Fatalf("create compressor: %v", err)
+	}
+
+	// Build storage backend
+	s3Backend, err := storage.NewS3Backend(ctx, cfg.Storage.Bucket, cfg.Storage.Region, cfg.Storage.Endpoint)
+	if err != nil {
+		t.Fatalf("create s3 backend: %v", err)
+	}
+
+	// Ensure bucket exists (LocalStack creates it automatically with the right
+	// env vars, but we create it explicitly to be safe).
+	if err = s3Backend.EnsureBucket(ctx); err != nil {
+		t.Logf("EnsureBucket: %v (may already exist)", err)
+	}
+
+	// --- Test 1: via temp file ---
+	t.Run("ViaTemp", func(t *testing.T) {
+		job := &backup.Job{
+			Dumper:       d,
+			Compressor:   c,
+			Storage:      s3Backend,
+			StreamDirect: false,
+			Logger:       logger,
+		}
+
+		result := job.Run(ctx)
+		if result.Err != nil {
+			t.Fatalf("backup via temp file failed: %v", result.Err)
+		}
+		assertResult(t, result)
 	})
-	if err != nil {
-		t.Fatalf("storage.NewS3: %v", err)
-	}
 
-	key := fmt.Sprintf("integration-test/%d.sql.gz", time.Now().UnixNano())
+	// --- Test 2: streaming pipeline ---
+	t.Run("StreamDirect", func(t *testing.T) {
+		job := &backup.Job{
+			Dumper:       d,
+			Compressor:   c,
+			Storage:      s3Backend,
+			StreamDirect: true,
+			Logger:       logger,
+		}
 
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   comp,
-		Storage:      s3,
-		StorageKey:   key,
-		StreamDirect: false,
-	}
-
-	result := job.Run(ctx)
-	if result.Err != nil {
-		t.Fatalf("backup job failed: %v", result.Err)
-	}
-	if result.Size == 0 {
-		t.Error("expected non-zero uploaded size")
-	}
-	t.Logf("integration backup OK: key=%s size=%d duration=%s", result.Key, result.Size, result.Duration)
+		result := job.Run(ctx)
+		if result.Err != nil {
+			t.Fatalf("backup via streaming pipeline failed: %v", result.Err)
+		}
+		assertResult(t, result)
+	})
 }
 
-func TestBackupJob_Integration_StreamDirect(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
-	pgDSN := requireEnv(t, "POSTGRES_DSN")
-	endpoint := requireEnv(t, "S3_ENDPOINT")
-	bucket := requireEnv(t, "S3_BUCKET")
-	accessKey := requireEnv(t, "AWS_ACCESS_KEY")
-	secretKey := requireEnv(t, "AWS_SECRET_KEY")
-	region := requireEnvWithDefault("AWS_REGION", "us-east-1")
-
-	d, err := dumper.New(pgDSN)
-	if err != nil {
-		t.Fatalf("dumper.New: %v", err)
+func assertResult(t *testing.T, r backup.BackupResult) {
+	t.Helper()
+	if r.Key == "" {
+		t.Error("result key is empty")
 	}
-
-	comp := compress.NewGzip(compress.DefaultGzipLevel)
-
-	s3, err := storage.NewS3(ctx, storage.S3Config{
-		Endpoint:        endpoint,
-		Bucket:          bucket,
-		AccessKeyID:     accessKey,
-		SecretAccessKey: secretKey,
-		Region:          region,
-		ForcePathStyle:  true,
-	})
-	if err != nil {
-		t.Fatalf("storage.NewS3: %v", err)
+	if r.Size <= 0 {
+		t.Errorf("expected size > 0, got %d", r.Size)
 	}
-
-	key := fmt.Sprintf("integration-test/direct-%d.sql.gz", time.Now().UnixNano())
-
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   comp,
-		Storage:      s3,
-		StorageKey:   key,
-		StreamDirect: true,
+	if r.Duration <= 0 {
+		t.Errorf("expected positive duration, got %v", r.Duration)
 	}
-
-	result := job.Run(ctx)
-	if result.Err != nil {
-		t.Fatalf("backup job (stream-direct) failed: %v", result.Err)
-	}
-	if result.Size == 0 {
-		t.Error("expected non-zero uploaded size")
-	}
-	t.Logf("integration stream-direct backup OK: key=%s size=%d duration=%s", result.Key, result.Size, result.Duration)
+	t.Logf("backup result: key=%s size=%d duration=%v", r.Key, r.Size, r.Duration)
 }
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
 
 func requireEnv(t *testing.T, key string) string {
 	t.Helper()
 	v := os.Getenv(key)
 	if v == "" {
-		t.Skipf("environment variable %s not set – skipping integration test", key)
+		t.Skipf("integration test skipped: env var %q not set", key)
 	}
 	return v
 }
@@ -144,3 +146,7 @@ func requireEnvWithDefault(key, def string) string {
 	}
 	return v
 }
+
+// Compile-time check so the fmt import is used even when helper functions are
+// expanded away by the compiler.
+var _ = fmt.Sprintf

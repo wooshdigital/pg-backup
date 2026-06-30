@@ -7,13 +7,13 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/smlgh/smarti/internal/compress"
-	"github.com/smlgh/smarti/internal/dumper"
-	"github.com/smlgh/smarti/internal/storage"
-	"github.com/smlgh/smarti/internal/tempfile"
+	"github.com/sdreger/cmd-worker/internal/compress"
+	"github.com/sdreger/cmd-worker/internal/dumper"
+	"github.com/sdreger/cmd-worker/internal/storage"
+	"github.com/sdreger/cmd-worker/internal/tempfile"
 )
 
-// BackupResult holds the outcome of a completed backup run.
+// BackupResult holds the outcome of a completed backup operation.
 type BackupResult struct {
 	Key      string
 	Size     int64
@@ -26,10 +26,8 @@ type Job struct {
 	Dumper    dumper.Dumper
 	Compressor compress.Compressor
 	Storage   storage.StorageBackend
-	// StorageKey is the object key used when uploading to the backend.
-	StorageKey string
-	// StreamDirect, when true, pipes compressed data directly to the uploader
-	// without writing an intermediate temp file.
+	// StreamDirect bypasses the temp file and pipes data directly from the
+	// compressor to the uploader. Useful when disk space is scarce.
 	StreamDirect bool
 	Logger       *slog.Logger
 }
@@ -37,98 +35,120 @@ type Job struct {
 // Run executes a complete backup cycle and returns a BackupResult.
 func (j *Job) Run(ctx context.Context) BackupResult {
 	start := time.Now()
-	log := j.logger()
+	logger := j.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
 
-	log.InfoContext(ctx, "backup job started", "key", j.StorageKey, "stream_direct", j.StreamDirect)
+	logger.InfoContext(ctx, "backup job started")
+
+	key := storage.GenerateKey(time.Now())
+	logger.InfoContext(ctx, "generated storage key", slog.String("key", key))
 
 	var (
-		key  string
 		size int64
 		err  error
 	)
 
 	if j.StreamDirect {
-		key, size, err = j.runStreamDirect(ctx, log)
+		size, err = j.runStreaming(ctx, key, logger)
 	} else {
-		key, size, err = j.runViaTempFile(ctx, log)
+		size, err = j.runViaTemp(ctx, key, logger)
 	}
 
 	duration := time.Since(start)
 
 	if err != nil {
-		log.ErrorContext(ctx, "backup job failed", "key", j.StorageKey, "duration_ms", duration.Milliseconds(), "error", err)
-		return BackupResult{Key: key, Size: size, Duration: duration, Err: err}
+		logger.ErrorContext(ctx, "backup job failed",
+			slog.String("key", key),
+			slog.Duration("duration", duration),
+			slog.String("error", err.Error()),
+		)
+		return BackupResult{Key: key, Duration: duration, Err: err}
 	}
 
-	log.InfoContext(ctx, "backup job completed", "key", key, "size_bytes", size, "duration_ms", duration.Milliseconds())
-	return BackupResult{Key: key, Size: size, Duration: duration}
+	logger.InfoContext(ctx, "backup job completed",
+		slog.String("key", key),
+		slog.Int64("size_bytes", size),
+		slog.Duration("duration", duration),
+	)
+
+	return BackupResult{
+		Key:      key,
+		Size:     size,
+		Duration: duration,
+	}
 }
 
-// runViaTempFile dumps → compresses into a temp file, then uploads the file.
-func (j *Job) runViaTempFile(ctx context.Context, log *slog.Logger) (string, int64, error) {
-	// 1. Create temp file.
-	log.InfoContext(ctx, "creating temp file")
-	tf, err := tempfile.New()
+// runViaTemp writes the dump through the compressor into a temporary file,
+// then seeks back to the start and uploads from there.
+func (j *Job) runViaTemp(ctx context.Context, key string, logger *slog.Logger) (int64, error) {
+	logger.InfoContext(ctx, "creating temporary file")
+
+	tmp, err := tempfile.New()
 	if err != nil {
-		return "", 0, fmt.Errorf("create temp file: %w", err)
+		return 0, fmt.Errorf("create temp file: %w", err)
 	}
 	defer func() {
-		if removeErr := tf.Remove(); removeErr != nil {
-			log.WarnContext(ctx, "failed to remove temp file", "path", tf.Path(), "error", removeErr)
+		if removeErr := tmp.Remove(); removeErr != nil {
+			logger.WarnContext(ctx, "failed to remove temp file",
+				slog.String("path", tmp.Path()),
+				slog.String("error", removeErr.Error()),
+			)
 		}
 	}()
 
-	// 2. Stream pg_dump → compressor → temp file.
-	log.InfoContext(ctx, "dumping and compressing", "temp_path", tf.Path())
-	pr, pw := io.Pipe()
+	logger.InfoContext(ctx, "temp file created", slog.String("path", tmp.Path()))
 
-	dumpErr := make(chan error, 1)
-	go func() {
-		defer pw.Close()
-		if err := j.Dumper.Dump(ctx, pw); err != nil {
-			pw.CloseWithError(err)
-			dumpErr <- fmt.Errorf("dump: %w", err)
-			return
-		}
-		dumpErr <- nil
-	}()
-
-	if err := j.Compressor.Compress(ctx, pr, tf.File()); err != nil {
-		// drain dump error too
-		<-dumpErr
-		return "", 0, fmt.Errorf("compress: %w", err)
-	}
-
-	if err := <-dumpErr; err != nil {
-		return "", 0, err
-	}
-
-	// 3. Seek temp file to start.
-	log.InfoContext(ctx, "seeking temp file to beginning")
-	if _, err := tf.File().Seek(0, io.SeekStart); err != nil {
-		return "", 0, fmt.Errorf("seek temp file: %w", err)
-	}
-
-	// 4. Upload to storage backend.
-	log.InfoContext(ctx, "uploading to storage", "key", j.StorageKey)
-	key, size, err := j.Storage.Upload(ctx, j.StorageKey, tf.File())
+	// Stage 1: dump → compress → temp file
+	logger.InfoContext(ctx, "starting dump and compress stage")
+	cw, err := j.Compressor.NewWriter(tmp.File())
 	if err != nil {
-		return key, size, fmt.Errorf("upload: %w", err)
+		return 0, fmt.Errorf("create compressor writer: %w", err)
 	}
 
-	// 5. Temp file is removed by the deferred Remove() above.
-	return key, size, nil
-}
-
-// runStreamDirect pipes dump → compressor → uploader without a temp file.
-func (j *Job) runStreamDirect(ctx context.Context, log *slog.Logger) (string, int64, error) {
-	log.InfoContext(ctx, "starting direct-stream pipeline", "key", j.StorageKey)
-	return RunPipeline(ctx, j.Dumper, j.Compressor, j.Storage, j.StorageKey, log)
-}
-
-func (j *Job) logger() *slog.Logger {
-	if j.Logger != nil {
-		return j.Logger
+	if err = j.Dumper.Dump(ctx, cw); err != nil {
+		_ = cw.Close()
+		return 0, fmt.Errorf("dump: %w", err)
 	}
-	return slog.Default()
+
+	if err = cw.Close(); err != nil {
+		return 0, fmt.Errorf("close compressor writer: %w", err)
+	}
+	logger.InfoContext(ctx, "dump and compress stage completed")
+
+	// Stage 2: seek to beginning for upload
+	if _, err = tmp.File().Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("seek temp file: %w", err)
+	}
+
+	// Stage 3: upload
+	logger.InfoContext(ctx, "starting upload stage", slog.String("key", key))
+	size, err := j.Storage.Upload(ctx, key, tmp.File())
+	if err != nil {
+		return 0, fmt.Errorf("upload: %w", err)
+	}
+	logger.InfoContext(ctx, "upload stage completed",
+		slog.String("key", key),
+		slog.Int64("size_bytes", size),
+	)
+
+	return size, nil
+}
+
+// runStreaming connects the compressor output directly to the uploader via an
+// io.Pipe, avoiding a local temp file write.
+func (j *Job) runStreaming(ctx context.Context, key string, logger *slog.Logger) (int64, error) {
+	logger.InfoContext(ctx, "starting streaming pipeline (no temp file)", slog.String("key", key))
+
+	size, err := RunStreamingPipeline(ctx, key, j.Dumper, j.Compressor, j.Storage)
+	if err != nil {
+		return 0, err
+	}
+
+	logger.InfoContext(ctx, "streaming pipeline completed",
+		slog.String("key", key),
+		slog.Int64("size_bytes", size),
+	)
+	return size, nil
 }

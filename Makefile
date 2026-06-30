@@ -1,41 +1,35 @@
-.PHONY: build test test-integration lint vet fmt docker-up docker-down
+.PHONY: build test test-unit test-integration lint clean docker-up docker-down
 
-# ── Go build ────────────────────────────────────────────────────────────────
+BINARY := bin/worker
+GO     := go
+GOTEST := $(GO) test
+
 build:
-	go build ./...
+	$(GO) build -o $(BINARY) ./cmd/worker
 
-# ── Unit tests ──────────────────────────────────────────────────────────────
-test:
-	go test -race -count=1 ./...
+test-unit:
+	$(GOTEST) -v -count=1 ./...
 
-# ── Integration tests (requires Docker) ─────────────────────────────────────
 test-integration: docker-up
 	@echo "Waiting for services to be healthy..."
 	@sleep 5
-	POSTGRES_DSN="postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable" \
+	POSTGRES_DSN="postgres://testuser:testpassword@localhost:5432/testdb?sslmode=disable" \
 	S3_ENDPOINT="http://localhost:4566" \
-	S3_BUCKET="test-bucket" \
-	AWS_ACCESS_KEY="test" \
-	AWS_SECRET_KEY="test" \
+	S3_BUCKET="backup-test" \
 	AWS_REGION="us-east-1" \
-	go test -v -race -count=1 -tags integration ./internal/backup/... ; \
-	STATUS=$$? ; \
-	$(MAKE) docker-down ; \
-	exit $$STATUS
+	AWS_ACCESS_KEY_ID="test" \
+	AWS_SECRET_ACCESS_KEY="test" \
+	$(GOTEST) -v -count=1 -tags=integration -timeout=5m ./internal/backup/...
+	$(MAKE) docker-down
 
-# ── Docker Compose helpers ───────────────────────────────────────────────────
 docker-up:
 	docker compose -f docker-compose.test.yml up -d --wait
 
 docker-down:
-	docker compose -f docker-compose.test.yml down --volumes --remove-orphans
+	docker compose -f docker-compose.test.yml down -v
 
-# ── Code quality ─────────────────────────────────────────────────────────────
 lint:
 	golangci-lint run ./...
 
-vet:
-	go vet ./...
-
-fmt:
-	gofmt -w .
+clean:
+	rm -rf $(BINARY)

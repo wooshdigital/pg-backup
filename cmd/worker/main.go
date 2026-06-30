@@ -5,77 +5,75 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/smlgh/smarti/internal/backup"
-	"github.com/smlgh/smarti/internal/compress"
-	"github.com/smlgh/smarti/internal/config"
-	"github.com/smlgh/smarti/internal/dumper"
-	"github.com/smlgh/smarti/internal/storage"
+	"github.com/sdreger/cmd-worker/internal/backup"
+	"github.com/sdreger/cmd-worker/internal/compress"
+	"github.com/sdreger/cmd-worker/internal/config"
+	"github.com/sdreger/cmd-worker/internal/dumper"
+	"github.com/sdreger/cmd-worker/internal/storage"
 )
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
-	slog.SetDefault(log)
-
-	cfg, err := config.Load()
-	if err != nil {
-		log.Error("failed to load config", "error", err)
-		os.Exit(1)
-	}
+	slog.SetDefault(logger)
 
 	ctx := context.Background()
 
-	// Build dumper.
+	// Load configuration
+	cfg, err := config.Load("config.yaml")
+	if err != nil {
+		logger.ErrorContext(ctx, "failed to load config", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	// Build dumper
 	d, err := dumper.New(cfg.Database.DSN)
 	if err != nil {
-		log.Error("failed to create dumper", "error", err)
+		logger.ErrorContext(ctx, "failed to create dumper", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
-	// Build compressor.
-	comp, err := compress.FromConfig(cfg.Compress)
+	// Build compressor
+	c, err := compress.New(cfg.Compress.Algorithm)
 	if err != nil {
-		log.Error("failed to create compressor", "error", err)
+		logger.ErrorContext(ctx, "failed to create compressor", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
-	// Build storage backend.
-	s3, err := storage.NewS3(ctx, storage.S3Config{
-		Endpoint:        cfg.Storage.Endpoint,
-		Bucket:          cfg.Storage.Bucket,
-		AccessKeyID:     cfg.Storage.AccessKeyID,
-		SecretAccessKey: cfg.Storage.SecretAccessKey,
-		Region:          cfg.Storage.Region,
-		ForcePathStyle:  cfg.Storage.ForcePathStyle,
-	})
+	// Build storage backend
+	s3Backend, err := storage.NewS3Backend(ctx, cfg.Storage.Bucket, cfg.Storage.Region, cfg.Storage.Endpoint)
 	if err != nil {
-		log.Error("failed to create S3 storage", "error", err)
+		logger.ErrorContext(ctx, "failed to create storage backend", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
-	// Determine the object key.
-	key := storage.GenerateKey(cfg.Storage.KeyPrefix)
+	// Ensure the destination bucket exists
+	if err = s3Backend.EnsureBucket(ctx); err != nil {
+		logger.ErrorContext(ctx, "failed to ensure bucket exists", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
 
-	// Construct and run the backup job (single run, no scheduling yet).
+	// Build and run the backup job
 	job := &backup.Job{
 		Dumper:       d,
-		Compressor:   comp,
-		Storage:      s3,
-		StorageKey:   key,
-		StreamDirect: cfg.StreamDirect,
-		Logger:       log,
+		Compressor:   c,
+		Storage:      s3Backend,
+		StreamDirect: cfg.Backup.StreamDirect,
+		Logger:       logger,
 	}
 
 	result := job.Run(ctx)
 	if result.Err != nil {
-		log.Error("backup failed", "error", result.Err)
+		logger.ErrorContext(ctx, "backup failed",
+			slog.String("error", result.Err.Error()),
+		)
 		os.Exit(1)
 	}
 
-	log.Info("backup succeeded",
-		"key", result.Key,
-		"size_bytes", result.Size,
-		"duration", result.Duration.String(),
+	logger.InfoContext(ctx, "backup succeeded",
+		slog.String("key", result.Key),
+		slog.Int64("size_bytes", result.Size),
+		slog.Duration("duration", result.Duration),
 	)
 }

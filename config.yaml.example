@@ -1,22 +1,13 @@
-# Example configuration file – copy to config.yaml and fill in your values.
-
 database:
   dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
 
 storage:
-  endpoint: ""           # Leave empty for real AWS S3; set to http://localhost:4566 for LocalStack.
-  bucket: "my-backups"
+  bucket: "my-backup-bucket"
   region: "us-east-1"
-  access_key_id: "AKIAIOSFODNN7EXAMPLE"
-  secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-  key_prefix: "backups"  # Optional prefix for object keys.
-  force_path_style: false  # Set to true when using LocalStack or MinIO.
+  # endpoint: "http://localhost:4566"  # Uncomment for LocalStack / MinIO
 
 compress:
-  algorithm: "gzip"  # gzip | zstd | noop
-  level: 6           # 1 (fastest) – 9 (best compression); 0 = default (6)
+  algorithm: "gzip"  # Supported: gzip, none
 
-# When stream_direct is true the backup is piped directly from pg_dump through
-# the compressor to S3 without writing a local temp file first.  This reduces
-# disk I/O but requires the S3 SDK to support streaming uploads.
-stream_direct: false
+backup:
+  stream_direct: false  # Set to true to skip temp file and stream directly to S3

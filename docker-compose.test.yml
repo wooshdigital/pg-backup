@@ -4,18 +4,17 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
       POSTGRES_DB: testdb
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
       interval: 5s
       timeout: 5s
       retries: 10
-    tmpfs:
-      - /var/lib/postgresql/data
+      start_period: 10s
 
   localstack:
     image: localstack/localstack:3
@@ -23,29 +22,14 @@ services:
       SERVICES: s3
       DEFAULT_REGION: us-east-1
       AWS_DEFAULT_REGION: us-east-1
-      LOCALSTACK_AUTH_TOKEN: ""
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      LOCALSTACK_HOST: localstack
     ports:
       - "4566:4566"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep '\"s3\": *\"available\"'"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep '\"s3\": \"available\"'"]
       interval: 5s
       timeout: 5s
       retries: 20
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
-  # One-shot initialiser: creates the S3 bucket in LocalStack.
-  setup:
-    image: amazon/aws-cli:2.15.17
-    depends_on:
-      localstack:
-        condition: service_healthy
-    environment:
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_DEFAULT_REGION: us-east-1
-    entrypoint: >
-      /bin/sh -c "
-        aws --endpoint-url http://localstack:4566 s3 mb s3://test-bucket --region us-east-1 || true
-      "
-    restart: "no"
+      start_period: 15s

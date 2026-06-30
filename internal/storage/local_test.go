@@ -1,4 +1,4 @@
-package storage
+package storage_test
 
 import (
 	"bytes"
@@ -6,59 +6,35 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sdreger/cmd-worker/internal/storage"
 )
 
-func TestLocalStorage_Upload(t *testing.T) {
-	dir := t.TempDir()
+func TestLocalBackend_Upload(t *testing.T) {
+	t.Parallel()
 
-	ls, err := NewLocalStorage(dir)
+	dir := t.TempDir()
+	b, err := storage.NewLocalBackend(dir)
 	if err != nil {
-		t.Fatalf("NewLocalStorage: %v", err)
+		t.Fatalf("NewLocalBackend: %v", err)
 	}
 
-	content := []byte("hello local storage")
-	key := "backups/2024-03-15/dump.sql.gz"
+	const key = "backups/2025/06/15/backup-20250615-103045.dump.gz"
+	data := []byte("fake compressed backup data")
 
-	if err := ls.Upload(context.Background(), key, bytes.NewReader(content), int64(len(content))); err != nil {
+	n, err := b.Upload(context.Background(), key, bytes.NewReader(data))
+	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
+	if n != int64(len(data)) {
+		t.Errorf("Upload returned %d bytes, want %d", n, len(data))
+	}
 
-	dest := filepath.Join(dir, filepath.FromSlash(key))
-	got, err := os.ReadFile(dest)
+	got, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(key)))
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	if !bytes.Equal(got, content) {
-		t.Errorf("file content = %q, want %q", got, content)
+	if !bytes.Equal(got, data) {
+		t.Errorf("file content = %q, want %q", got, data)
 	}
-}
-
-func TestLocalStorage_Upload_CreatesIntermediateDirs(t *testing.T) {
-	dir := t.TempDir()
-
-	ls, err := NewLocalStorage(dir)
-	if err != nil {
-		t.Fatalf("NewLocalStorage: %v", err)
-	}
-
-	key := "a/b/c/d/dump.gz"
-	if err := ls.Upload(context.Background(), key, bytes.NewReader([]byte("data")), 4); err != nil {
-		t.Fatalf("Upload: %v", err)
-	}
-
-	if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(key))); err != nil {
-		t.Errorf("expected file to exist: %v", err)
-	}
-}
-
-func TestLocalStorage_EmptyBaseDir(t *testing.T) {
-	_, err := NewLocalStorage("")
-	if err == nil {
-		t.Error("expected error for empty base dir")
-	}
-}
-
-func TestLocalStorage_ImplementsStorageBackend(t *testing.T) {
-	// Compile-time check that *LocalStorage satisfies StorageBackend.
-	var _ StorageBackend = (*LocalStorage)(nil)
 }

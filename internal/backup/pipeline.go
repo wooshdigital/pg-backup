@@ -4,82 +4,70 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 
-	"github.com/smlgh/smarti/internal/compress"
-	"github.com/smlgh/smarti/internal/dumper"
-	"github.com/smlgh/smarti/internal/storage"
+	"github.com/sdreger/cmd-worker/internal/compress"
+	"github.com/sdreger/cmd-worker/internal/dumper"
+	"github.com/sdreger/cmd-worker/internal/storage"
 )
 
-// RunPipeline connects the dumper → compressor → storage uploader using two
-// io.Pipe pairs, avoiding any intermediate temp file.
+// RunStreamingPipeline streams pg_dump output through the compressor and
+// uploads the compressed bytes directly to storage without writing a temp file.
 //
-//	goroutine 1:  Dumper.Dump  → pw1
-//	goroutine 2:  pr1 → Compressor.Compress → pw2
-//	main:         pr2 → Storage.Upload
-func RunPipeline(
+// It uses an io.Pipe to connect the compressor writer (producer goroutine) to
+// the storage uploader (consumer on the current goroutine).
+func RunStreamingPipeline(
 	ctx context.Context,
+	key string,
 	d dumper.Dumper,
 	c compress.Compressor,
 	s storage.StorageBackend,
-	key string,
-	log *slog.Logger,
-) (string, int64, error) {
-	if log == nil {
-		log = slog.Default()
-	}
+) (int64, error) {
+	pr, pw := io.Pipe()
 
-	// Pipe 1: raw dump output.
-	pr1, pw1 := io.Pipe()
-	// Pipe 2: compressed output.
-	pr2, pw2 := io.Pipe()
-
-	dumpErrCh := make(chan error, 1)
-	compressErrCh := make(chan error, 1)
-
-	// Goroutine 1: run the dumper.
+	// Producer goroutine: dump → compress → pipe writer
+	producerErr := make(chan error, 1)
 	go func() {
-		defer func() {
-			_ = pw1.Close()
-		}()
-		if err := d.Dump(ctx, pw1); err != nil {
-			_ = pw1.CloseWithError(err)
-			dumpErrCh <- fmt.Errorf("dump: %w", err)
+		defer close(producerErr)
+
+		cw, err := c.NewWriter(pw)
+		if err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("create compressor writer: %w", err))
+			producerErr <- err
 			return
 		}
-		dumpErrCh <- nil
-	}()
 
-	// Goroutine 2: compress pipe1 → pipe2.
-	go func() {
-		defer func() {
-			_ = pw2.Close()
-		}()
-		if err := c.Compress(ctx, pr1, pw2); err != nil {
-			_ = pw2.CloseWithError(err)
-			compressErrCh <- fmt.Errorf("compress: %w", err)
+		if err = d.Dump(ctx, cw); err != nil {
+			_ = cw.Close()
+			_ = pw.CloseWithError(fmt.Errorf("dump: %w", err))
+			producerErr <- err
 			return
 		}
-		compressErrCh <- nil
+
+		if err = cw.Close(); err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("close compressor writer: %w", err))
+			producerErr <- err
+			return
+		}
+
+		_ = pw.Close()
 	}()
 
-	// Main: upload from pipe2.
-	uploadedKey, size, uploadErr := s.Upload(ctx, key, pr2)
-
-	// Drain goroutines – they finish when Upload returns (pipe closed).
-	dumpErr := <-dumpErrCh
-	compressErr := <-compressErrCh
-
-	// Propagate errors in priority order: dump > compress > upload.
-	if dumpErr != nil {
-		return uploadedKey, size, dumpErr
+	// Consumer: read from pipe reader → upload
+	size, uploadErr := s.Upload(ctx, key, pr)
+	if uploadErr != nil {
+		// Signal the producer to stop if it's still running.
+		_ = pr.CloseWithError(uploadErr)
 	}
-	if compressErr != nil {
-		return uploadedKey, size, compressErr
+
+	// Wait for the producer to finish and collect its error.
+	pErr := <-producerErr
+
+	if pErr != nil {
+		return 0, fmt.Errorf("producer error: %w", pErr)
 	}
 	if uploadErr != nil {
-		return uploadedKey, size, fmt.Errorf("upload: %w", uploadErr)
+		return 0, fmt.Errorf("upload error: %w", uploadErr)
 	}
 
-	return uploadedKey, size, nil
+	return size, nil
 }
