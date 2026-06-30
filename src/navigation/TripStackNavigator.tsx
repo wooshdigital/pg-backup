@@ -1,42 +1,65 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { TripsListScreen } from '../screens/TripsListScreen';
 import { TripDetailScreen } from '../screens/TripDetailScreen';
-import { RootStackParamList } from '../types';
+import { ParticipantsScreen } from '../screens/ParticipantsScreen';
+import { ExpensesScreen } from '../screens/ExpensesScreen';
+import { AddExpenseScreen } from '../screens/AddExpenseScreen';
+import { ExpenseDetailScreen } from '../screens/ExpenseDetailScreen';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+export type TripStackParamList = {
+  TripDetail: { tripId: string };
+  Participants: { tripId: string };
+  Expenses: { tripId: string };
+  AddExpense: { tripId: string };
+  ExpenseDetail: { tripId: string; expenseId: string };
+};
 
-export function TripStackNavigator() {
+const Stack = createNativeStackNavigator<TripStackParamList>();
+
+interface TripStackNavigatorProps {
+  tripId: string;
+}
+
+export function TripStackNavigator({ tripId }: TripStackNavigatorProps) {
   return (
     <Stack.Navigator
+      initialRouteName="TripDetail"
       screenOptions={{
-        headerStyle: {
-          backgroundColor: '#FFFFFF',
-        },
-        headerTintColor: '#007AFF',
-        headerTitleStyle: {
-          fontWeight: '700',
-          color: '#1C1C1E',
-        },
-        headerShadowVisible: false,
+        headerStyle: { backgroundColor: '#FFFFFF' },
+        headerTitleStyle: { fontWeight: '700', color: '#111827' },
+        headerTintColor: '#6366F1',
         headerBackTitle: 'Back',
       }}
     >
       <Stack.Screen
-        name="Trips"
-        component={TripsListScreen}
-        options={{ title: 'My Trips', headerLargeTitle: true }}
-      />
-      <Stack.Screen
         name="TripDetail"
         component={TripDetailScreen}
-        options={({ route }) => ({
-          title: route.params.tripName,
-          headerLargeTitle: false,
-        })}
+        initialParams={{ tripId }}
+        options={{ title: 'Trip Details' }}
+      />
+      <Stack.Screen
+        name="Participants"
+        component={ParticipantsScreen}
+        initialParams={{ tripId }}
+        options={{ title: 'Participants' }}
+      />
+      <Stack.Screen
+        name="Expenses"
+        component={ExpensesScreen}
+        initialParams={{ tripId }}
+        options={{ title: 'Expenses' }}
+      />
+      <Stack.Screen
+        name="AddExpense"
+        component={AddExpenseScreen}
+        initialParams={{ tripId }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ExpenseDetail"
+        component={ExpenseDetailScreen}
+        options={{ title: 'Expense Details' }}
       />
     </Stack.Navigator>
   );
 }
-
-export default TripStackNavigator;

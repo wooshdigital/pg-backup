@@ -7,3 +7,4 @@ export * from './formatters';
 export * from './id';
 export * from './keys';
 export * from './storage';
+export * from './splitCalculator';

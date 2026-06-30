@@ -1,186 +1,175 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Trip, Participant } from '../types';
-import { getRandomAvatarColor } from '../utils/avatarColors';
+import { Trip, Participant, Expense } from '../types';
 import { generateId } from '../utils/id';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STORAGE_KEY = '@trips';
 
-export type TripAction =
-  | { type: 'TRIPS_LOADED'; payload: Trip[] }
-  | { type: 'TRIP_ADD'; payload: Trip }
-  | { type: 'TRIP_UPDATE'; payload: Trip }
-  | { type: 'TRIP_DELETE'; payload: string }
-  | { type: 'TRIP_ADD_PARTICIPANT'; payload: { tripId: string; participant: Participant } }
-  | { type: 'TRIP_REMOVE_PARTICIPANT'; payload: { tripId: string; participantId: string } };
+type TripAction =
+  | { type: 'SET_TRIPS'; payload: Trip[] }
+  | { type: 'ADD_TRIP'; payload: Trip }
+  | { type: 'UPDATE_TRIP'; payload: Trip }
+  | { type: 'DELETE_TRIP'; payload: string }
+  | { type: 'ADD_PARTICIPANT'; payload: { tripId: string; participant: Participant } }
+  | { type: 'UPDATE_PARTICIPANT'; payload: { tripId: string; participant: Participant } }
+  | { type: 'DELETE_PARTICIPANT'; payload: { tripId: string; participantId: string } }
+  | { type: 'TRIP_ADD_EXPENSE'; payload: { tripId: string; expense: Expense } }
+  | { type: 'TRIP_UPDATE_EXPENSE'; payload: { tripId: string; expense: Expense } }
+  | { type: 'TRIP_DELETE_EXPENSE'; payload: { tripId: string; expenseId: string } };
 
 interface TripState {
   trips: Trip[];
-  loaded: boolean;
+  loading: boolean;
 }
 
 interface TripContextValue {
   state: TripState;
   dispatch: React.Dispatch<TripAction>;
-  addTrip: (trip: Omit<Trip, 'id' | 'createdAt' | 'participants'>) => void;
-  updateTrip: (trip: Trip) => void;
-  deleteTrip: (tripId: string) => void;
-  addParticipant: (tripId: string, name: string) => void;
-  removeParticipant: (tripId: string, participantId: string) => void;
+  getTrip: (id: string) => Trip | undefined;
 }
+
+const TripContext = createContext<TripContextValue | undefined>(undefined);
 
 function tripReducer(state: TripState, action: TripAction): TripState {
   switch (action.type) {
-    case 'TRIPS_LOADED':
-      return { ...state, trips: action.payload, loaded: true };
+    case 'SET_TRIPS':
+      return { ...state, trips: action.payload, loading: false };
 
-    case 'TRIP_ADD':
+    case 'ADD_TRIP':
       return { ...state, trips: [...state.trips, action.payload] };
 
-    case 'TRIP_UPDATE':
+    case 'UPDATE_TRIP':
       return {
         ...state,
         trips: state.trips.map((t) => (t.id === action.payload.id ? action.payload : t)),
       };
 
-    case 'TRIP_DELETE':
-      return {
-        ...state,
-        trips: state.trips.filter((t) => t.id !== action.payload),
-      };
+    case 'DELETE_TRIP':
+      return { ...state, trips: state.trips.filter((t) => t.id !== action.payload) };
 
-    case 'TRIP_ADD_PARTICIPANT': {
-      const { tripId, participant } = action.payload;
+    case 'ADD_PARTICIPANT':
       return {
         ...state,
         trips: state.trips.map((t) =>
-          t.id === tripId
-            ? { ...t, participants: [...(t.participants || []), participant] }
+          t.id === action.payload.tripId
+            ? { ...t, participants: [...t.participants, action.payload.participant] }
             : t
         ),
       };
-    }
 
-    case 'TRIP_REMOVE_PARTICIPANT': {
-      const { tripId, participantId } = action.payload;
+    case 'UPDATE_PARTICIPANT':
       return {
         ...state,
         trips: state.trips.map((t) =>
-          t.id === tripId
+          t.id === action.payload.tripId
             ? {
                 ...t,
-                participants: (t.participants || []).filter((p) => p.id !== participantId),
+                participants: t.participants.map((p) =>
+                  p.id === action.payload.participant.id ? action.payload.participant : p
+                ),
               }
             : t
         ),
       };
-    }
+
+    case 'DELETE_PARTICIPANT':
+      return {
+        ...state,
+        trips: state.trips.map((t) =>
+          t.id === action.payload.tripId
+            ? {
+                ...t,
+                participants: t.participants.filter((p) => p.id !== action.payload.participantId),
+              }
+            : t
+        ),
+      };
+
+    case 'TRIP_ADD_EXPENSE':
+      return {
+        ...state,
+        trips: state.trips.map((t) =>
+          t.id === action.payload.tripId
+            ? { ...t, expenses: [...(t.expenses || []), action.payload.expense] }
+            : t
+        ),
+      };
+
+    case 'TRIP_UPDATE_EXPENSE':
+      return {
+        ...state,
+        trips: state.trips.map((t) =>
+          t.id === action.payload.tripId
+            ? {
+                ...t,
+                expenses: (t.expenses || []).map((e) =>
+                  e.id === action.payload.expense.id ? action.payload.expense : e
+                ),
+              }
+            : t
+        ),
+      };
+
+    case 'TRIP_DELETE_EXPENSE':
+      return {
+        ...state,
+        trips: state.trips.map((t) =>
+          t.id === action.payload.tripId
+            ? {
+                ...t,
+                expenses: (t.expenses || []).filter((e) => e.id !== action.payload.expenseId),
+              }
+            : t
+        ),
+      };
 
     default:
       return state;
   }
 }
 
-const TripContext = createContext<TripContextValue | undefined>(undefined);
+const initialState: TripState = {
+  trips: [],
+  loading: true,
+};
 
 export function TripProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(tripReducer, { trips: [], loaded: false });
+  const [state, dispatch] = useReducer(tripReducer, initialState);
 
-  // Load trips from storage on mount
   useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed: Trip[] = JSON.parse(raw);
-          // Ensure participants array exists on all trips
-          const normalized = parsed.map((t) => ({
-            ...t,
-            participants: t.participants || [],
-          }));
-          dispatch({ type: 'TRIPS_LOADED', payload: normalized });
-        } else {
-          dispatch({ type: 'TRIPS_LOADED', payload: [] });
+    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const trips: Trip[] = JSON.parse(raw);
+          // Ensure expenses array exists on each trip
+          const normalized = trips.map((t) => ({ ...t, expenses: t.expenses || [] }));
+          dispatch({ type: 'SET_TRIPS', payload: normalized });
+        } catch {
+          dispatch({ type: 'SET_TRIPS', payload: [] });
         }
-      } catch (e) {
-        console.error('Failed to load trips', e);
-        dispatch({ type: 'TRIPS_LOADED', payload: [] });
+      } else {
+        dispatch({ type: 'SET_TRIPS', payload: [] });
       }
-    })();
+    });
   }, []);
 
-  // Persist trips whenever they change
   useEffect(() => {
-    if (!state.loaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state.trips)).catch((e) =>
-      console.error('Failed to save trips', e)
-    );
-  }, [state.trips, state.loaded]);
-
-  const addTrip = (tripData: Omit<Trip, 'id' | 'createdAt' | 'participants'>) => {
-    const trip: Trip = {
-      ...tripData,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
-      participants: [],
-    };
-    dispatch({ type: 'TRIP_ADD', payload: trip });
-  };
-
-  const updateTrip = (trip: Trip) => {
-    dispatch({ type: 'TRIP_UPDATE', payload: trip });
-  };
-
-  const deleteTrip = (tripId: string) => {
-    dispatch({ type: 'TRIP_DELETE', payload: tripId });
-  };
-
-  const addParticipant = (tripId: string, name: string) => {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      Alert.alert('Invalid Name', 'Please enter a valid participant name.');
-      return;
+    if (!state.loading) {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state.trips));
     }
+  }, [state.trips, state.loading]);
 
-    const participant: Participant = {
-      id: generateId(),
-      name: trimmedName,
-      avatarColor: getRandomAvatarColor(),
-      tripId,
-    };
-
-    dispatch({ type: 'TRIP_ADD_PARTICIPANT', payload: { tripId, participant } });
-  };
-
-  const removeParticipant = (tripId: string, participantId: string) => {
-    // Validation: check if participant is attached to any expense
-    // For now, expenses are not yet implemented (Phase 4), so we allow removal.
-    // When expenses are added, check here and show alert if attached.
-    const trip = state.trips.find((t) => t.id === tripId);
-    if (!trip) return;
-
-    // Placeholder check for future expense validation:
-    // const isAttached = checkParticipantInExpenses(trip, participantId);
-    // if (isAttached) {
-    //   Alert.alert('Cannot Remove', 'This participant is attached to one or more expenses.');
-    //   return;
-    // }
-
-    dispatch({ type: 'TRIP_REMOVE_PARTICIPANT', payload: { tripId, participantId } });
-  };
+  const getTrip = (id: string) => state.trips.find((t) => t.id === id);
 
   return (
-    <TripContext.Provider value={{ state, dispatch, addTrip, updateTrip, deleteTrip, addParticipant, removeParticipant }}>
+    <TripContext.Provider value={{ state, dispatch, getTrip }}>
       {children}
     </TripContext.Provider>
   );
 }
 
-export function useTripContext(): TripContextValue {
+export function useTripContext() {
   const ctx = useContext(TripContext);
   if (!ctx) throw new Error('useTripContext must be used within TripProvider');
   return ctx;
 }
-
-export default TripContext;
