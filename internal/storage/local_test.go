@@ -1,40 +1,47 @@
 package storage_test
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/sdreger/cmd-worker/internal/storage"
+	"github.com/ssoready/conf/internal/config"
+	"github.com/ssoready/conf/internal/storage"
 )
 
-func TestLocalBackend_Upload(t *testing.T) {
-	t.Parallel()
-
+func TestLocalBackend_Put(t *testing.T) {
 	dir := t.TempDir()
-	b, err := storage.NewLocalBackend(dir)
-	if err != nil {
-		t.Fatalf("NewLocalBackend: %v", err)
+
+	cfg := &config.Config{
+		Storage: config.StorageConfig{
+			Backend:   "local",
+			LocalPath: dir,
+		},
 	}
 
-	const key = "backups/2025/06/15/backup-20250615-103045.dump.gz"
-	data := []byte("fake compressed backup data")
-
-	n, err := b.Upload(context.Background(), key, bytes.NewReader(data))
+	b, err := storage.New(context.Background(), cfg)
 	if err != nil {
-		t.Fatalf("Upload: %v", err)
-	}
-	if n != int64(len(data)) {
-		t.Errorf("Upload returned %d bytes, want %d", n, len(data))
+		t.Fatalf("storage.New: %v", err)
 	}
 
-	got, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(key)))
+	const content = "backup content"
+	key, err := b.Put(context.Background(), strings.NewReader(content))
 	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
+		t.Fatalf("Put: %v", err)
 	}
-	if !bytes.Equal(got, data) {
-		t.Errorf("file content = %q, want %q", got, data)
+	if key == "" {
+		t.Error("expected non-empty key")
+	}
+
+	// Verify file exists.
+	dst := filepath.Join(dir, filepath.Base(key))
+	data, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read back file: %v", err)
+	}
+	if string(data) != content {
+		t.Errorf("content = %q, want %q", data, content)
 	}
 }

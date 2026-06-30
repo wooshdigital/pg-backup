@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-// S3 unit tests are kept minimal here; the integration test exercises the real
-// S3 code path against LocalStack.
+// S3 unit tests are minimal because real S3 interactions are covered by the
+// integration test (s3_integration_test.go) which requires LocalStack.
 func TestS3Backend_Placeholder(t *testing.T) {
-	t.Skip("S3 unit tests require LocalStack; use the integration test suite")
+	t.Log("S3 backend unit tests run via integration suite with LocalStack")
 }

@@ -7,72 +7,94 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config is the root configuration structure.
+// Config holds all application configuration.
 type Config struct {
-	Database DatabaseConfig `yaml:"database"`
-	Storage  StorageConfig  `yaml:"storage"`
-	Compress CompressConfig `yaml:"compress"`
-	Backup   BackupConfig   `yaml:"backup"`
+	Database    DatabaseConfig    `yaml:"database"`
+	Storage     StorageConfig     `yaml:"storage"`
+	Compression CompressionConfig `yaml:"compression"`
+	StreamDirect bool             `yaml:"stream_direct"`
 }
 
-// DatabaseConfig holds PostgreSQL connection settings.
+// DatabaseConfig contains Postgres connection settings.
 type DatabaseConfig struct {
 	DSN string `yaml:"dsn"`
 }
 
-// StorageConfig holds S3 / object-storage settings.
+// StorageConfig contains storage backend settings.
 type StorageConfig struct {
-	Bucket   string `yaml:"bucket"`
-	Region   string `yaml:"region"`
-	Endpoint string `yaml:"endpoint"` // optional; used for LocalStack / MinIO
+	Backend     string `yaml:"backend"`      // "s3" or "local"
+	LocalPath   string `yaml:"local_path"`
+	S3Bucket    string `yaml:"s3_bucket"`
+	S3Region    string `yaml:"s3_region"`
+	S3Endpoint  string `yaml:"s3_endpoint"`
+	S3PathStyle bool   `yaml:"s3_path_style"`
 }
 
-// CompressConfig controls the compression algorithm.
-type CompressConfig struct {
-	Algorithm string `yaml:"algorithm"` // e.g. "gzip", "zstd", "none"
+// CompressionConfig controls which compression algorithm and level to use.
+type CompressionConfig struct {
+	Algorithm string `yaml:"algorithm"` // "gzip", "zstd", "none"
+	Level     int    `yaml:"level"`
 }
 
-// BackupConfig contains top-level backup behaviour flags.
-type BackupConfig struct {
-	// StreamDirect skips writing to a local temp file and pipes data directly
-	// from the compressor to the uploader.
-	StreamDirect bool `yaml:"stream_direct"`
+// Load reads configuration from the path specified by CONFIG_FILE env var
+// (default: config.yaml), then overrides with individual env vars.
+func Load() (*Config, error) {
+	path := os.Getenv("CONFIG_FILE")
+	if path == "" {
+		path = "config.yaml"
+	}
+
+	cfg := defaultConfig()
+
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read config file %q: %w", path, err)
+	}
+	if err == nil {
+		if err = yaml.Unmarshal(data, cfg); err != nil {
+			return nil, fmt.Errorf("parse config file: %w", err)
+		}
+	}
+
+	// Allow individual environment variable overrides.
+	applyEnvOverrides(cfg)
+
+	return cfg, nil
 }
 
-// Load reads and parses the YAML configuration file at the given path.
-// Environment variables are NOT expanded here; use them in DSN / endpoint
-// strings directly if needed.
-func Load(path string) (*Config, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open config file %q: %w", path, err)
+func defaultConfig() *Config {
+	return &Config{
+		Storage: StorageConfig{
+			Backend:  "s3",
+			S3Region: "us-east-1",
+		},
+		Compression: CompressionConfig{
+			Algorithm: "gzip",
+			Level:     6,
+		},
 	}
-	defer f.Close()
-
-	var cfg Config
-	if err = yaml.NewDecoder(f).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("decode config file %q: %w", path, err)
-	}
-
-	if err = cfg.validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
-	}
-
-	return &cfg, nil
 }
 
-func (c *Config) validate() error {
-	if c.Database.DSN == "" {
-		return fmt.Errorf("database.dsn must not be empty")
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("POSTGRES_DSN"); v != "" {
+		cfg.Database.DSN = v
 	}
-	if c.Storage.Bucket == "" {
-		return fmt.Errorf("storage.bucket must not be empty")
+	if v := os.Getenv("S3_BUCKET"); v != "" {
+		cfg.Storage.S3Bucket = v
 	}
-	if c.Storage.Region == "" {
-		c.Storage.Region = "us-east-1"
+	if v := os.Getenv("S3_REGION"); v != "" {
+		cfg.Storage.S3Region = v
 	}
-	if c.Compress.Algorithm == "" {
-		c.Compress.Algorithm = "gzip"
+	if v := os.Getenv("S3_ENDPOINT"); v != "" {
+		cfg.Storage.S3Endpoint = v
 	}
-	return nil
+	if v := os.Getenv("STORAGE_BACKEND"); v != "" {
+		cfg.Storage.Backend = v
+	}
+	if v := os.Getenv("LOCAL_PATH"); v != "" {
+		cfg.Storage.LocalPath = v
+	}
+	if v := os.Getenv("COMPRESSION_ALGORITHM"); v != "" {
+		cfg.Compression.Algorithm = v
+	}
 }

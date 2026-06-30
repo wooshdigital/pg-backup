@@ -5,26 +5,63 @@ import (
 	"net/url"
 )
 
-// ParseDSN validates and normalises a Postgres connection DSN.
-// Both URI format (postgres://…) and DSN keyword format are accepted.
-func ParseDSN(dsn string) (string, error) {
-	if dsn == "" {
-		return "", fmt.Errorf("DSN must not be empty")
-	}
+// ParseDSN extracts individual components from a Postgres connection string.
+// It accepts both URI (postgres://...) and key=value formats.
+type DSNComponents struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Database string
+	SSLMode  string
+}
 
+// ParseDSN parses a DSN string into its components.
+func ParseDSN(dsn string) (*DSNComponents, error) {
 	u, err := url.Parse(dsn)
 	if err != nil {
-		return "", fmt.Errorf("invalid DSN: %w", err)
+		return nil, fmt.Errorf("invalid DSN: %w", err)
 	}
 
-	switch u.Scheme {
-	case "postgres", "postgresql":
-		// valid URI format – return as-is
-		return dsn, nil
-	case "":
-		// keyword=value format – pass through unchecked
-		return dsn, nil
-	default:
-		return "", fmt.Errorf("unsupported DSN scheme %q (expected postgres or postgresql)", u.Scheme)
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "5432"
 	}
+
+	var pass string
+	if u.User != nil {
+		pass, _ = u.User.Password()
+	}
+
+	sslmode := u.Query().Get("sslmode")
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+
+	db := ""
+	if len(u.Path) > 1 {
+		db = u.Path[1:] // strip leading /
+	}
+
+	return &DSNComponents{
+		Host:     host,
+		Port:     port,
+		User:     u.User.Username(),
+		Password: pass,
+		Database: db,
+		SSLMode:  sslmode,
+	}, nil
+}
+
+// ToArgs converts DSN components to pg_dump command-line arguments.
+func (d *DSNComponents) ToArgs() []string {
+	args := []string{
+		"-h", d.Host,
+		"-p", d.Port,
+		"-U", d.User,
+		"-d", d.Database,
+		"--no-password",
+	}
+	return args
 }

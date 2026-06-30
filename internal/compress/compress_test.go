@@ -2,36 +2,71 @@ package compress_test
 
 import (
 	"bytes"
-	"context"
+	"compress/gzip"
+	"io"
+	"strings"
 	"testing"
 
-	"github.com/soapboxsys/ombudslib/internal/compress"
+	"github.com/ssoready/conf/internal/compress"
 )
 
 func TestGzipCompressor_RoundTrip(t *testing.T) {
-	original := []byte("hello, world! this is test data for gzip compression.")
-
-	c, err := compress.NewGzip(compress.DefaultLevel)
+	f := compress.NewFactory()
+	c, err := f.Create("gzip")
 	if err != nil {
-		t.Fatalf("NewGzip: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 
+	const input = "Hello, World! This is a test payload."
+
 	var compressed bytes.Buffer
-	if err := c.Compress(context.Background(), bytes.NewReader(original), &compressed); err != nil {
+	if err = c.Compress(strings.NewReader(input), &compressed); err != nil {
 		t.Fatalf("Compress: %v", err)
 	}
 
-	if compressed.Len() == 0 {
-		t.Error("compressed output is empty")
+	gr, err := gzip.NewReader(&compressed)
+	if err != nil {
+		t.Fatalf("gzip.NewReader: %v", err)
 	}
-	if c.Extension() != ".gz" {
-		t.Errorf("Extension() = %q, want .gz", c.Extension())
+	defer gr.Close()
+
+	out, err := io.ReadAll(gr)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+
+	if string(out) != input {
+		t.Errorf("got %q, want %q", out, input)
+	}
+}
+
+func TestNoopCompressor(t *testing.T) {
+	f := compress.NewFactory()
+	c, err := f.Create("none")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	const input = "raw bytes"
+	var out bytes.Buffer
+	if err = c.Compress(strings.NewReader(input), &out); err != nil {
+		t.Fatalf("Compress: %v", err)
+	}
+	if out.String() != input {
+		t.Errorf("noop should pass through; got %q", out.String())
 	}
 }
 
 func TestFactory_UnknownAlgorithm(t *testing.T) {
-	_, err := compress.NewFromConfig(compress.Config{Algorithm: "bzip3"})
+	_, err := compress.NewFactory().Create("brotli")
 	if err == nil {
 		t.Error("expected error for unknown algorithm")
+	}
+}
+
+func TestFactory_CreateWithLevel(t *testing.T) {
+	_, err := compress.NewFactory().CreateWithLevel("gzip", 9)
+	if err != nil {
+		t.Fatalf("CreateWithLevel: %v", err)
 	}
 }

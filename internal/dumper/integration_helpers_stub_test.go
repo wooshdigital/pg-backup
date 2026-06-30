@@ -1,20 +1,5 @@
 //go:build !integration
-// +build !integration
 
-package dumper
+package dumper_test
 
-import (
-	"context"
-	"testing"
-)
-
-// pgContainer is a stub for non-integration builds.
-type pgContainer struct {
-	DSN string
-}
-
-func startPostgres(_ context.Context, t *testing.T) *pgContainer {
-	t.Helper()
-	t.Skip("skipping integration test: build tag 'integration' not set")
-	return nil
-}
+// Stub file to satisfy the build when integration tag is not set.

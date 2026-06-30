@@ -5,12 +5,9 @@ import (
 	"time"
 )
 
-// GenerateKey creates a time-stamped storage key for a backup object.
-// Format: backups/YYYY/MM/DD/backup-YYYYMMDD-HHMMSS.dump.gz
-func GenerateKey(t time.Time) string {
-	return fmt.Sprintf(
-		"backups/%d/%02d/%02d/backup-%s.dump.gz",
-		t.Year(), t.Month(), t.Day(),
-		t.UTC().Format("20060102-150405"),
-	)
+// GenerateKey creates a time-stamped object key for a backup file.
+// Format: backups/2006-01-02T150405Z.sql.gz
+func GenerateKey(ext string) string {
+	ts := time.Now().UTC().Format("2006-01-02T150405Z")
+	return fmt.Sprintf("backups/%s.sql%s", ts, ext)
 }

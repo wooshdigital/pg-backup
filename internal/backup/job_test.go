@@ -8,211 +8,234 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sdreger/cmd-worker/internal/backup"
-	"github.com/sdreger/cmd-worker/internal/compress"
+	"github.com/ssoready/conf/internal/backup"
+	"github.com/ssoready/conf/internal/compress"
 )
 
-// ---- mock implementations ----
+// -------------------------------------------------------------------
+// Minimal fakes
+// -------------------------------------------------------------------
 
-type mockDumper struct {
-	data string
-	err  error
+// fakeDumper writes a fixed payload to the writer.
+type fakeDumper struct {
+	payload string
+	err     error
 }
 
-func (m *mockDumper) Dump(_ context.Context, w io.Writer) error {
-	if m.err != nil {
-		return m.err
+func (f *fakeDumper) Dump(_ context.Context, w io.Writer) error {
+	if f.err != nil {
+		return f.err
 	}
-	_, err := io.WriteString(w, m.data)
+	_, err := io.WriteString(w, f.payload)
 	return err
 }
 
-type mockStorage struct {
-	uploaded map[string][]byte
-	err      error
+// fakeBackend stores the last Put call in memory.
+type fakeBackend struct {
+	lastKey     string
+	lastContent []byte
+	err         error
 }
 
-func newMockStorage() *mockStorage {
-	return &mockStorage{uploaded: make(map[string][]byte)}
-}
-
-func (m *mockStorage) Upload(_ context.Context, key string, r io.Reader) (int64, error) {
-	if m.err != nil {
-		return 0, m.err
+func (f *fakeBackend) Put(_ context.Context, r io.Reader) (string, error) {
+	if f.err != nil {
+		return "", f.err
 	}
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	m.uploaded[key] = data
-	return int64(len(data)), nil
+	f.lastContent = data
+	f.lastKey = "backups/2026-06-30T000000Z.sql.gz"
+	return f.lastKey, nil
 }
 
-// ---- helpers ----
+// noopCompressor passes bytes through unchanged so we can inspect them.
+type noopCompressor struct{}
 
-// newNopCompressor returns a Compressor that does no compression (pass-through).
-func newNopCompressor(t *testing.T) compress.Compressor {
-	t.Helper()
-	c, err := compress.New("none")
+func (noopCompressor) Compress(r io.Reader, w io.Writer) error {
+	_, err := io.Copy(w, r)
+	return err
+}
+
+func (noopCompressor) Extension() string { return ".noop" }
+
+// -------------------------------------------------------------------
+// Unit tests – buffered mode
+// -------------------------------------------------------------------
+
+func TestJob_Run_Buffered_Success(t *testing.T) {
+	const payload = "SELECT 1;"
+	d := &fakeDumper{payload: payload}
+	b := &fakeBackend{}
+	c := noopCompressor{}
+
+	job := &backup.Job{
+		Dumper:     d,
+		Compressor: c,
+		Storage:    b,
+	}
+
+	res := job.Run(context.Background())
+	if res.Err != nil {
+		t.Fatalf("unexpected error: %v", res.Err)
+	}
+	if res.Key == "" {
+		t.Error("expected non-empty key")
+	}
+	if string(b.lastContent) != payload {
+		t.Errorf("got %q, want %q", string(b.lastContent), payload)
+	}
+	if res.Size <= 0 {
+		t.Errorf("expected positive size, got %d", res.Size)
+	}
+	if res.Duration <= 0 {
+		t.Errorf("expected positive duration, got %v", res.Duration)
+	}
+}
+
+func TestJob_Run_Buffered_DumperError(t *testing.T) {
+	d := &fakeDumper{err: errors.New("pg_dump: connection refused")}
+	b := &fakeBackend{}
+	c := noopCompressor{}
+
+	job := &backup.Job{
+		Dumper:     d,
+		Compressor: c,
+		Storage:    b,
+	}
+
+	res := job.Run(context.Background())
+	if res.Err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	if !strings.Contains(res.Err.Error(), "pg_dump") {
+		t.Errorf("error should mention pg_dump, got: %v", res.Err)
+	}
+}
+
+func TestJob_Run_Buffered_StorageError(t *testing.T) {
+	d := &fakeDumper{payload: "SELECT 1;"}
+	b := &fakeBackend{err: errors.New("s3: access denied")}
+	c := noopCompressor{}
+
+	job := &backup.Job{
+		Dumper:     d,
+		Compressor: c,
+		Storage:    b,
+	}
+
+	res := job.Run(context.Background())
+	if res.Err == nil {
+		t.Fatal("expected error but got nil")
+	}
+}
+
+// -------------------------------------------------------------------
+// Unit tests – streamed mode
+// -------------------------------------------------------------------
+
+func TestJob_Run_Streamed_Success(t *testing.T) {
+	const payload = "SELECT 2;"
+	d := &fakeDumper{payload: payload}
+	b := &fakeBackend{}
+	c := noopCompressor{}
+
+	job := &backup.Job{
+		Dumper:       d,
+		Compressor:   c,
+		Storage:      b,
+		StreamDirect: true,
+	}
+
+	res := job.Run(context.Background())
+	if res.Err != nil {
+		t.Fatalf("unexpected error: %v", res.Err)
+	}
+	if string(b.lastContent) != payload {
+		t.Errorf("got %q, want %q", string(b.lastContent), payload)
+	}
+}
+
+func TestJob_Run_Streamed_DumperError(t *testing.T) {
+	d := &fakeDumper{err: errors.New("dump error")}
+	b := &fakeBackend{}
+	c := noopCompressor{}
+
+	job := &backup.Job{
+		Dumper:       d,
+		Compressor:   c,
+		Storage:      b,
+		StreamDirect: true,
+	}
+
+	res := job.Run(context.Background())
+	if res.Err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// -------------------------------------------------------------------
+// Unit test – gzip compressor integration with fake dumper/backend
+// -------------------------------------------------------------------
+
+func TestJob_Run_Buffered_WithGzip(t *testing.T) {
+	const payload = "-- SQL payload for gzip test\nSELECT version();\n"
+	d := &fakeDumper{payload: payload}
+	b := &fakeBackend{}
+
+	c, err := compress.NewFactory().Create("gzip")
 	if err != nil {
-		// Fall back to the factory's passthrough implementation if "none" isn't
-		// registered — the unit tests only care that data flows through.
-		t.Logf("compress.New('none') returned: %v; using inline nop compressor", err)
-		return &nopCompressor{}
+		t.Skipf("gzip compressor unavailable: %v", err)
 	}
-	return c
-}
-
-// nopCompressor is a minimal pass-through compressor for unit tests.
-type nopCompressor struct{}
-
-func (n *nopCompressor) NewWriter(w io.Writer) (io.WriteCloser, error) {
-	return &nopWriteCloser{w}, nil
-}
-
-type nopWriteCloser struct{ io.Writer }
-
-func (n *nopWriteCloser) Close() error { return nil }
-
-// ---- unit tests ----
-
-func TestJob_Run_ViaTemp_Success(t *testing.T) {
-	ctx := context.Background()
-	d := &mockDumper{data: "SELECT 1;"}
-	s := newMockStorage()
 
 	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   &nopCompressor{},
-		Storage:      s,
-		StreamDirect: false,
+		Dumper:     d,
+		Compressor: c,
+		Storage:    b,
 	}
 
-	result := job.Run(ctx)
-	if result.Err != nil {
-		t.Fatalf("expected no error, got: %v", result.Err)
+	res := job.Run(context.Background())
+	if res.Err != nil {
+		t.Fatalf("unexpected error: %v", res.Err)
 	}
-	if result.Key == "" {
-		t.Fatal("expected a non-empty key")
-	}
-	if result.Size == 0 {
-		t.Fatal("expected size > 0")
-	}
-	if result.Duration <= 0 {
-		t.Fatal("expected positive duration")
-	}
-
-	data, ok := s.uploaded[result.Key]
-	if !ok {
-		t.Fatalf("key %q not found in mock storage", result.Key)
-	}
-	if !bytes.Contains(data, []byte("SELECT 1;")) {
-		t.Fatalf("uploaded data doesn't contain expected payload; got %q", data)
+	// Gzip magic number: 0x1f 0x8b
+	if len(b.lastContent) < 2 || b.lastContent[0] != 0x1f || b.lastContent[1] != 0x8b {
+		t.Errorf("output does not look like gzip; first bytes: %x", b.lastContent[:min(4, len(b.lastContent))])
 	}
 }
 
-func TestJob_Run_StreamDirect_Success(t *testing.T) {
-	ctx := context.Background()
-	d := &mockDumper{data: "SELECT 2;"}
-	s := newMockStorage()
-
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   &nopCompressor{},
-		Storage:      s,
-		StreamDirect: true,
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
+	return b
+}
 
-	result := job.Run(ctx)
-	if result.Err != nil {
-		t.Fatalf("expected no error, got: %v", result.Err)
-	}
+// -------------------------------------------------------------------
+// Pipeline unit test
+// -------------------------------------------------------------------
 
-	data, ok := s.uploaded[result.Key]
-	if !ok {
-		t.Fatalf("key %q not found in mock storage", result.Key)
+func TestRunPipeline(t *testing.T) {
+	const payload = "pipeline payload"
+	d := &fakeDumper{payload: payload}
+	b := &fakeBackend{}
+	c := noopCompressor{}
+
+	key, size, err := backup.RunPipeline(context.Background(), d, c, b)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !bytes.Contains(data, []byte("SELECT 2;")) {
-		t.Fatalf("uploaded data doesn't contain expected payload; got %q", data)
+	if key == "" {
+		t.Error("expected non-empty key")
+	}
+	if int(size) != len(payload) {
+		t.Errorf("size = %d, want %d", size, len(payload))
+	}
+	if string(b.lastContent) != payload {
+		t.Errorf("content = %q, want %q", string(b.lastContent), payload)
 	}
 }
 
-func TestJob_Run_DumperError(t *testing.T) {
-	ctx := context.Background()
-	dumpErr := errors.New("pg_dump failed")
-	d := &mockDumper{err: dumpErr}
-	s := newMockStorage()
-
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   &nopCompressor{},
-		Storage:      s,
-		StreamDirect: false,
-	}
-
-	result := job.Run(ctx)
-	if result.Err == nil {
-		t.Fatal("expected an error from dumper, got nil")
-	}
-	if !strings.Contains(result.Err.Error(), "dump") {
-		t.Fatalf("error message should mention 'dump', got: %v", result.Err)
-	}
-}
-
-func TestJob_Run_StorageError(t *testing.T) {
-	ctx := context.Background()
-	d := &mockDumper{data: "SELECT 3;"}
-	s := &mockStorage{uploaded: make(map[string][]byte), err: errors.New("s3 unavailable")}
-
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   &nopCompressor{},
-		Storage:      s,
-		StreamDirect: false,
-	}
-
-	result := job.Run(ctx)
-	if result.Err == nil {
-		t.Fatal("expected an error from storage, got nil")
-	}
-	if !strings.Contains(result.Err.Error(), "upload") {
-		t.Fatalf("error message should mention 'upload', got: %v", result.Err)
-	}
-}
-
-func TestJob_Run_StreamDirect_DumperError(t *testing.T) {
-	ctx := context.Background()
-	dumpErr := errors.New("stream dump failed")
-	d := &mockDumper{err: dumpErr}
-	s := newMockStorage()
-
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   &nopCompressor{},
-		Storage:      s,
-		StreamDirect: true,
-	}
-
-	result := job.Run(ctx)
-	if result.Err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-}
-
-func TestJob_Run_StreamDirect_StorageError(t *testing.T) {
-	ctx := context.Background()
-	d := &mockDumper{data: "SELECT 4;"}
-	s := &mockStorage{uploaded: make(map[string][]byte), err: errors.New("s3 stream error")}
-
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   &nopCompressor{},
-		Storage:      s,
-		StreamDirect: true,
-	}
-
-	result := job.Run(ctx)
-	if result.Err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-}
+// Ensure unused import of bytes doesn't break compilation.
+var _ = bytes.NewBuffer

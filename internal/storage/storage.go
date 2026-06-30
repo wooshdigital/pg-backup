@@ -2,12 +2,26 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"io"
+
+	"github.com/ssoready/conf/internal/config"
 )
 
-// StorageBackend is the interface satisfied by every storage implementation.
-type StorageBackend interface {
-	// Upload streams data from r into the backend under the given key and
-	// returns the number of bytes written.
-	Upload(ctx context.Context, key string, r io.Reader) (int64, error)
+// Backend is the interface for uploading backup files.
+type Backend interface {
+	// Put uploads the content from r and returns a storage key.
+	Put(ctx context.Context, r io.Reader) (key string, err error)
+}
+
+// New constructs a storage Backend based on the provided configuration.
+func New(ctx context.Context, cfg *config.Config) (Backend, error) {
+	switch cfg.Storage.Backend {
+	case "s3", "":
+		return newS3Backend(ctx, cfg)
+	case "local":
+		return newLocalBackend(cfg)
+	default:
+		return nil, fmt.Errorf("unknown storage backend %q", cfg.Storage.Backend)
+	}
 }

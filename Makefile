@@ -1,35 +1,34 @@
-.PHONY: build test test-unit test-integration lint clean docker-up docker-down
+.PHONY: build test test-unit test-integration lint
 
-BINARY := bin/worker
-GO     := go
-GOTEST := $(GO) test
-
+# Build the worker binary.
 build:
-	$(GO) build -o $(BINARY) ./cmd/worker
+	go build -o bin/worker ./cmd/worker
 
+# Run unit tests only.
 test-unit:
-	$(GOTEST) -v -count=1 ./...
+	go test ./...
 
+# Run all tests including integration tests (requires Docker).
 test-integration: docker-up
-	@echo "Waiting for services to be healthy..."
-	@sleep 5
-	POSTGRES_DSN="postgres://testuser:testpassword@localhost:5432/testdb?sslmode=disable" \
+	POSTGRES_DSN="postgres://postgres:postgres@localhost:5432/testdb?sslmode=disable" \
 	S3_ENDPOINT="http://localhost:4566" \
-	S3_BUCKET="backup-test" \
+	S3_BUCKET="test-backups" \
 	AWS_REGION="us-east-1" \
 	AWS_ACCESS_KEY_ID="test" \
 	AWS_SECRET_ACCESS_KEY="test" \
-	$(GOTEST) -v -count=1 -tags=integration -timeout=5m ./internal/backup/...
+	go test -tags=integration -v -timeout 120s ./internal/backup/...
 	$(MAKE) docker-down
 
+# Run all tests (unit + integration).
+test: test-unit test-integration
+
+# Start test dependencies via docker-compose.
 docker-up:
 	docker compose -f docker-compose.test.yml up -d --wait
 
+# Stop test dependencies.
 docker-down:
-	docker compose -f docker-compose.test.yml down -v
+	docker compose -f docker-compose.test.yml down --volumes
 
 lint:
 	golangci-lint run ./...
-
-clean:
-	rm -rf $(BINARY)
