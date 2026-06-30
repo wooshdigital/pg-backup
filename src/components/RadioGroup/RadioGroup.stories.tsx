@@ -10,90 +10,26 @@ const meta: Meta<typeof RadioGroup> = {
     layout: 'padded',
   },
   tags: ['autodocs'],
+  argTypes: {
+    legend: { control: 'text' },
+    disabled: { control: 'boolean' },
+    required: { control: 'boolean' },
+    error: { control: 'text' },
+    helperText: { control: 'text' },
+    orientation: {
+      control: { type: 'select' },
+      options: ['vertical', 'horizontal'],
+    },
+  },
 };
 
 export default meta;
 type Story = StoryObj<typeof RadioGroup>;
 
 export const Default: Story = {
-  render: () => (
-    <RadioGroup legend="Choose a plan" name="plan">
-      <Radio value="free" label="Free" />
-      <Radio value="pro" label="Pro" />
-      <Radio value="enterprise" label="Enterprise" />
-    </RadioGroup>
-  ),
-};
-
-export const WithDefaultValue: Story = {
-  render: () => (
-    <RadioGroup legend="Choose a plan" name="plan-default" defaultValue="pro">
-      <Radio value="free" label="Free" />
-      <Radio value="pro" label="Pro" />
-      <Radio value="enterprise" label="Enterprise" />
-    </RadioGroup>
-  ),
-};
-
-export const Horizontal: Story = {
-  render: () => (
-    <RadioGroup legend="Select size" name="size" layout="horizontal">
-      <Radio value="xs" label="XS" />
-      <Radio value="sm" label="SM" />
-      <Radio value="md" label="MD" />
-      <Radio value="lg" label="LG" />
-      <Radio value="xl" label="XL" />
-    </RadioGroup>
-  ),
-};
-
-export const WithDisabledOption: Story = {
-  render: () => (
-    <RadioGroup
-      legend="Select payment method"
-      name="payment"
-      defaultValue="card"
-    >
-      <Radio value="card" label="Credit / Debit Card" />
-      <Radio value="paypal" label="PayPal" />
-      <Radio value="crypto" label="Cryptocurrency (unavailable)" disabled />
-    </RadioGroup>
-  ),
-};
-
-export const AllDisabled: Story = {
-  render: () => (
-    <RadioGroup legend="Read-only selection" name="readonly" defaultValue="b" disabled>
-      <Radio value="a" label="Option A" />
-      <Radio value="b" label="Option B" />
-      <Radio value="c" label="Option C" />
-    </RadioGroup>
-  ),
-};
-
-export const WithError: Story = {
-  render: () => (
-    <RadioGroup
-      legend="Preferred contact method"
-      name="contact"
-      error="Please select a contact method."
-    >
-      <Radio value="email" label="Email" />
-      <Radio value="phone" label="Phone" />
-      <Radio value="mail" label="Mail" />
-    </RadioGroup>
-  ),
-};
-
-export const WithHelperText: Story = {
-  render: () => (
-    <RadioGroup
-      legend="Notification frequency"
-      name="frequency"
-      helperText="You can change this setting at any time."
-      defaultValue="daily"
-    >
-      <Radio value="realtime" label="Real-time" />
+  render: (args) => (
+    <RadioGroup legend="Notification frequency" {...args}>
+      <Radio value="immediately" label="Immediately" />
       <Radio value="daily" label="Daily digest" />
       <Radio value="weekly" label="Weekly summary" />
       <Radio value="never" label="Never" />
@@ -101,61 +37,127 @@ export const WithHelperText: Story = {
   ),
 };
 
-export const Required: Story = {
+export const WithDefaultValue: Story = {
+  render: () => (
+    <RadioGroup legend="Notification frequency" defaultValue="daily">
+      <Radio value="immediately" label="Immediately" />
+      <Radio value="daily" label="Daily digest" />
+      <Radio value="weekly" label="Weekly summary" />
+      <Radio value="never" label="Never" />
+    </RadioGroup>
+  ),
+};
+
+export const Horizontal: Story = {
+  render: () => (
+    <RadioGroup legend="Size" orientation="horizontal" defaultValue="medium">
+      <Radio value="small" label="Small" />
+      <Radio value="medium" label="Medium" />
+      <Radio value="large" label="Large" />
+      <Radio value="xlarge" label="X-Large" />
+    </RadioGroup>
+  ),
+};
+
+export const WithDescriptions: Story = {
+  render: () => (
+    <RadioGroup legend="Plan" defaultValue="pro">
+      <Radio
+        value="free"
+        label="Free"
+        description="Up to 3 projects, 1GB storage"
+      />
+      <Radio
+        value="pro"
+        label="Pro"
+        description="Unlimited projects, 50GB storage, priority support"
+      />
+      <Radio
+        value="enterprise"
+        label="Enterprise"
+        description="Custom limits, SLA guarantees, dedicated support"
+      />
+    </RadioGroup>
+  ),
+};
+
+export const WithDisabledOption: Story = {
+  render: () => (
+    <RadioGroup legend="Payment method" defaultValue="card">
+      <Radio value="card" label="Credit card" />
+      <Radio value="bank" label="Bank transfer" />
+      <Radio value="crypto" label="Cryptocurrency (coming soon)" disabled />
+    </RadioGroup>
+  ),
+};
+
+export const AllDisabled: Story = {
+  render: () => (
+    <RadioGroup legend="Status" disabled defaultValue="active">
+      <Radio value="active" label="Active" />
+      <Radio value="paused" label="Paused" />
+      <Radio value="archived" label="Archived" />
+    </RadioGroup>
+  ),
+};
+
+export const WithError: Story = {
   render: () => (
     <RadioGroup
-      legend="Gender"
-      name="gender"
+      legend="Terms"
       required
+      error="You must select an option to continue."
     >
+      <Radio value="agree" label="I agree to the terms" />
+      <Radio value="disagree" label="I disagree" />
+    </RadioGroup>
+  ),
+};
+
+export const WithHelperText: Story = {
+  render: () => (
+    <RadioGroup
+      legend="Delivery speed"
+      helperText="Faster delivery options may incur additional charges."
+      defaultValue="standard"
+    >
+      <Radio value="standard" label="Standard (5-7 days)" />
+      <Radio value="express" label="Express (2-3 days)" />
+      <Radio value="overnight" label="Overnight" />
+    </RadioGroup>
+  ),
+};
+
+export const Required: Story = {
+  render: () => (
+    <RadioGroup legend="Gender" required>
       <Radio value="male" label="Male" />
       <Radio value="female" label="Female" />
       <Radio value="nonbinary" label="Non-binary" />
-      <Radio value="prefer-not" label="Prefer not to say" />
+      <Radio value="prefer_not" label="Prefer not to say" />
     </RadioGroup>
   ),
 };
 
 export const Controlled: Story = {
   render: () => {
-    const [value, setValue] = useState('monthly');
+    const [value, setValue] = useState('');
     return (
       <div>
         <RadioGroup
-          legend="Billing cycle"
-          name="billing"
+          legend="Favourite season"
           value={value}
           onChange={setValue}
         >
-          <Radio value="monthly" label="Monthly" />
-          <Radio value="quarterly" label="Quarterly" />
-          <Radio value="annual" label="Annual (save 20%)" />
+          <Radio value="spring" label="Spring" />
+          <Radio value="summer" label="Summer" />
+          <Radio value="autumn" label="Autumn" />
+          <Radio value="winter" label="Winter" />
         </RadioGroup>
         <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-          Selected: <strong>{value}</strong>
+          Selected: {value || '(none)'}
         </p>
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-          <button onClick={() => setValue('monthly')}>Set Monthly</button>
-          <button onClick={() => setValue('annual')}>Set Annual</button>
-        </div>
       </div>
     );
   },
-};
-
-export const HorizontalWithError: Story = {
-  render: () => (
-    <RadioGroup
-      legend="Rating"
-      name="rating"
-      layout="horizontal"
-      error="Please provide a rating."
-    >
-      <Radio value="1" label="1 ★" />
-      <Radio value="2" label="2 ★" />
-      <Radio value="3" label="3 ★" />
-      <Radio value="4" label="4 ★" />
-      <Radio value="5" label="5 ★" />
-    </RadioGroup>
-  ),
 };

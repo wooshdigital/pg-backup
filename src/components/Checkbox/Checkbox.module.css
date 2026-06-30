@@ -21,82 +21,76 @@
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
-  border: 0;
+  border-width: 0;
 }
 
+/* Custom indicator */
 .indicator {
-  display: flex;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 1.125rem;
   height: 1.125rem;
-  min-width: 1.125rem;
   border: 2px solid var(--color-border, #6b7280);
-  border-radius: 3px;
-  background: var(--color-surface, #ffffff);
+  border-radius: 0.25rem;
+  background-color: var(--color-surface, #ffffff);
   transition: background-color 0.15s ease, border-color 0.15s ease;
-  position: relative;
   margin-top: 0.125rem;
 }
 
-/* Focus ring via :focus-visible on the input */
+/* Checked state */
+.input:checked + .indicator,
+.input[data-indeterminate="true"] + .indicator {
+  background-color: var(--color-primary, #4f46e5);
+  border-color: var(--color-primary, #4f46e5);
+}
+
+/* Focus ring */
 .input:focus-visible + .indicator {
-  outline: 2px solid var(--color-focus, #3b82f6);
+  outline: 2px solid var(--color-focus-ring, #4f46e5);
   outline-offset: 2px;
 }
 
-/* Checked state */
-.input:checked + .indicator {
-  background: var(--color-primary, #3b82f6);
-  border-color: var(--color-primary, #3b82f6);
+/* Check mark SVG icon */
+.checkIcon {
+  display: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  color: #ffffff;
+  pointer-events: none;
 }
 
-.input:checked + .indicator::after {
-  content: '';
+.input:checked + .indicator .checkIcon {
   display: block;
-  width: 0.3125rem;
-  height: 0.5625rem;
-  border: 2px solid #ffffff;
-  border-top: none;
-  border-left: none;
-  transform: rotate(45deg) translateY(-0.0625rem);
-  animation: checkmark 0.1s ease-in-out;
+  animation: checkAppear 0.1s ease-in-out;
 }
 
-@keyframes checkmark {
+/* Indeterminate dash */
+.indeterminateIcon {
+  display: none;
+  width: 0.625rem;
+  height: 2px;
+  background-color: #ffffff;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.indicator.indeterminate .indeterminateIcon {
+  display: block;
+}
+
+@keyframes checkAppear {
   from {
     opacity: 0;
-    transform: rotate(45deg) scale(0.8) translateY(-0.0625rem);
+    transform: scale(0.5);
   }
   to {
     opacity: 1;
-    transform: rotate(45deg) scale(1) translateY(-0.0625rem);
+    transform: scale(1);
   }
 }
 
-/* Indeterminate state */
-.input.indeterminate + .indicator {
-  background: var(--color-primary, #3b82f6);
-  border-color: var(--color-primary, #3b82f6);
-}
-
-.input.indeterminate + .indicator::after {
-  content: '';
-  display: block;
-  width: 0.5rem;
-  height: 2px;
-  background: #ffffff;
-  border: none;
-  transform: none;
-  animation: none;
-}
-
-/* Hover */
-.wrapper:not(.disabled):hover .indicator {
-  border-color: var(--color-primary, #3b82f6);
-}
-
-/* Label */
 .label {
   font-size: 0.875rem;
   line-height: 1.25rem;
@@ -104,18 +98,19 @@
   user-select: none;
 }
 
-/* Error state */
-.wrapper.error .indicator {
-  border-color: var(--color-error, #ef4444);
+.description {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 0.125rem;
 }
 
-.helperText {
-  display: block;
+.labelContent {
+  display: flex;
+  flex-direction: column;
+}
+
+.error {
+  color: var(--color-error, #dc2626);
   font-size: 0.75rem;
   margin-top: 0.25rem;
-  color: var(--color-text-muted, #6b7280);
-}
-
-.helperText.errorText {
-  color: var(--color-error, #ef4444);
 }

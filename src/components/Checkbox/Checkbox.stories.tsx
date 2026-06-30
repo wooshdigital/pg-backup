@@ -10,6 +10,13 @@ const meta: Meta<typeof Checkbox> = {
     layout: 'padded',
   },
   tags: ['autodocs'],
+  argTypes: {
+    label: { control: 'text' },
+    description: { control: 'text' },
+    error: { control: 'text' },
+    disabled: { control: 'boolean' },
+    indeterminate: { control: 'boolean' },
+  },
 };
 
 export default meta;
@@ -23,50 +30,43 @@ export const Default: Story = {
 
 export const Checked: Story = {
   args: {
-    label: 'I agree to the terms',
+    label: 'Receive newsletter',
     defaultChecked: true,
   },
 };
 
+export const WithDescription: Story = {
+  args: {
+    label: 'Enable notifications',
+    description: 'Receive email notifications when someone mentions you.',
+  },
+};
+
 export const Indeterminate: Story = {
-  render: () => {
-    const ref = React.createRef<HTMLInputElement>();
-    return (
-      <Checkbox
-        ref={ref}
-        label="Select all"
-        indeterminate
-        onChange={() => {}}
-      />
-    );
+  args: {
+    label: 'Select all',
+    indeterminate: true,
   },
 };
 
 export const Disabled: Story = {
   args: {
-    label: 'This option is unavailable',
+    label: 'Disabled option',
     disabled: true,
   },
 };
 
 export const DisabledChecked: Story = {
   args: {
-    label: 'This option is unavailable',
+    label: 'Disabled checked option',
     disabled: true,
     defaultChecked: true,
   },
 };
 
-export const WithHelperText: Story = {
-  args: {
-    label: 'Subscribe to newsletter',
-    helperText: 'You can unsubscribe at any time.',
-  },
-};
-
 export const WithError: Story = {
   args: {
-    label: 'Accept terms and conditions',
+    label: 'Accept terms',
     error: 'You must accept the terms to continue.',
   },
 };
@@ -76,7 +76,7 @@ export const Controlled: Story = {
     const [checked, setChecked] = useState(false);
     return (
       <Checkbox
-        label={`Controlled checkbox (${checked ? 'checked' : 'unchecked'})`}
+        label={checked ? 'Checked' : 'Unchecked'}
         checked={checked}
         onChange={(e) => setChecked(e.target.checked)}
       />
@@ -86,53 +86,51 @@ export const Controlled: Story = {
 
 export const IndeterminateControlled: Story = {
   render: () => {
-    const [items, setItems] = useState([
-      { id: '1', label: 'Item 1', checked: true },
-      { id: '2', label: 'Item 2', checked: false },
-      { id: '3', label: 'Item 3', checked: true },
-    ]);
-
-    const allChecked = items.every((i) => i.checked);
-    const someChecked = items.some((i) => i.checked) && !allChecked;
-
-    const handleParentChange = () => {
-      setItems((prev) =>
-        prev.map((i) => ({ ...i, checked: !allChecked }))
+    const [state, setState] = useState<'unchecked' | 'indeterminate' | 'checked'>(
+      'indeterminate',
+    );
+    const cycle = () => {
+      setState((s) =>
+        s === 'unchecked' ? 'indeterminate' : s === 'indeterminate' ? 'checked' : 'unchecked',
       );
     };
-
-    const handleChildChange = (id: string) => {
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, checked: !i.checked } : i))
-      );
-    };
-
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <Checkbox
-          label="Select all items"
-          checked={allChecked}
-          indeterminate={someChecked}
-          onChange={handleParentChange}
-        />
-        <div style={{ paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {items.map((item) => (
-            <Checkbox
-              key={item.id}
-              label={item.label}
-              checked={item.checked}
-              onChange={() => handleChildChange(item.id)}
-            />
-          ))}
-        </div>
-      </div>
+      <Checkbox
+        label={`State: ${state}`}
+        checked={state === 'checked'}
+        indeterminate={state === 'indeterminate'}
+        onChange={cycle}
+      />
     );
   },
 };
 
-export const GroupDefault: StoryObj = {
+export const CheckboxGroupDefault: Story = {
+  render: () => {
+    const [values, setValues] = useState<string[]>([]);
+    const toggle = (value: string) =>
+      setValues((prev) =>
+        prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+      );
+    return (
+      <CheckboxGroup legend="Notify me about">
+        {['Comments', 'Mentions', 'Follows', 'New features'].map((opt) => (
+          <Checkbox
+            key={opt}
+            label={opt}
+            value={opt.toLowerCase()}
+            checked={values.includes(opt.toLowerCase())}
+            onChange={() => toggle(opt.toLowerCase())}
+          />
+        ))}
+      </CheckboxGroup>
+    );
+  },
+};
+
+export const CheckboxGroupHorizontal: Story = {
   render: () => (
-    <CheckboxGroup legend="Preferred contact methods">
+    <CheckboxGroup legend="Preferred contact" orientation="horizontal">
       <Checkbox label="Email" name="contact" value="email" />
       <Checkbox label="Phone" name="contact" value="phone" />
       <Checkbox label="SMS" name="contact" value="sms" />
@@ -140,49 +138,21 @@ export const GroupDefault: StoryObj = {
   ),
 };
 
-export const GroupHorizontal: StoryObj = {
+export const CheckboxGroupRequired: Story = {
   render: () => (
-    <CheckboxGroup legend="Select days" layout="horizontal">
-      <Checkbox label="Mon" name="days" value="mon" />
-      <Checkbox label="Tue" name="days" value="tue" />
-      <Checkbox label="Wed" name="days" value="wed" />
-      <Checkbox label="Thu" name="days" value="thu" />
-      <Checkbox label="Fri" name="days" value="fri" />
+    <CheckboxGroup legend="Agree to all" required error="You must select all required options.">
+      <Checkbox label="Terms of Service" />
+      <Checkbox label="Privacy Policy" />
     </CheckboxGroup>
   ),
 };
 
-export const GroupWithError: StoryObj = {
+export const CheckboxGroupDisabled: Story = {
   render: () => (
-    <CheckboxGroup
-      legend="Interests"
-      error="Please select at least one interest."
-    >
-      <Checkbox label="Technology" name="interests" value="tech" />
-      <Checkbox label="Design" name="interests" value="design" />
-      <Checkbox label="Business" name="interests" value="business" />
-    </CheckboxGroup>
-  ),
-};
-
-export const GroupWithHelperText: StoryObj = {
-  render: () => (
-    <CheckboxGroup
-      legend="Notification preferences"
-      helperText="Choose when you'd like to be notified."
-    >
-      <Checkbox label="New messages" name="notifs" value="messages" />
-      <Checkbox label="Mentions" name="notifs" value="mentions" />
-      <Checkbox label="Updates" name="notifs" value="updates" />
-    </CheckboxGroup>
-  ),
-};
-
-export const GroupRequired: StoryObj = {
-  render: () => (
-    <CheckboxGroup legend="Agreement" required>
-      <Checkbox label="I accept the terms of service" name="agree" value="tos" />
-      <Checkbox label="I accept the privacy policy" name="agree" value="privacy" />
+    <CheckboxGroup legend="Disabled group" disabled>
+      <Checkbox label="Option 1" />
+      <Checkbox label="Option 2" />
+      <Checkbox label="Option 3" />
     </CheckboxGroup>
   ),
 };

@@ -7,8 +7,9 @@ export interface CheckboxGroupProps {
   required?: boolean;
   error?: string;
   helperText?: string;
-  layout?: 'vertical' | 'horizontal';
+  orientation?: 'vertical' | 'horizontal';
   className?: string;
+  disabled?: boolean;
 }
 
 export const CheckboxGroup: React.FC<CheckboxGroupProps> = ({
@@ -17,18 +18,28 @@ export const CheckboxGroup: React.FC<CheckboxGroupProps> = ({
   required,
   error,
   helperText,
-  layout = 'vertical',
+  orientation = 'vertical',
   className,
+  disabled,
 }) => {
-  const groupId = useId();
-  const helperTextId = `${groupId}-helper`;
+  const id = useId();
+  const errorId = `${id}-error`;
+  const helperTextId = `${id}-helper`;
+
+  const describedBy = [
+    helperText ? helperTextId : '',
+    error ? errorId : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <fieldset
-      className={[styles.group, className ?? ''].filter(Boolean).join(' ')}
+      className={[styles.fieldset, className ?? ''].filter(Boolean).join(' ')}
       aria-required={required ? true : undefined}
-      aria-describedby={helperText || error ? helperTextId : undefined}
-      aria-invalid={error ? true : undefined}
+      aria-describedby={describedBy || undefined}
+      aria-errormessage={error ? errorId : undefined}
+      disabled={disabled}
     >
       <legend
         className={[styles.legend, required ? styles.required : '']
@@ -36,36 +47,33 @@ export const CheckboxGroup: React.FC<CheckboxGroupProps> = ({
           .join(' ')}
       >
         {legend}
-        {required && (
-          <span aria-hidden="true" style={{ color: 'var(--color-error, #ef4444)' }}>
-            {' '}*
-          </span>
-        )}
+        {required && <span aria-hidden="true"> *</span>}
       </legend>
+
       <div
         className={[
-          styles.list,
-          layout === 'horizontal' ? styles.horizontal : '',
+          styles.group,
+          orientation === 'horizontal' ? styles.horizontal : '',
         ]
           .filter(Boolean)
           .join(' ')}
       >
         {children}
       </div>
-      {(helperText || error) && (
-        <span
-          id={helperTextId}
-          className={[
-            styles.helperText,
-            error ? styles.errorText : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          role={error ? 'alert' : undefined}
-        >
-          {error ?? helperText}
-        </span>
+
+      {helperText && !error && (
+        <p id={helperTextId} className={styles.helperText}>
+          {helperText}
+        </p>
+      )}
+
+      {error && (
+        <p id={errorId} className={styles.error} role="alert">
+          {error}
+        </p>
       )}
     </fieldset>
   );
 };
+
+CheckboxGroup.displayName = 'CheckboxGroup';
