@@ -27,22 +27,10 @@ export interface Trip {
   id: string;
   name: string;
   description?: string;
+  currency: string;
   startDate?: string;
   endDate?: string;
-  currency: string;
   participants: Participant[];
   expenses: Expense[];
   createdAt: string;
 }
-
-export type RootStackParamList = {
-  Home: undefined;
-  TripsList: undefined;
-  Trips: undefined;
-  TripDetail: { tripId: string };
-  AddExpense: { tripId: string };
-  ExpenseDetail: { tripId: string; expenseId: string };
-  CreateTrip: undefined;
-  Settings: undefined;
-  Participants: { tripId: string };
-};

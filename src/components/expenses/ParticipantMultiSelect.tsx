@@ -2,145 +2,115 @@ import React from 'react';
 import {
   View,
   Text,
+  TouchableOpacity,
+  FlatList,
   StyleSheet,
-  Pressable,
-  ScrollView,
 } from 'react-native';
 import { Participant } from '../../types';
-import { getAvatarColor } from '../../utils/avatarColors';
 
 interface ParticipantMultiSelectProps {
   participants: Participant[];
   selectedIds: string[];
   onToggle: (participantId: string) => void;
-  perPersonAmount?: number;
-  currency?: string;
-  currencySymbol?: string;
 }
 
 export function ParticipantMultiSelect({
   participants,
   selectedIds,
   onToggle,
-  perPersonAmount,
-  currency,
-  currencySymbol = '$',
 }: ParticipantMultiSelectProps) {
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {participants.map(participant => {
-        const isSelected = selectedIds.includes(participant.id);
-        const avatarColor = participant.avatarColor || getAvatarColor(participant.name);
-        const initials = getInitials(participant.name);
-
+    <FlatList
+      data={participants}
+      keyExtractor={(item) => item.id}
+      scrollEnabled={false}
+      renderItem={({ item }) => {
+        const isSelected = selectedIds.includes(item.id);
+        const initials = getInitials(item.name);
         return (
-          <Pressable
-            key={participant.id}
-            style={[styles.row, isSelected && styles.rowSelected]}
-            onPress={() => onToggle(participant.id)}
-            android_ripple={{ color: '#EEF2FF' }}
+          <TouchableOpacity
+            style={[styles.row, isSelected && styles.selectedRow]}
+            onPress={() => onToggle(item.id)}
+            activeOpacity={0.7}
           >
-            <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+            <View style={[styles.avatar, { backgroundColor: item.avatarColor || '#6366F1' }]}>
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
-            <View style={styles.info}>
-              <Text style={[styles.name, isSelected && styles.nameSelected]}>
-                {participant.name}
-              </Text>
-              {isSelected && perPersonAmount !== undefined ? (
-                <Text style={styles.shareAmount}>
-                  {currencySymbol}{perPersonAmount.toFixed(2)} each
-                </Text>
-              ) : null}
-            </View>
+            <Text style={styles.name} numberOfLines={1}>
+              {item.name}
+            </Text>
             <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
               {isSelected && <Text style={styles.checkmark}>✓</Text>}
             </View>
-          </Pressable>
+          </TouchableOpacity>
         );
-      })}
-    </ScrollView>
+      }}
+      ItemSeparatorComponent={() => <View style={styles.separator} />}
+    />
   );
 }
 
 function getInitials(name: string): string {
   return name
     .split(' ')
-    .map(part => part[0])
+    .map((w) => w[0])
     .join('')
     .toUpperCase()
-    .substring(0, 2);
+    .slice(0, 2);
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
-    marginBottom: 8,
     backgroundColor: '#F9FAFB',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
   },
-  rowSelected: {
+  selectedRow: {
     backgroundColor: '#EEF2FF',
-    borderColor: '#6366F1',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
   avatarText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: '#fff',
     fontWeight: '700',
-  },
-  info: {
-    flex: 1,
+    fontSize: 14,
   },
   name: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  nameSelected: {
-    color: '#4338CA',
-  },
-  shareAmount: {
-    fontSize: 13,
-    color: '#6366F1',
-    marginTop: 2,
+    color: '#111827',
     fontWeight: '500',
   },
   checkbox: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     borderRadius: 6,
     borderWidth: 2,
     borderColor: '#D1D5DB',
-    alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
-    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    backgroundColor: '#fff',
   },
   checkboxSelected: {
     backgroundColor: '#6366F1',
     borderColor: '#6366F1',
   },
   checkmark: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '700',
+    lineHeight: 16,
+  },
+  separator: {
+    height: 8,
   },
 });
-
-export default ParticipantMultiSelect;

@@ -2,169 +2,177 @@ import React, { useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   SectionList,
-  Pressable,
+  TouchableOpacity,
+  StyleSheet,
   Alert,
-  RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import { RootStackParamList } from '../types';
 import { useTripContext } from '../context/TripContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { ExpenseCard } from '../components/expenses/ExpenseCard';
-import { getCurrencySymbol } from '../utils/currency';
+import { Expense } from '../types';
 
-type ExpensesScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
-type ExpensesScreenRouteProp = RouteProp<{ ExpensesTab: { tripId: string } }, 'ExpensesTab'>;
+type RootStackParamList = {
+  Expenses: { tripId: string };
+};
 
-interface Props {
-  tripId: string;
-}
+type ExpensesRouteProp = RouteProp<RootStackParamList, 'Expenses'>;
 
-export function ExpensesScreen({ tripId }: Props) {
-  const navigation = useNavigation<ExpensesScreenNavigationProp>();
-  const { getTripById, deleteExpense } = useTripContext();
-  const { sections, totalAmount } = useExpenses(tripId);
+export function ExpensesScreen() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<ExpensesRouteProp>();
+  const { tripId } = route.params;
+  const { state, dispatch } = useTripContext();
 
-  const trip = getTripById(tripId);
-  const currencySymbol = getCurrencySymbol(trip?.currency || 'USD');
+  const trip = state.trips.find((t) => t.id === tripId);
+  const { sections, total } = useExpenses(tripId);
 
-  const handleDeleteExpense = useCallback((expenseId: string, title: string) => {
-    Alert.alert(
-      'Delete Expense',
-      `Are you sure you want to delete "${title}"?`,
-      [
+  const handleDelete = useCallback(
+    (expenseId: string) => {
+      Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteExpense(tripId, expenseId),
+          onPress: () =>
+            dispatch({
+              type: 'TRIP_DELETE_EXPENSE',
+              payload: { tripId, expenseId },
+            }),
         },
-      ]
-    );
-  }, [tripId, deleteExpense]);
+      ]);
+    },
+    [tripId, dispatch]
+  );
 
-  const renderRightActions = useCallback((expenseId: string, title: string) => {
-    return (
-      <Pressable
+  const renderRightActions = useCallback(
+    (expenseId: string) => (
+      <TouchableOpacity
         style={styles.deleteAction}
-        onPress={() => handleDeleteExpense(expenseId, title)}
+        onPress={() => handleDelete(expenseId)}
       >
         <Text style={styles.deleteActionText}>Delete</Text>
-      </Pressable>
-    );
-  }, [handleDeleteExpense]);
+      </TouchableOpacity>
+    ),
+    [handleDelete]
+  );
 
-  const renderItem = useCallback(({ item }: { item: any }) => {
-    return (
+  const renderItem = useCallback(
+    ({ item }: { item: Expense }) => (
       <Swipeable
-        renderRightActions={() => renderRightActions(item.id, item.title)}
+        renderRightActions={() => renderRightActions(item.id)}
         overshootRight={false}
-        friction={2}
-        rightThreshold={40}
       >
         <ExpenseCard
           expense={item}
           participants={trip?.participants || []}
-          currencySymbol={currencySymbol}
           onPress={() =>
-            navigation.navigate('ExpenseDetail', {
-              tripId,
-              expenseId: item.id,
-            })
+            navigation.navigate('ExpenseDetail', { tripId, expenseId: item.id })
           }
         />
       </Swipeable>
-    );
-  }, [trip, currencySymbol, tripId, navigation, renderRightActions]);
+    ),
+    [trip, tripId, navigation, renderRightActions]
+  );
 
-  const renderSectionHeader = useCallback(({ section }: { section: any }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionHeaderText}>{section.title}</Text>
-    </View>
-  ), []);
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: { title: string } }) => (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
+      </View>
+    ),
+    []
+  );
 
-  const renderEmpty = () => (
+  const ListEmptyComponent = (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyEmoji}>💸</Text>
+      <Text style={styles.emptyEmoji}>🧾</Text>
       <Text style={styles.emptyTitle}>No expenses yet</Text>
       <Text style={styles.emptySubtitle}>
-        Tap the + button to add your first expense
+        Tap the + button to log your first expense.
       </Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      {/* Summary bar */}
       {sections.length > 0 && (
-        <View style={styles.totalBanner}>
-          <Text style={styles.totalLabel}>Total Spent</Text>
-          <Text style={styles.totalAmount}>
-            {currencySymbol}{totalAmount.toFixed(2)}
+        <View style={styles.summaryBar}>
+          <Text style={styles.summaryLabel}>Total Spent</Text>
+          <Text style={styles.summaryAmount}>
+            {trip?.currency || 'USD'} {total.toFixed(2)}
           </Text>
         </View>
       )}
 
       <SectionList
         sections={sections}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderItem}
         renderSectionHeader={renderSectionHeader}
-        ListEmptyComponent={renderEmpty}
-        contentContainerStyle={sections.length === 0 ? styles.emptyContent : styles.listContent}
+        ListEmptyComponent={ListEmptyComponent}
+        contentContainerStyle={
+          sections.length === 0 ? styles.emptyList : styles.list
+        }
         stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
       />
 
-      <Pressable
+      {/* FAB */}
+      <TouchableOpacity
         style={styles.fab}
         onPress={() => navigation.navigate('AddExpense', { tripId })}
+        activeOpacity={0.85}
       >
         <Text style={styles.fabIcon}>+</Text>
-      </Pressable>
-    </View>
+      </TouchableOpacity>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F9FAFB',
   },
-  totalBanner: {
+  summaryBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#6366F1',
     paddingHorizontal: 20,
     paddingVertical: 14,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  totalLabel: {
+  summaryLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#C7D2FE',
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  totalAmount: {
-    fontSize: 22,
+  summaryAmount: {
+    fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#111827',
   },
-  listContent: {
+  list: {
+    paddingVertical: 12,
     paddingBottom: 100,
-    paddingTop: 8,
   },
-  emptyContent: {
-    flex: 1,
+  emptyList: {
+    flexGrow: 1,
+    paddingBottom: 100,
   },
   sectionHeader: {
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 6,
   },
-  sectionHeaderText: {
+  sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#6B7280',
@@ -173,64 +181,60 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
+    alignItems: 'center',
     paddingTop: 80,
+    gap: 10,
   },
   emptyEmoji: {
     fontSize: 56,
-    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-    textAlign: 'center',
+    color: '#374151',
   },
   emptySubtitle: {
     fontSize: 15,
-    color: '#6B7280',
+    color: '#9CA3AF',
     textAlign: 'center',
-    lineHeight: 22,
+    paddingHorizontal: 40,
   },
   deleteAction: {
     backgroundColor: '#EF4444',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    marginVertical: 5,
+    marginVertical: 4,
     marginRight: 16,
     borderRadius: 14,
   },
   deleteActionText: {
-    color: '#FFFFFF',
+    color: '#fff',
     fontWeight: '700',
     fontSize: 14,
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 28,
     right: 24,
     width: 56,
     height: 56,
     borderRadius: 28,
     backgroundColor: '#6366F1',
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowRadius: 10,
+    elevation: 6,
   },
   fabIcon: {
+    color: '#fff',
     fontSize: 28,
-    color: '#FFFFFF',
     fontWeight: '300',
     lineHeight: 32,
+    marginTop: -2,
   },
 });
-
-export default ExpensesScreen;

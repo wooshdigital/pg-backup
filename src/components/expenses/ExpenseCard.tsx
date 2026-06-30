@@ -1,202 +1,167 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Expense, Participant } from '../../types';
-import { getAvatarColor } from '../../utils/avatarColors';
 
 interface ExpenseCardProps {
   expense: Expense;
   participants: Participant[];
-  currencySymbol?: string;
-  onPress?: () => void;
+  onPress: () => void;
 }
 
-const MAX_PARTICIPANT_AVATARS = 4;
-
-export function ExpenseCard({
-  expense,
-  participants,
-  currencySymbol = '$',
-  onPress,
-}: ExpenseCardProps) {
-  const participantMap = new Map(participants.map(p => [p.id, p]));
+export function ExpenseCard({ expense, participants, onPress }: ExpenseCardProps) {
+  const participantMap = new Map(participants.map((p) => [p.id, p]));
   const payer = participantMap.get(expense.payerId);
   const payerInitials = payer ? getInitials(payer.name) : '?';
-  const payerColor = payer?.avatarColor || getAvatarColor(payer?.name || '');
+  const involvedCount = expense.splits.length;
 
-  const involvedIds = expense.splits.map(s => s.participantId);
-  const involvedParticipants = involvedIds
-    .map(id => participantMap.get(id))
+  // Show up to 3 participant avatars
+  const involvedParticipants = expense.splits
+    .slice(0, 3)
+    .map((s) => participantMap.get(s.participantId))
     .filter(Boolean) as Participant[];
 
-  const visibleParticipants = involvedParticipants.slice(0, MAX_PARTICIPANT_AVATARS);
-  const remainingCount = involvedParticipants.length - visibleParticipants.length;
+  const extraCount = Math.max(0, involvedCount - 3);
 
   return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={onPress}
-      android_ripple={{ color: '#EEF2FF' }}
-    >
-      <View style={styles.leftSection}>
-        <View style={[styles.payerAvatar, { backgroundColor: payerColor }]}>
-          <Text style={styles.payerAvatarText}>{payerInitials}</Text>
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+      <View style={styles.left}>
+        <View
+          style={[styles.payerAvatar, { backgroundColor: payer?.avatarColor || '#6366F1' }]}
+        >
+          <Text style={styles.payerInitials}>{payerInitials}</Text>
         </View>
       </View>
-
-      <View style={styles.middleSection}>
+      <View style={styles.middle}>
         <Text style={styles.title} numberOfLines={1}>
           {expense.title}
         </Text>
         <View style={styles.metaRow}>
-          <Text style={styles.payerName}>
-            {payer ? `Paid by ${payer.name}` : 'Unknown payer'}
+          <Text style={styles.meta}>
+            Paid by {payer?.name || 'Unknown'}
           </Text>
           <Text style={styles.dot}> · </Text>
-          <Text style={styles.participantCount}>
-            {involvedParticipants.length} {involvedParticipants.length === 1 ? 'person' : 'people'}
-          </Text>
-        </View>
-        <View style={styles.participantAvatars}>
-          {visibleParticipants.map((p, index) => {
-            const color = p.avatarColor || getAvatarColor(p.name);
-            return (
+          <View style={styles.avatarStrip}>
+            {involvedParticipants.map((p) => (
               <View
                 key={p.id}
-                style={[
-                  styles.participantAvatar,
-                  { backgroundColor: color, zIndex: visibleParticipants.length - index, marginLeft: index > 0 ? -8 : 0 },
-                ]}
+                style={[styles.miniAvatar, { backgroundColor: p.avatarColor || '#818CF8' }]}
               >
-                <Text style={styles.participantAvatarText}>{getInitials(p.name)}</Text>
+                <Text style={styles.miniAvatarText}>{getInitials(p.name)}</Text>
               </View>
-            );
-          })}
-          {remainingCount > 0 && (
-            <View style={[styles.participantAvatar, styles.participantAvatarExtra, { marginLeft: -8 }]}>
-              <Text style={styles.participantAvatarExtraText}>+{remainingCount}</Text>
-            </View>
-          )}
+            ))}
+            {extraCount > 0 && (
+              <View style={[styles.miniAvatar, styles.extraAvatar]}>
+                <Text style={styles.miniAvatarText}>+{extraCount}</Text>
+              </View>
+            )}
+          </View>
         </View>
       </View>
-
-      <View style={styles.rightSection}>
+      <View style={styles.right}>
         <Text style={styles.amount}>
-          {currencySymbol}{expense.amount.toFixed(2)}
+          {expense.currency} {expense.amount.toFixed(2)}
+        </Text>
+        <Text style={styles.splitCount}>
+          {involvedCount} {involvedCount === 1 ? 'person' : 'people'}
         </Text>
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
 function getInitials(name: string): string {
   return name
     .split(' ')
-    .map(part => part[0])
+    .map((w) => w[0])
     .join('')
     .toUpperCase()
-    .substring(0, 2);
+    .slice(0, 2);
 }
 
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderRadius: 14,
     padding: 14,
     marginHorizontal: 16,
-    marginVertical: 5,
+    marginVertical: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
+    gap: 12,
   },
-  cardPressed: {
-    opacity: 0.92,
-    backgroundColor: '#F5F3FF',
-  },
-  leftSection: {
-    marginRight: 12,
-  },
+  left: {},
   payerAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  payerAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+  payerInitials: {
+    color: '#fff',
     fontWeight: '700',
+    fontSize: 16,
   },
-  middleSection: {
+  middle: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   title: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
-  payerName: {
-    fontSize: 12,
+  meta: {
+    fontSize: 13,
     color: '#6B7280',
   },
   dot: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#9CA3AF',
   },
-  participantCount: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  participantAvatars: {
+  avatarStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
   },
-  participantAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
+  miniAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -4,
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    borderColor: '#fff',
   },
-  participantAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-  participantAvatarExtra: {
+  extraAvatar: {
     backgroundColor: '#9CA3AF',
   },
-  participantAvatarExtraText: {
-    color: '#FFFFFF',
+  miniAvatarText: {
+    color: '#fff',
     fontSize: 8,
     fontWeight: '700',
   },
-  rightSection: {
-    marginLeft: 12,
+  right: {
     alignItems: 'flex-end',
+    gap: 2,
   },
   amount: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#6366F1',
+    fontWeight: '700',
+    color: '#111827',
+  },
+  splitCount: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
 });
-
-export default ExpenseCard;

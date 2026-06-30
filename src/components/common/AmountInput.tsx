@@ -1,124 +1,108 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
-  TextInput,
   Text,
+  TextInput,
   StyleSheet,
   TextInputProps,
-  Pressable,
 } from 'react-native';
 
-interface AmountInputProps {
+interface AmountInputProps extends Omit<TextInputProps, 'value' | 'onChangeText'> {
   value: string;
-  onChangeValue: (value: string) => void;
+  onChangeText: (value: string) => void;
   currencySymbol?: string;
-  currency?: string;
-  placeholder?: string;
   label?: string;
   error?: string;
-  autoFocus?: boolean;
 }
 
 export function AmountInput({
   value,
-  onChangeValue,
+  onChangeText,
   currencySymbol = '$',
-  currency,
-  placeholder = '0.00',
   label,
   error,
-  autoFocus,
+  ...rest
 }: AmountInputProps) {
-  const inputRef = useRef<TextInput>(null);
+  const [focused, setFocused] = useState(false);
 
-  const handleChangeText = (text: string) => {
-    // Allow digits and at most one decimal point
-    let cleaned = text.replace(/[^0-9.]/g, '');
-
-    // Prevent multiple decimal points
+  const handleChange = (text: string) => {
+    // Allow only numbers and a single decimal point with up to 2 decimal places
+    const cleaned = text.replace(/[^0-9.]/g, '');
     const parts = cleaned.split('.');
-    if (parts.length > 2) {
-      cleaned = parts[0] + '.' + parts.slice(1).join('');
-    }
-
-    // Limit to 2 decimal places
-    if (parts[1] !== undefined && parts[1].length > 2) {
-      cleaned = parts[0] + '.' + parts[1].substring(0, 2);
-    }
-
-    onChangeValue(cleaned);
+    if (parts.length > 2) return; // More than one decimal point
+    if (parts[1] !== undefined && parts[1].length > 2) return; // More than 2 decimals
+    onChangeText(cleaned);
   };
 
-  const displaySymbol = currencySymbol || currency || '$';
-
   return (
-    <View style={styles.container}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
-      <Pressable
-        style={[styles.inputRow, error ? styles.inputRowError : null]}
-        onPress={() => inputRef.current?.focus()}
+    <View style={styles.wrapper}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      <View
+        style={[
+          styles.inputRow,
+          focused && styles.inputRowFocused,
+          !!error && styles.inputRowError,
+        ]}
       >
-        <Text style={styles.symbol}>{displaySymbol}</Text>
+        <Text style={styles.symbol}>{currencySymbol}</Text>
         <TextInput
-          ref={inputRef}
           style={styles.input}
           value={value}
-          onChangeText={handleChangeText}
+          onChangeText={handleChange}
           keyboardType="decimal-pad"
-          placeholder={placeholder}
+          placeholder="0.00"
           placeholderTextColor="#9CA3AF"
-          autoFocus={autoFocus}
-          returnKeyType="done"
-          selectTextOnFocus
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          {...rest}
         />
-      </Pressable>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      </View>
+      {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
+  wrapper: {
+    gap: 6,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 6,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
+    borderColor: '#E5E7EB',
     borderRadius: 12,
     backgroundColor: '#F9FAFB',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    height: 52,
+  },
+  inputRowFocused: {
+    borderColor: '#6366F1',
+    backgroundColor: '#fff',
   },
   inputRowError: {
     borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
   },
   symbol: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: '#374151',
-    marginRight: 8,
+    marginRight: 6,
   },
   input: {
     flex: 1,
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#111827',
-    padding: 0,
   },
   error: {
     fontSize: 12,
     color: '#EF4444',
-    marginTop: 4,
+    marginTop: 2,
   },
 });
-
-export default AmountInput;

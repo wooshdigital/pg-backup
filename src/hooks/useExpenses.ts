@@ -3,71 +3,61 @@ import { useTripContext } from '../context/TripContext';
 import { Expense } from '../types';
 
 export interface ExpenseSection {
-  title: string; // date string formatted for display
-  date: string;  // raw date string for sorting
+  title: string; // formatted date label e.g. "June 28, 2026"
   data: Expense[];
 }
 
 /**
  * Returns expenses for a given tripId, sorted descending by date,
- * and grouped into sections by date for use with SectionList.
+ * and grouped into sections by date for SectionList consumption.
  */
 export function useExpenses(tripId: string): {
   expenses: Expense[];
   sections: ExpenseSection[];
-  totalAmount: number;
+  total: number;
 } {
-  const { getTripById } = useTripContext();
+  const { state } = useTripContext();
 
-  return useMemo(() => {
-    const trip = getTripById(tripId);
-    const expenses: Expense[] = trip?.expenses || [];
+  const trip = state.trips.find((t) => t.id === tripId);
+  const expenses: Expense[] = trip?.expenses || [];
 
-    // Sort expenses by date descending, then by createdAt descending
-    const sorted = [...expenses].sort((a, b) => {
-      const dateCmp = b.date.localeCompare(a.date);
-      if (dateCmp !== 0) return dateCmp;
-      return b.createdAt.localeCompare(a.createdAt);
-    });
+  const sorted = useMemo(
+    () =>
+      [...expenses].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      ),
+    [expenses]
+  );
 
-    // Group by date
-    const groups = new Map<string, Expense[]>();
+  const sections = useMemo<ExpenseSection[]>(() => {
+    const map = new Map<string, Expense[]>();
+
     for (const expense of sorted) {
-      const dateKey = expense.date.substring(0, 10); // YYYY-MM-DD
-      if (!groups.has(dateKey)) {
-        groups.set(dateKey, []);
-      }
-      groups.get(dateKey)!.push(expense);
+      const dateKey = expense.date.slice(0, 10); // YYYY-MM-DD
+      if (!map.has(dateKey)) map.set(dateKey, []);
+      map.get(dateKey)!.push(expense);
     }
 
-    const sections: ExpenseSection[] = Array.from(groups.entries()).map(([date, data]) => ({
-      title: formatSectionDate(date),
-      date,
+    return Array.from(map.entries()).map(([dateKey, data]) => ({
+      title: formatDateLabel(dateKey),
       data,
     }));
+  }, [sorted]);
 
-    const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const total = useMemo(
+    () => expenses.reduce((sum, e) => sum + e.amount, 0),
+    [expenses]
+  );
 
-    return { expenses: sorted, sections, totalAmount };
-  }, [getTripById, tripId]);
+  return { expenses: sorted, sections, total };
 }
 
-function formatSectionDate(dateStr: string): string {
-  const date = new Date(dateStr + 'T00:00:00');
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  const isToday = dateStr === today.toISOString().substring(0, 10);
-  const isYesterday = dateStr === yesterday.toISOString().substring(0, 10);
-
-  if (isToday) return 'Today';
-  if (isYesterday) return 'Yesterday';
-
+function formatDateLabel(dateKey: string): string {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
   return date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
+    year: 'numeric',
+    month: 'long',
     day: 'numeric',
-    year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
   });
 }
