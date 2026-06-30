@@ -1,0 +1,42 @@
+.group {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text, #111827);
+  margin-bottom: 0.5rem;
+  padding: 0;
+}
+
+.legend.required::after {
+  content: ' *';
+  color: var(--color-error, #ef4444);
+  aria-hidden: true;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.list.horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.helperText {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.helperText.errorText {
+  color: var(--color-error, #ef4444);
+}

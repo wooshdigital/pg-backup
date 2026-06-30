@@ -1,0 +1,132 @@
+.fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text, #111827);
+  margin-bottom: 0.5rem;
+  padding: 0;
+}
+
+.legend.required::after {
+  content: ' *';
+  color: var(--color-error, #ef4444);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.list.horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* Individual radio wrapper */
+.radioWrapper {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  cursor: pointer;
+  position: relative;
+}
+
+.radioWrapper.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Visually hidden native input */
+.input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  min-width: 1.125rem;
+  border: 2px solid var(--color-border, #6b7280);
+  border-radius: 50%;
+  background: var(--color-surface, #ffffff);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  margin-top: 0.125rem;
+  position: relative;
+}
+
+/* Focus ring via :focus-visible on the input */
+.input:focus-visible + .indicator {
+  outline: 2px solid var(--color-focus, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Checked state */
+.input:checked + .indicator {
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.input:checked + .indicator::after {
+  content: '';
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-primary, #3b82f6);
+  animation: radioSelect 0.1s ease-in-out;
+}
+
+@keyframes radioSelect {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Hover */
+.radioWrapper:not(.disabled):hover .indicator {
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.radioLabel {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-text, #111827);
+  user-select: none;
+}
+
+/* Error state */
+.fieldset.error .indicator {
+  border-color: var(--color-error, #ef4444);
+}
+
+.helperText {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.helperText.errorText {
+  color: var(--color-error, #ef4444);
+}
