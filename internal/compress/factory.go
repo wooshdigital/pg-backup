@@ -2,25 +2,26 @@ package compress
 
 import (
 	"fmt"
+
+	"github.com/smlgh/smarti/internal/config"
 )
 
-// Config holds configuration for selecting and tuning the compressor.
-type Config struct {
-	Algorithm string `yaml:"algorithm"`
-	Level     int    `yaml:"level"`
-}
+// DefaultGzipLevel is the default gzip compression level.
+const DefaultGzipLevel = 6
 
-// NewFromConfig creates a Compressor from a Config.
-func NewFromConfig(cfg Config) (Compressor, error) {
+// FromConfig constructs a Compressor from the application config.
+func FromConfig(cfg config.CompressConfig) (Compressor, error) {
 	switch cfg.Algorithm {
-	case "gzip", "":
+	case "gzip", "gz", "":
 		level := cfg.Level
 		if level == 0 {
-			level = DefaultLevel
+			level = DefaultGzipLevel
 		}
-		return NewGzip(level)
+		return NewGzip(level), nil
 	case "zstd":
-		return NewZstd(cfg.Level)
+		return NewZstd(), nil
+	case "noop", "none":
+		return NewNoop(), nil
 	default:
 		return nil, fmt.Errorf("unknown compression algorithm: %q", cfg.Algorithm)
 	}

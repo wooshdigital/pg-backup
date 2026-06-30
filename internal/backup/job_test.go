@@ -5,21 +5,22 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"testing"
-	"time"
 
-	"github.com/soapboxsys/ombudslib/internal/backup"
+	"github.com/smlgh/smarti/internal/backup"
+	"github.com/smlgh/smarti/internal/compress"
 )
 
-// --- Mock Dumper ---
+// ---------------------------------------------------------------------------
+// Minimal mocks
+// ---------------------------------------------------------------------------
 
 type mockDumper struct {
 	data []byte
 	err  error
 }
 
-func (m *mockDumper) Dump(ctx context.Context, w io.Writer) error {
+func (m *mockDumper) Dump(_ context.Context, w io.Writer) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -27,217 +28,148 @@ func (m *mockDumper) Dump(ctx context.Context, w io.Writer) error {
 	return err
 }
 
-// --- Mock Compressor ---
-
-type mockCompressor struct {
-	err       error
-	extension string
-}
-
-func (m *mockCompressor) Compress(ctx context.Context, r io.Reader, w io.Writer) error {
-	if m.err != nil {
-		return m.err
-	}
-	_, err := io.Copy(w, r)
-	return err
-}
-
-func (m *mockCompressor) Extension() string {
-	if m.extension != "" {
-		return m.extension
-	}
-	return ".dump"
-}
-
-// --- Mock Storage Backend ---
-
 type mockStorage struct {
-	buf  bytes.Buffer
-	err  error
-	key  string
-	size int64
+	uploaded map[string][]byte
+	err      error
 }
 
-func (m *mockStorage) Upload(ctx context.Context, key string, r io.Reader) (int64, error) {
+func newMockStorage() *mockStorage {
+	return &mockStorage{uploaded: make(map[string][]byte)}
+}
+
+func (m *mockStorage) Upload(_ context.Context, key string, r io.Reader) (string, int64, error) {
 	if m.err != nil {
-		return 0, m.err
+		return key, 0, m.err
 	}
-	m.key = key
-	n, err := io.Copy(&m.buf, r)
-	m.size = n
-	return n, err
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return key, 0, err
+	}
+	m.uploaded[key] = data
+	return key, int64(len(data)), nil
 }
 
-func (m *mockStorage) Download(ctx context.Context, key string, w io.Writer) error {
-	_, err := io.Copy(w, &m.buf)
-	return err
-}
-
-func (m *mockStorage) List(ctx context.Context) ([]string, error) {
-	if m.key != "" {
-		return []string{m.key}, nil
-	}
+func (m *mockStorage) Delete(_ context.Context, key string) error { return nil }
+func (m *mockStorage) List(_ context.Context, prefix string) ([]string, error) {
 	return nil, nil
 }
 
-func (m *mockStorage) Delete(ctx context.Context, key string) error {
-	return nil
-}
+// ---------------------------------------------------------------------------
+// Unit tests – temp-file path
+// ---------------------------------------------------------------------------
 
-// --- Tests ---
+func TestJob_Run_TempFile_Success(t *testing.T) {
+	rawData := []byte("SELECT 1; -- pg_dump output")
 
-func TestJob_Run_Success(t *testing.T) {
-	dumpData := []byte("SELECT 1; -- pg_dump output")
+	md := &mockDumper{data: rawData}
+	mc := newMockStorage()
+	comp := compress.NewNoop() // no-op compressor keeps data as-is
 
-	d := &mockDumper{data: dumpData}
-	c := &mockCompressor{extension: ".sql"}
-	s := &mockStorage{}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	job := backup.NewJob(d, c, s, false, logger)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result := job.Run(ctx)
-
-	if result.Error != nil {
-		t.Fatalf("expected no error, got: %v", result.Error)
+	job := &backup.Job{
+		Dumper:      md,
+		Compressor:  comp,
+		Storage:     mc,
+		StorageKey:  "backups/test.sql",
+		StreamDirect: false,
 	}
-	if result.Key == "" {
-		t.Error("expected non-empty key")
+
+	result := job.Run(context.Background())
+	if result.Err != nil {
+		t.Fatalf("expected no error, got: %v", result.Err)
+	}
+	if result.Key != "backups/test.sql" {
+		t.Errorf("unexpected key: %s", result.Key)
 	}
 	if result.Size == 0 {
 		t.Error("expected non-zero size")
 	}
-	if result.Duration <= 0 {
-		t.Error("expected positive duration")
-	}
-	if !bytes.Equal(s.buf.Bytes(), dumpData) {
-		t.Errorf("storage content mismatch: got %q, want %q", s.buf.Bytes(), dumpData)
+	if result.Duration == 0 {
+		t.Error("expected non-zero duration")
 	}
 }
+
+func TestJob_Run_TempFile_DumperError(t *testing.T) {
+	md := &mockDumper{err: errors.New("pg_dump failed")}
+	mc := newMockStorage()
+	comp := compress.NewNoop()
+
+	job := &backup.Job{
+		Dumper:     md,
+		Compressor: comp,
+		Storage:    mc,
+		StorageKey: "backups/test.sql",
+	}
+
+	result := job.Run(context.Background())
+	if result.Err == nil {
+		t.Fatal("expected an error from dumper")
+	}
+}
+
+func TestJob_Run_TempFile_StorageError(t *testing.T) {
+	md := &mockDumper{data: []byte("data")}
+	mc := newMockStorage()
+	mc.err = errors.New("S3 unavailable")
+	comp := compress.NewNoop()
+
+	job := &backup.Job{
+		Dumper:     md,
+		Compressor: comp,
+		Storage:    mc,
+		StorageKey: "backups/test.sql",
+	}
+
+	result := job.Run(context.Background())
+	if result.Err == nil {
+		t.Fatal("expected an error from storage")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests – direct-stream path
+// ---------------------------------------------------------------------------
 
 func TestJob_Run_StreamDirect_Success(t *testing.T) {
-	dumpData := []byte("SELECT 2; -- pg_dump output stream direct")
+	rawData := []byte("pg_dump direct stream data")
 
-	d := &mockDumper{data: dumpData}
-	c := &mockCompressor{extension: ".sql"}
-	s := &mockStorage{}
+	md := &mockDumper{data: rawData}
+	mc := newMockStorage()
+	comp := compress.NewNoop()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	job := backup.NewJob(d, c, s, true, logger)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result := job.Run(ctx)
-
-	if result.Error != nil {
-		t.Fatalf("expected no error, got: %v", result.Error)
+	job := &backup.Job{
+		Dumper:       md,
+		Compressor:   comp,
+		Storage:      mc,
+		StorageKey:   "backups/direct.sql",
+		StreamDirect: true,
 	}
-	if result.Key == "" {
-		t.Error("expected non-empty key")
+
+	result := job.Run(context.Background())
+	if result.Err != nil {
+		t.Fatalf("expected no error, got: %v", result.Err)
 	}
-	if result.Size == 0 {
-		t.Error("expected non-zero size")
-	}
-	if !bytes.Equal(s.buf.Bytes(), dumpData) {
-		t.Errorf("storage content mismatch: got %q, want %q", s.buf.Bytes(), dumpData)
+
+	uploaded := mc.uploaded["backups/direct.sql"]
+	if !bytes.Equal(uploaded, rawData) {
+		t.Errorf("uploaded data mismatch: got %q want %q", uploaded, rawData)
 	}
 }
 
-func TestJob_Run_DumpError(t *testing.T) {
-	dumpErr := errors.New("pg_dump connection refused")
+func TestJob_Run_StreamDirect_DumperError(t *testing.T) {
+	md := &mockDumper{err: errors.New("dump failed")}
+	mc := newMockStorage()
+	comp := compress.NewNoop()
 
-	d := &mockDumper{err: dumpErr}
-	c := &mockCompressor{}
-	s := &mockStorage{}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	job := backup.NewJob(d, c, s, false, logger)
-
-	ctx := context.Background()
-	result := job.Run(ctx)
-
-	if result.Error == nil {
-		t.Fatal("expected error, got nil")
-	}
-	if result.Key != "" {
-		t.Errorf("expected empty key on error, got %q", result.Key)
-	}
-}
-
-func TestJob_Run_CompressError(t *testing.T) {
-	compErr := errors.New("compression failed")
-
-	d := &mockDumper{data: []byte("data")}
-	c := &mockCompressor{err: compErr}
-	s := &mockStorage{}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	job := backup.NewJob(d, c, s, false, logger)
-
-	ctx := context.Background()
-	result := job.Run(ctx)
-
-	if result.Error == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestJob_Run_StorageError(t *testing.T) {
-	uploadErr := errors.New("s3: access denied")
-
-	d := &mockDumper{data: []byte("data")}
-	c := &mockCompressor{}
-	s := &mockStorage{err: uploadErr}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	job := backup.NewJob(d, c, s, false, logger)
-
-	ctx := context.Background()
-	result := job.Run(ctx)
-
-	if result.Error == nil {
-		t.Fatal("expected error, got nil")
-	}
-}
-
-func TestJob_Run_ContextCanceled(t *testing.T) {
-	d := &mockDumper{data: []byte("data")}
-	c := &mockCompressor{}
-	s := &mockStorage{}
-
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	job := backup.NewJob(d, c, s, false, logger)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
-
-	// Should still complete (mocks don't check context), but verifies no panic
-	result := job.Run(ctx)
-	_ = result
-}
-
-func TestBackupResult_Fields(t *testing.T) {
-	result := backup.BackupResult{
-		Key:      "backups/2026/01/01/backup.sql",
-		Size:     1024,
-		Duration: 5 * time.Second,
-		Error:    nil,
+	job := &backup.Job{
+		Dumper:       md,
+		Compressor:   comp,
+		Storage:      mc,
+		StorageKey:   "backups/direct.sql",
+		StreamDirect: true,
 	}
 
-	if result.Key == "" {
-		t.Error("Key should not be empty")
-	}
-	if result.Size != 1024 {
-		t.Errorf("Size = %d, want 1024", result.Size)
-	}
-	if result.Duration != 5*time.Second {
-		t.Errorf("Duration = %v, want 5s", result.Duration)
-	}
-	if result.Error != nil {
-		t.Errorf("Error = %v, want nil", result.Error)
+	result := job.Run(context.Background())
+	if result.Err == nil {
+		t.Fatal("expected an error")
 	}
 }

@@ -6,101 +6,80 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/soapboxsys/ombudslib/internal/compress"
-	"github.com/soapboxsys/ombudslib/internal/dumper"
-	"github.com/soapboxsys/ombudslib/internal/storage"
+	"github.com/smlgh/smarti/internal/compress"
+	"github.com/smlgh/smarti/internal/dumper"
+	"github.com/smlgh/smarti/internal/storage"
 )
 
-// Pipeline represents a streaming backup pipeline that connects a Dumper,
-// Compressor, and StorageBackend via io.Pipe without intermediate temp files.
-type Pipeline struct {
-	Dumper     dumper.Dumper
-	Compressor compress.Compressor
-	Storage    storage.Backend
-	Logger     *slog.Logger
-}
-
-// NewPipeline creates a new streaming Pipeline.
-func NewPipeline(d dumper.Dumper, c compress.Compressor, s storage.Backend, logger *slog.Logger) *Pipeline {
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return &Pipeline{
-		Dumper:     d,
-		Compressor: c,
-		Storage:    s,
-		Logger:     logger,
-	}
-}
-
-// PipelineResult holds the outcome of a streaming pipeline run.
-type PipelineResult struct {
-	Key  string
-	Size int64
-}
-
-// Run executes the streaming pipeline:
+// RunPipeline connects the dumper → compressor → storage uploader using two
+// io.Pipe pairs, avoiding any intermediate temp file.
 //
-//	pg_dump → [pipe1] → compressor → [pipe2] → storage upload
-func (p *Pipeline) Run(ctx context.Context) (PipelineResult, error) {
-	key := storage.GenerateKey(p.Compressor.Extension())
+//	goroutine 1:  Dumper.Dump  → pw1
+//	goroutine 2:  pr1 → Compressor.Compress → pw2
+//	main:         pr2 → Storage.Upload
+func RunPipeline(
+	ctx context.Context,
+	d dumper.Dumper,
+	c compress.Compressor,
+	s storage.StorageBackend,
+	key string,
+	log *slog.Logger,
+) (string, int64, error) {
+	if log == nil {
+		log = slog.Default()
+	}
 
-	// pipe1 connects dumper output to compressor input
-	dumpReader, dumpWriter := io.Pipe()
-	// pipe2 connects compressor output to storage input
-	compReader, compWriter := io.Pipe()
+	// Pipe 1: raw dump output.
+	pr1, pw1 := io.Pipe()
+	// Pipe 2: compressed output.
+	pr2, pw2 := io.Pipe()
 
 	dumpErrCh := make(chan error, 1)
-	compErrCh := make(chan error, 1)
+	compressErrCh := make(chan error, 1)
 
-	// Stage 1: run dump into dumpWriter
+	// Goroutine 1: run the dumper.
 	go func() {
-		defer dumpWriter.Close()
-		p.Logger.InfoContext(ctx, "pipeline: starting dump stage")
-		if err := p.Dumper.Dump(ctx, dumpWriter); err != nil {
-			dumpWriter.CloseWithError(err)
-			dumpErrCh <- fmt.Errorf("dump stage: %w", err)
+		defer func() {
+			_ = pw1.Close()
+		}()
+		if err := d.Dump(ctx, pw1); err != nil {
+			_ = pw1.CloseWithError(err)
+			dumpErrCh <- fmt.Errorf("dump: %w", err)
 			return
 		}
 		dumpErrCh <- nil
 	}()
 
-	// Stage 2: compress dumpReader → compWriter
+	// Goroutine 2: compress pipe1 → pipe2.
 	go func() {
-		defer compWriter.Close()
-		p.Logger.InfoContext(ctx, "pipeline: starting compress stage")
-		if err := p.Compressor.Compress(ctx, dumpReader, compWriter); err != nil {
-			compWriter.CloseWithError(err)
-			compErrCh <- fmt.Errorf("compress stage: %w", err)
+		defer func() {
+			_ = pw2.Close()
+		}()
+		if err := c.Compress(ctx, pr1, pw2); err != nil {
+			_ = pw2.CloseWithError(err)
+			compressErrCh <- fmt.Errorf("compress: %w", err)
 			return
 		}
-		compErrCh <- nil
+		compressErrCh <- nil
 	}()
 
-	// Stage 3: upload compReader to storage (runs in current goroutine)
-	p.Logger.InfoContext(ctx, "pipeline: starting upload stage", slog.String("key", key))
-	size, uploadErr := p.Storage.Upload(ctx, key, compReader)
+	// Main: upload from pipe2.
+	uploadedKey, size, uploadErr := s.Upload(ctx, key, pr2)
+
+	// Drain goroutines – they finish when Upload returns (pipe closed).
+	dumpErr := <-dumpErrCh
+	compressErr := <-compressErrCh
+
+	// Propagate errors in priority order: dump > compress > upload.
+	if dumpErr != nil {
+		return uploadedKey, size, dumpErr
+	}
+	if compressErr != nil {
+		return uploadedKey, size, compressErr
+	}
 	if uploadErr != nil {
-		compReader.CloseWithError(uploadErr)
-		// drain channels
-		<-dumpErrCh
-		<-compErrCh
-		return PipelineResult{}, fmt.Errorf("upload stage: %w", uploadErr)
+		return uploadedKey, size, fmt.Errorf("upload: %w", uploadErr)
 	}
 
-	// Collect errors from goroutines
-	if err := <-compErrCh; err != nil {
-		<-dumpErrCh
-		return PipelineResult{}, err
-	}
-	if err := <-dumpErrCh; err != nil {
-		return PipelineResult{}, err
-	}
-
-	p.Logger.InfoContext(ctx, "pipeline: all stages complete",
-		slog.String("key", key),
-		slog.Int64("size_bytes", size),
-	)
-
-	return PipelineResult{Key: key, Size: size}, nil
+	return uploadedKey, size, nil
 }
