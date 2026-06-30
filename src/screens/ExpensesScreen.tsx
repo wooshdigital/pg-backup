@@ -4,98 +4,92 @@ import {
   Text,
   StyleSheet,
   SectionList,
-  TouchableOpacity,
-  SafeAreaView,
+  Pressable,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Swipeable } from 'react-native-gesture-handler';
-import { TripStackParamList } from '../navigation/TripStackNavigator';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+import { RootStackParamList } from '../types';
 import { useTripContext } from '../context/TripContext';
 import { useExpenses } from '../hooks/useExpenses';
 import { ExpenseCard } from '../components/expenses/ExpenseCard';
-import { Expense } from '../types';
-import { formatAmount } from '../utils/splitCalculator';
+import { getCurrencySymbol } from '../utils/currency';
 
-type RouteType = RouteProp<TripStackParamList, 'Expenses'>;
-type Nav = NativeStackNavigationProp<TripStackParamList>;
+type ExpensesScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type ExpensesScreenRouteProp = RouteProp<{ ExpensesTab: { tripId: string } }, 'ExpensesTab'>;
 
-export function ExpensesScreen() {
-  const navigation = useNavigation<Nav>();
-  const route = useRoute<RouteType>();
-  const { tripId } = route.params;
-  const { getTrip, dispatch } = useTripContext();
-  const trip = getTrip(tripId);
+interface Props {
+  tripId: string;
+}
+
+export function ExpensesScreen({ tripId }: Props) {
+  const navigation = useNavigation<ExpensesScreenNavigationProp>();
+  const { getTripById, deleteExpense } = useTripContext();
   const { sections, totalAmount } = useExpenses(tripId);
 
-  const handleAddExpense = () => {
-    navigation.navigate('AddExpense', { tripId });
-  };
+  const trip = getTripById(tripId);
+  const currencySymbol = getCurrencySymbol(trip?.currency || 'USD');
 
-  const handleExpensePress = (expense: Expense) => {
-    navigation.navigate('ExpenseDetail', { tripId, expenseId: expense.id });
-  };
-
-  const handleDeleteExpense = useCallback(
-    (expenseId: string) => {
-      Alert.alert(
-        'Delete Expense',
-        'Are you sure you want to delete this expense?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              dispatch({
-                type: 'TRIP_DELETE_EXPENSE',
-                payload: { tripId, expenseId },
-              });
-            },
-          },
-        ]
-      );
-    },
-    [dispatch, tripId]
-  );
-
-  const renderRightActions = (expenseId: string) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      onPress={() => handleDeleteExpense(expenseId)}
-    >
-      <Text style={styles.deleteActionText}>Delete</Text>
-    </TouchableOpacity>
-  );
-
-  const renderItem = ({ item }: { item: Expense }) => (
-    <Swipeable renderRightActions={() => renderRightActions(item.id)}>
-      <ExpenseCard
-        expense={item}
-        participants={trip?.participants || []}
-        onPress={() => handleExpensePress(item)}
-      />
-    </Swipeable>
-  );
-
-  const renderSectionHeader = ({ section }: { section: { title: string } }) => {
-    const date = new Date(section.title + 'T00:00:00');
-    const formatted = date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'long',
-      day: 'numeric',
-    });
-    return (
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionHeaderText}>{formatted}</Text>
-      </View>
+  const handleDeleteExpense = useCallback((expenseId: string, title: string) => {
+    Alert.alert(
+      'Delete Expense',
+      `Are you sure you want to delete "${title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteExpense(tripId, expenseId),
+        },
+      ]
     );
-  };
+  }, [tripId, deleteExpense]);
 
-  const ListEmptyComponent = () => (
+  const renderRightActions = useCallback((expenseId: string, title: string) => {
+    return (
+      <Pressable
+        style={styles.deleteAction}
+        onPress={() => handleDeleteExpense(expenseId, title)}
+      >
+        <Text style={styles.deleteActionText}>Delete</Text>
+      </Pressable>
+    );
+  }, [handleDeleteExpense]);
+
+  const renderItem = useCallback(({ item }: { item: any }) => {
+    return (
+      <Swipeable
+        renderRightActions={() => renderRightActions(item.id, item.title)}
+        overshootRight={false}
+        friction={2}
+        rightThreshold={40}
+      >
+        <ExpenseCard
+          expense={item}
+          participants={trip?.participants || []}
+          currencySymbol={currencySymbol}
+          onPress={() =>
+            navigation.navigate('ExpenseDetail', {
+              tripId,
+              expenseId: item.id,
+            })
+          }
+        />
+      </Swipeable>
+    );
+  }, [trip, currencySymbol, tripId, navigation, renderRightActions]);
+
+  const renderSectionHeader = useCallback(({ section }: { section: any }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderText}>{section.title}</Text>
+    </View>
+  ), []);
+
+  const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>💸</Text>
+      <Text style={styles.emptyEmoji}>💸</Text>
       <Text style={styles.emptyTitle}>No expenses yet</Text>
       <Text style={styles.emptySubtitle}>
         Tap the + button to add your first expense
@@ -103,34 +97,35 @@ export function ExpensesScreen() {
     </View>
   );
 
-  const ListHeaderComponent = () =>
-    sections.length > 0 ? (
-      <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>Total Expenses</Text>
-        <Text style={styles.totalAmount}>
-          {formatAmount(totalAmount, trip?.currency || 'USD')}
-        </Text>
-      </View>
-    ) : null;
-
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {sections.length > 0 && (
+        <View style={styles.totalBanner}>
+          <Text style={styles.totalLabel}>Total Spent</Text>
+          <Text style={styles.totalAmount}>
+            {currencySymbol}{totalAmount.toFixed(2)}
+          </Text>
+        </View>
+      )}
+
       <SectionList
         sections={sections}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         renderItem={renderItem}
         renderSectionHeader={renderSectionHeader}
-        ListEmptyComponent={ListEmptyComponent}
-        ListHeaderComponent={ListHeaderComponent}
-        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={sections.length === 0 ? styles.emptyContent : styles.listContent}
         stickySectionHeadersEnabled={false}
+        showsVerticalScrollIndicator={false}
       />
 
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={handleAddExpense}>
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+      <Pressable
+        style={styles.fab}
+        onPress={() => navigation.navigate('AddExpense', { tripId })}
+      >
+        <Text style={styles.fabIcon}>+</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -139,33 +134,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
-  listContent: {
-    padding: 16,
-    paddingBottom: 100,
-    flexGrow: 1,
-  },
-  totalCard: {
-    backgroundColor: '#6366F1',
-    borderRadius: 14,
-    padding: 18,
-    marginBottom: 20,
+  totalBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
   totalLabel: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
-    marginBottom: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#C7D2FE',
   },
   totalAmount: {
-    fontSize: 32,
+    fontSize: 22,
     fontWeight: '800',
     color: '#FFFFFF',
   },
+  listContent: {
+    paddingBottom: 100,
+    paddingTop: 8,
+  },
+  emptyContent: {
+    flex: 1,
+  },
   sectionHeader: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginTop: 4,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 6,
   },
   sectionHeaderText: {
     fontSize: 13,
@@ -174,62 +171,66 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 80,
+  },
+  emptyEmoji: {
+    fontSize: 56,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
   deleteAction: {
     backgroundColor: '#EF4444',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    borderRadius: 12,
-    marginBottom: 8,
-    marginLeft: 8,
+    marginVertical: 5,
+    marginRight: 16,
+    borderRadius: 14,
   },
   deleteActionText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 80,
-  },
-  emptyIcon: {
-    fontSize: 60,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
   fab: {
     position: 'absolute',
-    right: 20,
-    bottom: 32,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#6366F1',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 8,
   },
-  fabText: {
+  fabIcon: {
+    fontSize: 28,
     color: '#FFFFFF',
-    fontSize: 32,
     fontWeight: '300',
-    lineHeight: 36,
+    lineHeight: 32,
   },
 });
+
+export default ExpensesScreen;

@@ -1,65 +1,87 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Pressable, Text, StyleSheet } from 'react-native';
+import { RootStackParamList } from '../types';
 import { TripDetailScreen } from '../screens/TripDetailScreen';
-import { ParticipantsScreen } from '../screens/ParticipantsScreen';
-import { ExpensesScreen } from '../screens/ExpensesScreen';
 import { AddExpenseScreen } from '../screens/AddExpenseScreen';
 import { ExpenseDetailScreen } from '../screens/ExpenseDetailScreen';
+import { CreateTripScreen } from '../screens/CreateTripScreen';
+import { ParticipantsScreen } from '../screens/ParticipantsScreen';
 
-export type TripStackParamList = {
-  TripDetail: { tripId: string };
-  Participants: { tripId: string };
-  Expenses: { tripId: string };
-  AddExpense: { tripId: string };
-  ExpenseDetail: { tripId: string; expenseId: string };
-};
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const Stack = createNativeStackNavigator<TripStackParamList>();
-
-interface TripStackNavigatorProps {
-  tripId: string;
-}
-
-export function TripStackNavigator({ tripId }: TripStackNavigatorProps) {
+export function TripStackNavigator() {
   return (
     <Stack.Navigator
-      initialRouteName="TripDetail"
       screenOptions={{
-        headerStyle: { backgroundColor: '#FFFFFF' },
-        headerTitleStyle: { fontWeight: '700', color: '#111827' },
-        headerTintColor: '#6366F1',
-        headerBackTitle: 'Back',
+        headerStyle: { backgroundColor: '#6366F1' },
+        headerTintColor: '#FFFFFF',
+        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        contentStyle: { backgroundColor: '#F3F4F6' },
       }}
     >
       <Stack.Screen
         name="TripDetail"
         component={TripDetailScreen}
-        initialParams={{ tripId }}
-        options={{ title: 'Trip Details' }}
-      />
-      <Stack.Screen
-        name="Participants"
-        component={ParticipantsScreen}
-        initialParams={{ tripId }}
-        options={{ title: 'Participants' }}
-      />
-      <Stack.Screen
-        name="Expenses"
-        component={ExpensesScreen}
-        initialParams={{ tripId }}
-        options={{ title: 'Expenses' }}
+        options={({ navigation, route }) => ({
+          title: 'Trip Details',
+          headerBackTitle: 'Trips',
+        })}
       />
       <Stack.Screen
         name="AddExpense"
         component={AddExpenseScreen}
-        initialParams={{ tripId }}
-        options={{ headerShown: false }}
+        options={{
+          title: 'Add Expense',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTintColor: '#6366F1',
+          headerTitleStyle: { fontWeight: '700', color: '#111827' },
+        }}
       />
       <Stack.Screen
         name="ExpenseDetail"
         component={ExpenseDetailScreen}
-        options={{ title: 'Expense Details' }}
+        options={{
+          title: 'Expense Detail',
+          headerBackTitle: 'Back',
+          headerTransparent: true,
+          headerTintColor: '#FFFFFF',
+          headerTitle: '',
+        }}
+      />
+      <Stack.Screen
+        name="CreateTrip"
+        component={CreateTripScreen}
+        options={{
+          title: 'New Trip',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTintColor: '#6366F1',
+          headerTitleStyle: { fontWeight: '700', color: '#111827' },
+        }}
+      />
+      <Stack.Screen
+        name="Participants"
+        component={ParticipantsScreen}
+        options={{
+          title: 'Participants',
+          headerBackTitle: 'Back',
+        }}
       />
     </Stack.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  headerButton: {
+    paddingHorizontal: 4,
+  },
+  headerButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+});
+
+export default TripStackNavigator;

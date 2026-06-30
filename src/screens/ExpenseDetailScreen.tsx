@@ -4,150 +4,229 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
-  TouchableOpacity,
+  Pressable,
+  Alert,
 } from 'react-native';
-import { useRoute, RouteProp, useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { TripStackParamList } from '../navigation/TripStackNavigator';
+import { RootStackParamList, Participant } from '../types';
 import { useTripContext } from '../context/TripContext';
-import { formatAmount } from '../utils/splitCalculator';
+import { getCurrencySymbol } from '../utils/currency';
+import { getAvatarColor } from '../utils/avatarColors';
 
-type RouteType = RouteProp<TripStackParamList, 'ExpenseDetail'>;
-type Nav = NativeStackNavigationProp<TripStackParamList>;
+type ExpenseDetailRouteProp = RouteProp<RootStackParamList, 'ExpenseDetail'>;
+type ExpenseDetailNavProp = NativeStackNavigationProp<RootStackParamList>;
 
 export function ExpenseDetailScreen() {
-  const route = useRoute<RouteType>();
-  const navigation = useNavigation<Nav>();
+  const navigation = useNavigation<ExpenseDetailNavProp>();
+  const route = useRoute<ExpenseDetailRouteProp>();
   const { tripId, expenseId } = route.params;
-  const { getTrip } = useTripContext();
 
-  const trip = getTrip(tripId);
-  const expense = trip?.expenses.find((e) => e.id === expenseId);
+  const { getTripById, deleteExpense } = useTripContext();
+  const trip = getTripById(tripId);
+  const expense = trip?.expenses?.find(e => e.id === expenseId);
 
-  if (!trip || !expense) {
+  if (!expense || !trip) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.notFound}>Expense not found</Text>
-      </SafeAreaView>
+      <View style={styles.notFound}>
+        <Text style={styles.notFoundText}>Expense not found.</Text>
+      </View>
     );
   }
 
-  const participantMap = new Map(trip.participants.map((p) => [p.id, p]));
+  const participantMap = new Map(trip.participants.map(p => [p.id, p]));
   const payer = participantMap.get(expense.payerId);
+  const currencySymbol = getCurrencySymbol(expense.currency);
 
-  const formattedDate = new Date(expense.date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Expense',
+      `Delete "${expense.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteExpense(tripId, expenseId);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const formatCreatedAt = (isoStr: string) => {
+    const date = new Date(isoStr);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Amount Hero */}
-        <View style={styles.heroCard}>
-          <Text style={styles.expenseTitle}>{expense.title}</Text>
-          <Text style={styles.heroAmount}>
-            {formatAmount(expense.amount, expense.currency)}
-          </Text>
-          <Text style={styles.heroDate}>{formattedDate}</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header Card */}
+      <View style={styles.headerCard}>
+        <View style={styles.amountContainer}>
+          <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+          <Text style={styles.amount}>{expense.amount.toFixed(2)}</Text>
         </View>
+        <Text style={styles.title}>{expense.title}</Text>
+        <Text style={styles.dateText}>{formatDate(expense.date)}</Text>
+      </View>
 
-        {/* Payer Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Paid by</Text>
-          <View style={styles.card}>
-            {payer && (
-              <View style={styles.payerRow}>
-                <View
-                  style={[
-                    styles.avatar,
-                    { backgroundColor: payer.avatarColor || '#6366F1' },
-                  ]}
-                >
-                  <Text style={styles.avatarText}>
-                    {payer.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View>
-                  <Text style={styles.payerName}>{payer.name}</Text>
-                  {payer.email && (
-                    <Text style={styles.payerEmail}>{payer.email}</Text>
-                  )}
-                </View>
-                <Text style={styles.payerAmount}>
-                  {formatAmount(expense.amount, expense.currency)}
+      {/* Payer Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Paid by</Text>
+        {payer && (
+          <View style={styles.payerRow}>
+            <ParticipantAvatar participant={payer} size={52} />
+            <View style={styles.payerInfo}>
+              <Text style={styles.payerName}>{payer.name}</Text>
+              {payer.email ? (
+                <Text style={styles.payerEmail}>{payer.email}</Text>
+              ) : null}
+              <View style={styles.paidBadge}>
+                <Text style={styles.paidBadgeText}>
+                  Paid {currencySymbol}{expense.amount.toFixed(2)}
                 </Text>
               </View>
-            )}
+            </View>
           </View>
-        </View>
+        )}
+      </View>
 
-        {/* Split Breakdown */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
-            Split ({expense.splitType === 'equal' ? 'Equally' : 'Custom'})
-          </Text>
-          <View style={styles.card}>
-            {expense.splits.map((split, index) => {
-              const participant = participantMap.get(split.participantId);
-              if (!participant) return null;
-              return (
-                <View
-                  key={split.participantId}
-                  style={[
-                    styles.splitRow,
-                    index < expense.splits.length - 1 && styles.splitRowBorder,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.smallAvatar,
-                      { backgroundColor: participant.avatarColor || '#6366F1' },
-                    ]}
-                  >
-                    <Text style={styles.smallAvatarText}>
-                      {participant.name.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.splitName}>{participant.name}</Text>
-                  <Text style={styles.splitAmount}>
-                    {formatAmount(split.amount, expense.currency)}
+      {/* Split Breakdown */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          Split between {expense.splits.length}{' '}
+          {expense.splits.length === 1 ? 'person' : 'people'}
+        </Text>
+        <View style={styles.splitCard}>
+          {expense.splits.map((split, index) => {
+            const participant = participantMap.get(split.participantId);
+            if (!participant) return null;
+            const isLast = index === expense.splits.length - 1;
+            const isPayer = participant.id === expense.payerId;
+            const owes = split.amount - (isPayer ? expense.amount : 0);
+
+            return (
+              <View
+                key={split.participantId}
+                style={[styles.splitRow, !isLast && styles.splitRowBorder]}
+              >
+                <ParticipantAvatar participant={participant} size={40} />
+                <View style={styles.splitInfo}>
+                  <Text style={styles.splitName}>
+                    {participant.name}
+                    {isPayer ? (
+                      <Text style={styles.payerTag}> (payer)</Text>
+                    ) : null}
+                  </Text>
+                  <Text style={styles.splitOwes}>
+                    {isPayer
+                      ? `Paid ${currencySymbol}${expense.amount.toFixed(2)}, owes ${currencySymbol}${split.amount.toFixed(2)}`
+                      : `Owes ${currencySymbol}${split.amount.toFixed(2)}`}
                   </Text>
                 </View>
-              );
-            })}
-          </View>
-        </View>
+                <Text
+                  style={[
+                    styles.splitAmount,
+                    isPayer ? styles.splitAmountPayer : null,
+                  ]}
+                >
+                  {currencySymbol}{split.amount.toFixed(2)}
+                </Text>
+              </View>
+            );
+          })}
 
-        {/* Metadata */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Details</Text>
-          <View style={styles.card}>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaKey}>Currency</Text>
-              <Text style={styles.metaValue}>{expense.currency}</Text>
-            </View>
-            <View style={[styles.metaRow, styles.metaRowBorder]}>
-              <Text style={styles.metaKey}>Participants</Text>
-              <Text style={styles.metaValue}>{expense.splits.length}</Text>
-            </View>
-            <View style={[styles.metaRow, styles.metaRowBorder]}>
-              <Text style={styles.metaKey}>Created</Text>
-              <Text style={styles.metaValue}>
-                {new Date(expense.createdAt).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </Text>
-            </View>
+          <View style={styles.splitTotal}>
+            <Text style={styles.splitTotalLabel}>Total</Text>
+            <Text style={styles.splitTotalAmount}>
+              {currencySymbol}{expense.amount.toFixed(2)}
+            </Text>
           </View>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+
+      {/* Meta Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Details</Text>
+        <View style={styles.metaCard}>
+          <MetaRow label="Split Type" value={expense.splitType === 'equal' ? 'Equal split' : 'Custom split'} />
+          <MetaRow label="Currency" value={expense.currency} />
+          <MetaRow label="Added" value={formatCreatedAt(expense.createdAt)} isLast />
+        </View>
+      </View>
+
+      {/* Delete Button */}
+      <Pressable style={styles.deleteButton} onPress={handleDelete}>
+        <Text style={styles.deleteButtonText}>🗑️  Delete Expense</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function ParticipantAvatar({ participant, size }: { participant: Participant; size: number }) {
+  const color = participant.avatarColor || getAvatarColor(participant.name);
+  const initials = participant.name
+    .split(' ')
+    .map(p => p[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+
+  return (
+    <View
+      style={[
+        styles.avatar,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+          marginRight: 12,
+        },
+      ]}
+    >
+      <Text style={[styles.avatarText, { fontSize: size * 0.35 }]}>{initials}</Text>
+    </View>
+  );
+}
+
+function MetaRow({
+  label,
+  value,
+  isLast,
+}: {
+  label: string;
+  value: string;
+  isLast?: boolean;
+}) {
+  return (
+    <View style={[styles.metaRow, !isLast && styles.metaRowBorder]}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text style={styles.metaValue}>{value}</Text>
+    </View>
   );
 }
 
@@ -156,142 +235,225 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
-  scrollContent: {
-    padding: 16,
+  content: {
     paddingBottom: 40,
   },
   notFound: {
-    textAlign: 'center',
-    marginTop: 40,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notFoundText: {
     fontSize: 16,
     color: '#6B7280',
   },
-  heroCard: {
+  headerCard: {
     backgroundColor: '#6366F1',
-    borderRadius: 16,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 40,
     alignItems: 'center',
-    marginBottom: 20,
   },
-  expenseTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
+  amountContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
-  heroAmount: {
-    fontSize: 40,
+  currencySymbol: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#C7D2FE',
+    marginTop: 8,
+    marginRight: 2,
+  },
+  amount: {
+    fontSize: 56,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 8,
+    lineHeight: 64,
   },
-  heroDate: {
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  dateText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#C7D2FE',
+    textAlign: 'center',
   },
   section: {
-    marginBottom: 20,
+    marginTop: 16,
+    paddingHorizontal: 16,
   },
-  sectionLabel: {
+  sectionTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   payerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    justifyContent: 'center',
   },
   avatarText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 20,
+  },
+  payerInfo: {
+    flex: 1,
   },
   payerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   payerEmail: {
     fontSize: 13,
     color: '#6B7280',
     marginTop: 2,
   },
-  payerAmount: {
-    marginLeft: 'auto',
-    fontSize: 16,
+  paidBadge: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  paidBadgeText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#6366F1',
+    color: '#059669',
+  },
+  splitCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   splitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   splitRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  smallAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  smallAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
+  splitInfo: {
+    flex: 1,
   },
   splitName: {
-    flex: 1,
     fontSize: 15,
-    color: '#374151',
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  payerTag: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#6B7280',
+  },
+  splitOwes: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
   splitAmount: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: '700',
+    color: '#EF4444',
+    marginLeft: 8,
+  },
+  splitAmountPayer: {
+    color: '#059669',
+  },
+  splitTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: 1.5,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  splitTotalLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  splitTotalAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#6366F1',
+  },
+  metaCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    alignItems: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   metaRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  metaKey: {
-    fontSize: 15,
+  metaLabel: {
+    fontSize: 14,
     color: '#6B7280',
   },
   metaValue: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: '#1F2937',
+  },
+  deleteButton: {
+    marginTop: 24,
+    marginHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });
+
+export default ExpenseDetailScreen;

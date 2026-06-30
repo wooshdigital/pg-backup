@@ -1,11 +1,11 @@
 export { HomeScreen } from './HomeScreen';
 export { TripsScreen } from './TripsScreen';
 export { TripsListScreen } from './TripsListScreen';
-export { CreateTripScreen } from './CreateTripScreen';
 export { TripDetailScreen } from './TripDetailScreen';
-export { ParticipantsScreen } from './ParticipantsScreen';
-export { SettingsScreen } from './SettingsScreen';
+export { CreateTripScreen } from './CreateTripScreen';
 export { ExpensesScreen } from './ExpensesScreen';
 export { ExpensesPlaceholderScreen } from './ExpensesPlaceholderScreen';
 export { AddExpenseScreen } from './AddExpenseScreen';
 export { ExpenseDetailScreen } from './ExpenseDetailScreen';
+export { ParticipantsScreen } from './ParticipantsScreen';
+export { SettingsScreen } from './SettingsScreen';

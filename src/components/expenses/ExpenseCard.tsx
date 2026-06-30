@@ -1,78 +1,105 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+} from 'react-native';
 import { Expense, Participant } from '../../types';
-import { formatAmount } from '../../utils/splitCalculator';
+import { getAvatarColor } from '../../utils/avatarColors';
 
 interface ExpenseCardProps {
   expense: Expense;
   participants: Participant[];
-  onPress: () => void;
+  currencySymbol?: string;
+  onPress?: () => void;
 }
 
-export function ExpenseCard({ expense, participants, onPress }: ExpenseCardProps) {
-  const participantMap = new Map(participants.map((p) => [p.id, p]));
+const MAX_PARTICIPANT_AVATARS = 4;
+
+export function ExpenseCard({
+  expense,
+  participants,
+  currencySymbol = '$',
+  onPress,
+}: ExpenseCardProps) {
+  const participantMap = new Map(participants.map(p => [p.id, p]));
   const payer = participantMap.get(expense.payerId);
-  const involvedParticipants = expense.splits
-    .map((s) => participantMap.get(s.participantId))
+  const payerInitials = payer ? getInitials(payer.name) : '?';
+  const payerColor = payer?.avatarColor || getAvatarColor(payer?.name || '');
+
+  const involvedIds = expense.splits.map(s => s.participantId);
+  const involvedParticipants = involvedIds
+    .map(id => participantMap.get(id))
     .filter(Boolean) as Participant[];
 
-  const MAX_AVATARS = 3;
-  const visibleAvatars = involvedParticipants.slice(0, MAX_AVATARS);
-  const overflow = involvedParticipants.length - MAX_AVATARS;
+  const visibleParticipants = involvedParticipants.slice(0, MAX_PARTICIPANT_AVATARS);
+  const remainingCount = involvedParticipants.length - visibleParticipants.length;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.75}>
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={onPress}
+      android_ripple={{ color: '#EEF2FF' }}
+    >
       <View style={styles.leftSection}>
+        <View style={[styles.payerAvatar, { backgroundColor: payerColor }]}>
+          <Text style={styles.payerAvatarText}>{payerInitials}</Text>
+        </View>
+      </View>
+
+      <View style={styles.middleSection}>
         <Text style={styles.title} numberOfLines={1}>
           {expense.title}
         </Text>
         <View style={styles.metaRow}>
-          {payer && (
-            <View
-              style={[
-                styles.payerAvatar,
-                { backgroundColor: payer.avatarColor || '#6366F1' },
-              ]}
-            >
-              <Text style={styles.payerAvatarText}>
-                {payer.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <Text style={styles.payerName}>{payer?.name || 'Unknown'}</Text>
-          <Text style={styles.dot}>·</Text>
+          <Text style={styles.payerName}>
+            {payer ? `Paid by ${payer.name}` : 'Unknown payer'}
+          </Text>
+          <Text style={styles.dot}> · </Text>
           <Text style={styles.participantCount}>
             {involvedParticipants.length} {involvedParticipants.length === 1 ? 'person' : 'people'}
           </Text>
         </View>
-      </View>
-      <View style={styles.rightSection}>
-        <Text style={styles.amount}>
-          {formatAmount(expense.amount, expense.currency)}
-        </Text>
-        <View style={styles.avatarStrip}>
-          {visibleAvatars.map((p, i) => (
-            <View
-              key={p.id}
-              style={[
-                styles.stripAvatar,
-                { backgroundColor: p.avatarColor || '#6366F1', marginLeft: i > 0 ? -6 : 0 },
-              ]}
-            >
-              <Text style={styles.stripAvatarText}>
-                {p.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          ))}
-          {overflow > 0 && (
-            <View style={[styles.stripAvatar, styles.overflowAvatar, { marginLeft: -6 }]}>
-              <Text style={styles.overflowText}>+{overflow}</Text>
+        <View style={styles.participantAvatars}>
+          {visibleParticipants.map((p, index) => {
+            const color = p.avatarColor || getAvatarColor(p.name);
+            return (
+              <View
+                key={p.id}
+                style={[
+                  styles.participantAvatar,
+                  { backgroundColor: color, zIndex: visibleParticipants.length - index, marginLeft: index > 0 ? -8 : 0 },
+                ]}
+              >
+                <Text style={styles.participantAvatarText}>{getInitials(p.name)}</Text>
+              </View>
+            );
+          })}
+          {remainingCount > 0 && (
+            <View style={[styles.participantAvatar, styles.participantAvatarExtra, { marginLeft: -8 }]}>
+              <Text style={styles.participantAvatarExtraText}>+{remainingCount}</Text>
             </View>
           )}
         </View>
       </View>
-    </TouchableOpacity>
+
+      <View style={styles.rightSection}>
+        <Text style={styles.amount}>
+          {currencySymbol}{expense.amount.toFixed(2)}
+        </Text>
+      </View>
+    </Pressable>
   );
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
 }
 
 const styles = StyleSheet.create({
@@ -80,88 +107,96 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginVertical: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
+  cardPressed: {
+    opacity: 0.92,
+    backgroundColor: '#F5F3FF',
+  },
   leftSection: {
-    flex: 1,
     marginRight: 12,
   },
+  payerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payerAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  middleSection: {
+    flex: 1,
+    gap: 3,
+  },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 6,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  payerAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 5,
-  },
-  payerAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 10,
-  },
   payerName: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
   },
   dot: {
-    marginHorizontal: 4,
-    color: '#D1D5DB',
-    fontSize: 13,
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   participantCount: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
   },
-  rightSection: {
-    alignItems: 'flex-end',
-  },
-  amount: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 6,
-  },
-  avatarStrip: {
+  participantAvatars: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
   },
-  stripAvatar: {
+  participantAvatar: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
-  stripAvatarText: {
+  participantAvatarText: {
     color: '#FFFFFF',
+    fontSize: 8,
     fontWeight: '700',
-    fontSize: 9,
   },
-  overflowAvatar: {
-    backgroundColor: '#E5E7EB',
+  participantAvatarExtra: {
+    backgroundColor: '#9CA3AF',
   },
-  overflowText: {
-    color: '#6B7280',
+  participantAvatarExtraText: {
+    color: '#FFFFFF',
+    fontSize: 8,
     fontWeight: '700',
-    fontSize: 9,
+  },
+  rightSection: {
+    marginLeft: 12,
+    alignItems: 'flex-end',
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#6366F1',
   },
 });
+
+export default ExpenseCard;

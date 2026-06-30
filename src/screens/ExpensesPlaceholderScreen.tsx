@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
+// This screen is used as a placeholder when tripId is not available
 export function ExpensesPlaceholderScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Expenses coming soon</Text>
+      <Text style={styles.text}>No trip selected</Text>
     </View>
   );
 }
@@ -12,8 +13,8 @@ export function ExpensesPlaceholderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F3F4F6',
   },
   text: {
@@ -21,3 +22,5 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
 });
+
+export default ExpensesPlaceholderScreen;

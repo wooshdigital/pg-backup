@@ -1,125 +1,122 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
-  Alert,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { TripStackParamList } from '../navigation/TripStackNavigator';
+import { RootStackParamList } from '../types';
 import { useTripContext } from '../context/TripContext';
-import { generateId } from '../utils/id';
-import { computeEqualSplits } from '../utils/splitCalculator';
 import { AmountInput } from '../components/common/AmountInput';
 import { StepIndicator } from '../components/expenses/StepIndicator';
 import { PayerSelector } from '../components/expenses/PayerSelector';
 import { ParticipantMultiSelect } from '../components/expenses/ParticipantMultiSelect';
 import { SplitSummary } from '../components/expenses/SplitSummary';
+import { computeEqualSplits, getEqualShareAmount } from '../utils/splitCalculator';
+import { getCurrencySymbol } from '../utils/currency';
+import { generateId } from '../utils/id';
 
-type Nav = NativeStackNavigationProp<TripStackParamList>;
-type RouteType = RouteProp<TripStackParamList, 'AddExpense'>;
+type AddExpenseRouteProp = RouteProp<RootStackParamList, 'AddExpense'>;
+type AddExpenseNavProp = NativeStackNavigationProp<RootStackParamList>;
 
-const TOTAL_STEPS = 3;
+const STEPS = ['Details', 'Payer', 'Split'];
 
 export function AddExpenseScreen() {
-  const navigation = useNavigation<Nav>();
-  const route = useRoute<RouteType>();
+  const navigation = useNavigation<AddExpenseNavProp>();
+  const route = useRoute<AddExpenseRouteProp>();
   const { tripId } = route.params;
-  const { getTrip, dispatch } = useTripContext();
-  const trip = getTrip(tripId);
 
-  const [step, setStep] = useState(0);
+  const { getTripById, addExpense } = useTripContext();
+  const trip = getTripById(tripId);
 
-  // Step 1 state
+  const currencySymbol = getCurrencySymbol(trip?.currency || 'USD');
+
+  // Step state
+  const [currentStep, setCurrentStep] = useState(0);
+
+  // Step 1: Details
   const [title, setTitle] = useState('');
   const [amountStr, setAmountStr] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
 
-  // Step 2 state
+  // Step 2: Payer
   const [payerId, setPayerId] = useState<string | null>(
-    trip?.participants[0]?.id || null
+    trip?.participants?.[0]?.id ?? null
   );
 
-  // Step 3 state
+  // Step 3: Split participants
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>(
-    trip?.participants.map((p) => p.id) || []
+    trip?.participants?.map(p => p.id) ?? []
   );
 
-  // Validation errors
+  // Errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  if (!trip) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.errorText}>Trip not found</Text>
-      </SafeAreaView>
-    );
-  }
-
-  const currency = trip.currency || 'USD';
   const amount = parseFloat(amountStr) || 0;
+  const perPersonAmount =
+    selectedParticipantIds.length > 0
+      ? getEqualShareAmount(amount, selectedParticipantIds.length)
+      : 0;
 
-  const validateStep = (): boolean => {
+  const splits = computeEqualSplits(amount, selectedParticipantIds);
+
+  const validateStep = useCallback((step: number): boolean => {
     const newErrors: Record<string, string> = {};
 
     if (step === 0) {
       if (!title.trim()) newErrors.title = 'Title is required';
-      if (!amountStr || amount <= 0) newErrors.amount = 'Enter a valid amount';
+      if (!amountStr || parseFloat(amountStr) <= 0)
+        newErrors.amount = 'Please enter a valid amount';
       if (!date) newErrors.date = 'Date is required';
     } else if (step === 1) {
-      if (!payerId) newErrors.payer = 'Please select a payer';
+      if (!payerId) newErrors.payer = 'Please select who paid';
     } else if (step === 2) {
-      if (selectedParticipantIds.length === 0) {
+      if (selectedParticipantIds.length === 0)
         newErrors.participants = 'Select at least one participant';
-      }
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [title, amountStr, date, payerId, selectedParticipantIds]);
 
-  const handleNext = () => {
-    if (!validateStep()) return;
-    if (step < TOTAL_STEPS - 1) {
-      setStep(step + 1);
-    }
-  };
+  const handleNext = useCallback(() => {
+    if (!validateStep(currentStep)) return;
+    setCurrentStep(prev => prev + 1);
+  }, [currentStep, validateStep]);
 
-  const handleBack = () => {
-    if (step > 0) {
-      setStep(step - 1);
-    } else {
-      navigation.goBack();
-    }
-  };
+  const handleBack = useCallback(() => {
+    setCurrentStep(prev => prev - 1);
+    setErrors({});
+  }, []);
 
-  const handleToggleParticipant = (participantId: string) => {
-    setSelectedParticipantIds((prev) =>
+  const handleToggleParticipant = useCallback((participantId: string) => {
+    setSelectedParticipantIds(prev =>
       prev.includes(participantId)
-        ? prev.filter((id) => id !== participantId)
+        ? prev.filter(id => id !== participantId)
         : [...prev, participantId]
     );
-  };
+  }, []);
 
-  const handleSave = () => {
-    if (!validateStep()) return;
-    if (!payerId) return;
-
-    const splits = computeEqualSplits(amount, selectedParticipantIds);
+  const handleSave = useCallback(() => {
+    if (!validateStep(2)) return;
+    if (!payerId) {
+      Alert.alert('Error', 'Please select a payer');
+      return;
+    }
 
     const expense = {
       id: generateId(),
       tripId,
       title: title.trim(),
       amount,
-      currency,
+      currency: trip?.currency || 'USD',
       date,
       payerId,
       splitType: 'equal' as const,
@@ -127,195 +124,193 @@ export function AddExpenseScreen() {
       createdAt: new Date().toISOString(),
     };
 
-    dispatch({ type: 'TRIP_ADD_EXPENSE', payload: { tripId, expense } });
+    addExpense(tripId, expense);
     navigation.goBack();
-  };
+  }, [validateStep, payerId, tripId, title, amount, trip, date, splits, addExpense, navigation]);
 
-  const splits = computeEqualSplits(amount, selectedParticipantIds);
-
-  const stepTitles = ['Expense Details', 'Who Paid?', "Who's Involved?"];
+  const participants = trip?.participants || [];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+    >
+      <StepIndicator
+        currentStep={currentStep}
+        totalSteps={STEPS.length}
+        stepLabels={STEPS}
+      />
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>
-              {step === 0 ? 'Cancel' : '← Back'}
+        {/* Step 0: Details */}
+        {currentStep === 0 && (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Expense Details</Text>
+            <Text style={styles.stepSubtitle}>
+              What did you spend money on?
             </Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{stepTitles[step]}</Text>
-          <View style={styles.headerRight} />
-        </View>
 
-        <StepIndicator steps={TOTAL_STEPS} currentStep={step} />
-
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Step 0: Details */}
-          {step === 0 && (
-            <View style={styles.stepContent}>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Title</Text>
-                <TextInput
-                  style={[styles.textInput, errors.title ? styles.textInputError : null]}
-                  placeholder="e.g. Dinner at Trattoria"
-                  placeholderTextColor="#9CA3AF"
-                  value={title}
-                  onChangeText={(t) => {
-                    setTitle(t);
-                    if (errors.title) setErrors((e) => ({ ...e, title: '' }));
-                  }}
-                  autoFocus
-                />
-                {errors.title ? <Text style={styles.errorText}>{errors.title}</Text> : null}
-              </View>
-
-              <AmountInput
-                label="Amount"
-                value={amountStr}
-                onChangeText={(v) => {
-                  setAmountStr(v);
-                  if (errors.amount) setErrors((e) => ({ ...e, amount: '' }));
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Title</Text>
+              <TextInput
+                style={[styles.textInput, errors.title ? styles.textInputError : null]}
+                value={title}
+                onChangeText={text => {
+                  setTitle(text);
+                  if (errors.title) setErrors(prev => ({ ...prev, title: '' }));
                 }}
-                currency={currency}
-                error={errors.amount}
+                placeholder="e.g. Dinner, Hotel, Taxi..."
+                placeholderTextColor="#9CA3AF"
+                returnKeyType="next"
+                autoFocus
               />
-
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Date</Text>
-                <TextInput
-                  style={[styles.textInput, errors.date ? styles.textInputError : null]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9CA3AF"
-                  value={date}
-                  onChangeText={(t) => {
-                    setDate(t);
-                    if (errors.date) setErrors((e) => ({ ...e, date: '' }));
-                  }}
-                  keyboardType="numbers-and-punctuation"
-                />
-                {errors.date ? <Text style={styles.errorText}>{errors.date}</Text> : null}
-              </View>
+              {errors.title ? <Text style={styles.errorText}>{errors.title}</Text> : null}
             </View>
-          )}
 
-          {/* Step 1: Payer */}
-          {step === 1 && (
-            <View style={styles.stepContent}>
-              {errors.payer ? (
-                <Text style={[styles.errorText, styles.errorTextCentered]}>{errors.payer}</Text>
-              ) : null}
-              <PayerSelector
-                participants={trip.participants}
-                selectedPayerId={payerId}
-                onSelect={(id) => {
-                  setPayerId(id);
-                  if (errors.payer) setErrors((e) => ({ ...e, payer: '' }));
+            <AmountInput
+              label="Amount"
+              value={amountStr}
+              onChangeValue={val => {
+                setAmountStr(val);
+                if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
+              }}
+              currencySymbol={currencySymbol}
+              error={errors.amount}
+            />
+
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Date</Text>
+              <TextInput
+                style={[styles.textInput, errors.date ? styles.textInputError : null]}
+                value={date}
+                onChangeText={text => {
+                  setDate(text);
+                  if (errors.date) setErrors(prev => ({ ...prev, date: '' }));
                 }}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
               />
+              {errors.date ? <Text style={styles.errorText}>{errors.date}</Text> : null}
             </View>
-          )}
+          </View>
+        )}
 
-          {/* Step 2: Participants + Preview */}
-          {step === 2 && (
-            <View style={styles.stepContent}>
-              {errors.participants ? (
-                <Text style={[styles.errorText, styles.errorTextCentered]}>
-                  {errors.participants}
-                </Text>
-              ) : null}
-              <ParticipantMultiSelect
-                participants={trip.participants}
-                selectedIds={selectedParticipantIds}
-                onToggle={(id) => {
-                  handleToggleParticipant(id);
-                  if (errors.participants)
-                    setErrors((e) => ({ ...e, participants: '' }));
-                }}
+        {/* Step 1: Payer */}
+        {currentStep === 1 && (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Who paid?</Text>
+            <Text style={styles.stepSubtitle}>
+              Select the person who paid {currencySymbol}{amount.toFixed(2)}
+            </Text>
+            {errors.payer ? (
+              <Text style={[styles.errorText, styles.errorTextCenter]}>{errors.payer}</Text>
+            ) : null}
+            <PayerSelector
+              participants={participants}
+              selectedPayerId={payerId}
+              onSelect={id => {
+                setPayerId(id);
+                if (errors.payer) setErrors(prev => ({ ...prev, payer: '' }));
+              }}
+            />
+          </View>
+        )}
+
+        {/* Step 2: Split participants */}
+        {currentStep === 2 && (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Split between</Text>
+            <Text style={styles.stepSubtitle}>
+              Who's sharing this expense?
+            </Text>
+            {errors.participants ? (
+              <Text style={[styles.errorText, styles.errorTextCenter]}>
+                {errors.participants}
+              </Text>
+            ) : null}
+            <ParticipantMultiSelect
+              participants={participants}
+              selectedIds={selectedParticipantIds}
+              onToggle={id => {
+                handleToggleParticipant(id);
+                if (errors.participants)
+                  setErrors(prev => ({ ...prev, participants: '' }));
+              }}
+              perPersonAmount={perPersonAmount}
+              currencySymbol={currencySymbol}
+            />
+            {selectedParticipantIds.length > 0 && (
+              <SplitSummary
+                splits={splits}
+                participants={participants}
+                totalAmount={amount}
+                currencySymbol={currencySymbol}
               />
-              {selectedParticipantIds.length > 0 && amount > 0 && (
-                <SplitSummary
-                  splits={splits}
-                  participants={trip.participants}
-                  currency={currency}
-                  totalAmount={amount}
-                />
-              )}
-            </View>
-          )}
-        </ScrollView>
+            )}
+          </View>
+        )}
+      </ScrollView>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          {step < TOTAL_STEPS - 1 ? (
-            <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-              <Text style={styles.nextButtonText}>Next →</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save Expense</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      {/* Navigation Buttons */}
+      <View style={styles.footer}>
+        {currentStep > 0 ? (
+          <Pressable style={styles.backButton} onPress={handleBack}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={styles.cancelButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Pressable>
+        )}
+
+        {currentStep < STEPS.length - 1 ? (
+          <Pressable style={styles.nextButton} onPress={handleNext}>
+            <Text style={styles.nextButtonText}>Next →</Text>
+          </Pressable>
+        ) : (
+          <Pressable style={styles.saveButton} onPress={handleSave}>
+            <Text style={styles.saveButtonText}>Save Expense</Text>
+          </Pressable>
+        )}
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  backButton: {
-    minWidth: 70,
-  },
-  backButtonText: {
-    fontSize: 15,
-    color: '#6366F1',
-    fontWeight: '500',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  headerRight: {
-    minWidth: 70,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 16,
   },
-  stepContent: {
-    flex: 1,
+  stepContainer: {
+    padding: 20,
   },
-  fieldGroup: {
+  stepTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  stepSubtitle: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginBottom: 24,
+  },
+  field: {
     marginBottom: 16,
   },
   fieldLabel: {
@@ -326,8 +321,8 @@ const styles = StyleSheet.create({
   },
   textInput: {
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
     backgroundColor: '#F9FAFB',
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -336,43 +331,77 @@ const styles = StyleSheet.create({
   },
   textInputError: {
     borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
   },
   errorText: {
-    marginTop: 4,
     fontSize: 12,
     color: '#EF4444',
+    marginTop: 4,
   },
-  errorTextCentered: {
+  errorTextCenter: {
     textAlign: 'center',
     marginBottom: 12,
     fontSize: 14,
   },
   footer: {
-    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  backButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+  },
+  backButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  cancelButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
   },
   nextButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 10,
     backgroundColor: '#6366F1',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
   },
   nextButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
   saveButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    backgroundColor: '#6366F1',
   },
   saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
+
+export default AddExpenseScreen;

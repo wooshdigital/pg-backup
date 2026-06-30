@@ -1,26 +1,26 @@
-export const AVATAR_COLOR_PALETTE: string[] = [
-  '#F44336', // Red
-  '#E91E63', // Pink
-  '#9C27B0', // Purple
-  '#673AB7', // Deep Purple
-  '#3F51B5', // Indigo
-  '#2196F3', // Blue
-  '#009688', // Teal
-  '#4CAF50', // Green
-  '#FF9800', // Orange
-  '#FF5722', // Deep Orange
-  '#795548', // Brown
-  '#607D8B', // Blue Grey
+const AVATAR_COLORS = [
+  '#6366F1', // indigo
+  '#8B5CF6', // violet
+  '#EC4899', // pink
+  '#EF4444', // red
+  '#F97316', // orange
+  '#EAB308', // yellow
+  '#22C55E', // green
+  '#14B8A6', // teal
+  '#06B6D4', // cyan
+  '#3B82F6', // blue
+  '#A855F7', // purple
+  '#F43F5E', // rose
 ];
 
-export function getRandomAvatarColor(): string {
-  const index = Math.floor(Math.random() * AVATAR_COLOR_PALETTE.length);
-  return AVATAR_COLOR_PALETTE[index];
+export function getAvatarColor(name: string): string {
+  if (!name) return AVATAR_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    hash = hash & hash;
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-export function getAvatarInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0 || parts[0] === '') return '?';
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
+export default { getAvatarColor };

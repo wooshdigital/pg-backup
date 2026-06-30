@@ -2,11 +2,12 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
+  Pressable,
   ScrollView,
 } from 'react-native';
 import { Participant } from '../../types';
+import { getAvatarColor } from '../../utils/avatarColors';
 
 interface PayerSelectorProps {
   participants: Participant[];
@@ -16,95 +17,116 @@ interface PayerSelectorProps {
 
 export function PayerSelector({ participants, selectedPayerId, onSelect }: PayerSelectorProps) {
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {participants.map((participant) => {
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {participants.map(participant => {
         const isSelected = participant.id === selectedPayerId;
+        const avatarColor = participant.avatarColor || getAvatarColor(participant.name);
+        const initials = getInitials(participant.name);
+
         return (
-          <TouchableOpacity
+          <Pressable
             key={participant.id}
             style={[styles.row, isSelected && styles.rowSelected]}
             onPress={() => onSelect(participant.id)}
-            activeOpacity={0.7}
+            android_ripple={{ color: '#EEF2FF' }}
           >
-            <View style={[styles.avatar, { backgroundColor: participant.avatarColor || '#6366F1' }]}>
-              <Text style={styles.avatarText}>
-                {participant.name.charAt(0).toUpperCase()}
+            <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+            <View style={styles.info}>
+              <Text style={[styles.name, isSelected && styles.nameSelected]}>
+                {participant.name}
               </Text>
+              {participant.email ? (
+                <Text style={styles.email}>{participant.email}</Text>
+              ) : null}
             </View>
-            <Text style={[styles.name, isSelected && styles.nameSelected]}>
-              {participant.name}
-            </Text>
             <View style={[styles.radio, isSelected && styles.radioSelected]}>
-              {isSelected && <View style={styles.radioInner} />}
+              {isSelected && <View style={styles.radioDot} />}
             </View>
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
     </ScrollView>
   );
 }
 
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    paddingBottom: 16,
-  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     marginBottom: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
   },
   rowSelected: {
-    borderColor: '#6366F1',
     backgroundColor: '#EEF2FF',
+    borderColor: '#6366F1',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   avatarText: {
     color: '#FFFFFF',
-    fontWeight: '700',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  info: {
+    flex: 1,
   },
   name: {
-    flex: 1,
     fontSize: 16,
+    fontWeight: '600',
     color: '#1F2937',
-    fontWeight: '500',
   },
   nameSelected: {
-    color: '#4F46E5',
-    fontWeight: '600',
+    color: '#4338CA',
+  },
+  email: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
   },
   radio: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#9CA3AF',
-    justifyContent: 'center',
+    borderColor: '#D1D5DB',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
   radioSelected: {
     borderColor: '#6366F1',
   },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#6366F1',
   },
 });
+
+export default PayerSelector;
