@@ -7,15 +7,11 @@ const meta: Meta<typeof Checkbox> = {
   title: 'Components/Checkbox',
   component: Checkbox,
   parameters: {
-    layout: 'padded',
+    layout: 'centered',
   },
   tags: ['autodocs'],
   argTypes: {
-    label: { control: 'text' },
-    description: { control: 'text' },
-    error: { control: 'text' },
-    disabled: { control: 'boolean' },
-    indeterminate: { control: 'boolean' },
+    onChange: { action: 'changed' },
   },
 };
 
@@ -30,22 +26,46 @@ export const Default: Story = {
 
 export const Checked: Story = {
   args: {
-    label: 'Receive newsletter',
+    label: 'Subscribed to newsletter',
     defaultChecked: true,
   },
 };
 
-export const WithDescription: Story = {
-  args: {
-    label: 'Enable notifications',
-    description: 'Receive email notifications when someone mentions you.',
-  },
-};
-
 export const Indeterminate: Story = {
-  args: {
-    label: 'Select all',
-    indeterminate: true,
+  render: () => {
+    const [checked, setChecked] = useState<boolean[]>([true, false, false]);
+
+    const allChecked = checked.every(Boolean);
+    const someChecked = checked.some(Boolean) && !allChecked;
+
+    const handleGroupChange = (val: boolean) => {
+      setChecked([val, val, val]);
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <Checkbox
+          label="Select all"
+          checked={allChecked}
+          indeterminate={someChecked}
+          onChange={handleGroupChange}
+        />
+        <div style={{ paddingLeft: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {['Apple', 'Banana', 'Cherry'].map((fruit, i) => (
+            <Checkbox
+              key={fruit}
+              label={fruit}
+              checked={checked[i]}
+              onChange={(val) => {
+                const next = [...checked];
+                next[i] = val;
+                setChecked(next);
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
   },
 };
 
@@ -58,9 +78,16 @@ export const Disabled: Story = {
 
 export const DisabledChecked: Story = {
   args: {
-    label: 'Disabled checked option',
+    label: 'Disabled and checked',
     disabled: true,
     defaultChecked: true,
+  },
+};
+
+export const WithHelperText: Story = {
+  args: {
+    label: 'Subscribe to newsletter',
+    helperText: 'You can unsubscribe at any time.',
   },
 };
 
@@ -71,88 +98,51 @@ export const WithError: Story = {
   },
 };
 
-export const Controlled: Story = {
+export const CheckboxGroupStory: StoryObj = {
+  name: 'CheckboxGroup',
   render: () => {
-    const [checked, setChecked] = useState(false);
-    return (
-      <Checkbox
-        label={checked ? 'Checked' : 'Unchecked'}
-        checked={checked}
-        onChange={(e) => setChecked(e.target.checked)}
-      />
-    );
-  },
-};
+    const [selected, setSelected] = useState<Record<string, boolean>>({
+      email: true,
+      sms: false,
+      push: false,
+    });
 
-export const IndeterminateControlled: Story = {
-  render: () => {
-    const [state, setState] = useState<'unchecked' | 'indeterminate' | 'checked'>(
-      'indeterminate',
-    );
-    const cycle = () => {
-      setState((s) =>
-        s === 'unchecked' ? 'indeterminate' : s === 'indeterminate' ? 'checked' : 'unchecked',
-      );
+    const toggle = (key: string) => (val: boolean) => {
+      setSelected((prev) => ({ ...prev, [key]: val }));
     };
-    return (
-      <Checkbox
-        label={`State: ${state}`}
-        checked={state === 'checked'}
-        indeterminate={state === 'indeterminate'}
-        onChange={cycle}
-      />
-    );
-  },
-};
 
-export const CheckboxGroupDefault: Story = {
-  render: () => {
-    const [values, setValues] = useState<string[]>([]);
-    const toggle = (value: string) =>
-      setValues((prev) =>
-        prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
-      );
     return (
-      <CheckboxGroup legend="Notify me about">
-        {['Comments', 'Mentions', 'Follows', 'New features'].map((opt) => (
-          <Checkbox
-            key={opt}
-            label={opt}
-            value={opt.toLowerCase()}
-            checked={values.includes(opt.toLowerCase())}
-            onChange={() => toggle(opt.toLowerCase())}
-          />
-        ))}
+      <CheckboxGroup legend="Notification preferences" helperText="Select all that apply">
+        <Checkbox label="Email" checked={selected.email} onChange={toggle('email')} />
+        <Checkbox label="SMS" checked={selected.sms} onChange={toggle('sms')} />
+        <Checkbox
+          label="Push notifications"
+          checked={selected.push}
+          onChange={toggle('push')}
+        />
       </CheckboxGroup>
     );
   },
 };
 
-export const CheckboxGroupHorizontal: Story = {
+export const CheckboxGroupHorizontal: StoryObj = {
+  name: 'CheckboxGroup (Horizontal)',
   render: () => (
-    <CheckboxGroup legend="Preferred contact" orientation="horizontal">
-      <Checkbox label="Email" name="contact" value="email" />
-      <Checkbox label="Phone" name="contact" value="phone" />
-      <Checkbox label="SMS" name="contact" value="sms" />
+    <CheckboxGroup legend="Dietary preferences" orientation="horizontal">
+      <Checkbox label="Vegetarian" />
+      <Checkbox label="Vegan" />
+      <Checkbox label="Gluten-free" />
     </CheckboxGroup>
   ),
 };
 
-export const CheckboxGroupRequired: Story = {
+export const CheckboxGroupWithError: StoryObj = {
+  name: 'CheckboxGroup with Error',
   render: () => (
-    <CheckboxGroup legend="Agree to all" required error="You must select all required options.">
-      <Checkbox label="Terms of Service" />
-      <Checkbox label="Privacy Policy" />
-    </CheckboxGroup>
-  ),
-};
-
-export const CheckboxGroupDisabled: Story = {
-  render: () => (
-    <CheckboxGroup legend="Disabled group" disabled>
-      <Checkbox label="Option 1" />
-      <Checkbox label="Option 2" />
-      <Checkbox label="Option 3" />
+    <CheckboxGroup legend="Interests" error="Please select at least one option" required>
+      <Checkbox label="Sports" />
+      <Checkbox label="Music" />
+      <Checkbox label="Technology" />
     </CheckboxGroup>
   ),
 };

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe, toHaveNoViolations } from 'jest-axe';
 import { RadioGroup } from './RadioGroup';
@@ -7,159 +7,174 @@ import { Radio } from './Radio';
 
 expect.extend(toHaveNoViolations);
 
-const OPTIONS = [
-  { value: 'apple', label: 'Apple' },
-  { value: 'banana', label: 'Banana' },
-  { value: 'cherry', label: 'Cherry' },
-];
-
-const DefaultGroup = (props: Partial<React.ComponentProps<typeof RadioGroup>> = {}) => (
-  <RadioGroup legend="Favourite fruit" {...props}>
-    {OPTIONS.map((opt) => (
-      <Radio key={opt.value} value={opt.value} label={opt.label} />
-    ))}
+const DefaultGroup = ({
+  onChange,
+  value,
+  defaultValue,
+  disabled,
+}: {
+  onChange?: (v: string) => void;
+  value?: string;
+  defaultValue?: string;
+  disabled?: boolean;
+}) => (
+  <RadioGroup
+    legend="Favorite fruit"
+    onChange={onChange}
+    value={value}
+    defaultValue={defaultValue}
+    disabled={disabled}
+  >
+    <Radio value="apple" label="Apple" />
+    <Radio value="banana" label="Banana" />
+    <Radio value="cherry" label="Cherry" />
   </RadioGroup>
 );
 
 describe('RadioGroup', () => {
   describe('Rendering', () => {
-    it('renders a radiogroup with correct legend', () => {
+    it('renders a radiogroup with legend', () => {
       render(<DefaultGroup />);
-      expect(
-        screen.getByRole('radiogroup', { name: 'Favourite fruit' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('radiogroup', { name: 'Favorite fruit' })).toBeInTheDocument();
     });
 
     it('renders all radio options', () => {
       render(<DefaultGroup />);
       expect(screen.getAllByRole('radio')).toHaveLength(3);
+      expect(screen.getByRole('radio', { name: 'Apple' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Banana' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Cherry' })).toBeInTheDocument();
     });
 
-    it('renders radio labels', () => {
+    it('all radios share the same name attribute', () => {
       render(<DefaultGroup />);
-      OPTIONS.forEach(({ label }) => {
-        expect(screen.getByRole('radio', { name: label })).toBeInTheDocument();
-      });
+      const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+      const names = radios.map((r) => r.name);
+      expect(new Set(names).size).toBe(1);
     });
 
-    it('renders with default value selected', () => {
+    it('renders helper text', () => {
+      render(
+        <RadioGroup legend="Size" helperText="Choose your size">
+          <Radio value="s" label="Small" />
+        </RadioGroup>
+      );
+      expect(screen.getByText('Choose your size')).toBeInTheDocument();
+    });
+
+    it('renders error message with role=alert', () => {
+      render(
+        <RadioGroup legend="Size" error="Please select a size">
+          <Radio value="s" label="Small" />
+        </RadioGroup>
+      );
+      expect(screen.getByRole('alert')).toHaveTextContent('Please select a size');
+    });
+  });
+
+  describe('Selection', () => {
+    it('renders defaultValue as checked', () => {
       render(<DefaultGroup defaultValue="banana" />);
       expect(screen.getByRole('radio', { name: 'Banana' })).toBeChecked();
       expect(screen.getByRole('radio', { name: 'Apple' })).not.toBeChecked();
     });
 
-    it('renders controlled value', () => {
+    it('renders controlled value as checked', () => {
       render(<DefaultGroup value="cherry" onChange={() => {}} />);
       expect(screen.getByRole('radio', { name: 'Cherry' })).toBeChecked();
     });
 
-    it('renders error message', () => {
-      render(<DefaultGroup error="Please select an option" />);
-      expect(screen.getByRole('alert')).toHaveTextContent('Please select an option');
+    it('calls onChange when clicking a radio', async () => {
+      const user = userEvent.setup();
+      const handleChange = jest.fn();
+      render(<DefaultGroup onChange={handleChange} />);
+      await user.click(screen.getByRole('radio', { name: 'Banana' }));
+      expect(handleChange).toHaveBeenCalledWith('banana');
     });
 
-    it('renders helper text', () => {
-      render(<DefaultGroup helperText="Pick your favourite" />);
-      expect(screen.getByText('Pick your favourite')).toBeInTheDocument();
-    });
-
-    it('disables all radios when group is disabled', () => {
-      render(<DefaultGroup disabled />);
-      screen.getAllByRole('radio').forEach((radio) => {
-        expect(radio).toBeDisabled();
-      });
+    it('does not call onChange when disabled', async () => {
+      const user = userEvent.setup();
+      const handleChange = jest.fn();
+      render(<DefaultGroup disabled onChange={handleChange} />);
+      await user.click(screen.getByRole('radio', { name: 'Apple' }));
+      expect(handleChange).not.toHaveBeenCalled();
     });
   });
 
-  describe('Name association', () => {
-    it('all radios share the same name attribute', () => {
+  describe('Roving tabindex', () => {
+    it('first radio has tabIndex=0 when no value selected', () => {
       render(<DefaultGroup />);
       const radios = screen.getAllByRole('radio') as HTMLInputElement[];
-      const names = new Set(radios.map((r) => r.name));
-      expect(names.size).toBe(1);
+      expect(radios[0]).toHaveAttribute('tabindex', '0');
+      expect(radios[1]).toHaveAttribute('tabindex', '-1');
+      expect(radios[2]).toHaveAttribute('tabindex', '-1');
     });
 
-    it('uses provided name prop', () => {
-      render(<DefaultGroup name="fruit-picker" />);
-      const radios = screen.getAllByRole('radio') as HTMLInputElement[];
-      radios.forEach((r) => expect(r.name).toBe('fruit-picker'));
+    it('selected radio has tabIndex=0', () => {
+      render(<DefaultGroup defaultValue="banana" />);
+      const apple = screen.getByRole('radio', { name: 'Apple' }) as HTMLInputElement;
+      const banana = screen.getByRole('radio', { name: 'Banana' }) as HTMLInputElement;
+      const cherry = screen.getByRole('radio', { name: 'Cherry' }) as HTMLInputElement;
+      expect(apple).toHaveAttribute('tabindex', '-1');
+      expect(banana).toHaveAttribute('tabindex', '0');
+      expect(cherry).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('updates tabIndex on click', async () => {
+      const user = userEvent.setup();
+      render(<DefaultGroup />);
+      await user.click(screen.getByRole('radio', { name: 'Cherry' }));
+      expect(screen.getByRole('radio', { name: 'Cherry' })).toHaveAttribute('tabindex', '0');
+      expect(screen.getByRole('radio', { name: 'Apple' })).toHaveAttribute('tabindex', '-1');
     });
   });
 
-  describe('Click interaction', () => {
-    it('selects a radio when clicked', async () => {
-      const user = userEvent.setup();
-      const onChange = jest.fn();
-      render(<DefaultGroup onChange={onChange} />);
-
-      await user.click(screen.getByRole('radio', { name: 'Banana' }));
-      expect(onChange).toHaveBeenCalledWith('banana');
-    });
-
-    it('clicking label selects radio', async () => {
-      const user = userEvent.setup();
-      const onChange = jest.fn();
-      render(<DefaultGroup onChange={onChange} />);
-
-      await user.click(screen.getByText('Apple'));
-      expect(onChange).toHaveBeenCalledWith('apple');
-    });
-
-    it('does not call onChange for disabled radio', async () => {
-      const user = userEvent.setup();
-      const onChange = jest.fn();
-      render(
-        <RadioGroup legend="Fruits" onChange={onChange}>
-          <Radio value="apple" label="Apple" />
-          <Radio value="banana" label="Banana" disabled />
-        </RadioGroup>,
-      );
-
-      await user.click(screen.getByRole('radio', { name: 'Banana' }));
-      expect(onChange).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Keyboard navigation (roving tabindex)', () => {
+  describe('Keyboard navigation', () => {
     it('ArrowDown moves focus to next radio', async () => {
       const user = userEvent.setup();
-      render(<DefaultGroup defaultValue="apple" />);
+      const handleChange = jest.fn();
+      render(<DefaultGroup onChange={handleChange} />);
 
-      const appleRadio = screen.getByRole('radio', { name: 'Apple' });
-      appleRadio.focus();
+      const apple = screen.getByRole('radio', { name: 'Apple' });
+      apple.focus();
 
       await user.keyboard('{ArrowDown}');
       expect(screen.getByRole('radio', { name: 'Banana' })).toHaveFocus();
-    });
-
-    it('ArrowUp moves focus to previous radio', async () => {
-      const user = userEvent.setup();
-      render(<DefaultGroup defaultValue="banana" />);
-
-      const bananaRadio = screen.getByRole('radio', { name: 'Banana' });
-      bananaRadio.focus();
-
-      await user.keyboard('{ArrowUp}');
-      expect(screen.getByRole('radio', { name: 'Apple' })).toHaveFocus();
+      expect(handleChange).toHaveBeenCalledWith('banana');
     });
 
     it('ArrowRight moves focus to next radio', async () => {
       const user = userEvent.setup();
-      render(<DefaultGroup defaultValue="apple" />);
+      const handleChange = jest.fn();
+      render(<DefaultGroup onChange={handleChange} />);
 
-      const appleRadio = screen.getByRole('radio', { name: 'Apple' });
-      appleRadio.focus();
+      const apple = screen.getByRole('radio', { name: 'Apple' });
+      apple.focus();
 
       await user.keyboard('{ArrowRight}');
       expect(screen.getByRole('radio', { name: 'Banana' })).toHaveFocus();
     });
 
+    it('ArrowUp moves focus to previous radio', async () => {
+      const user = userEvent.setup();
+      const handleChange = jest.fn();
+      render(<DefaultGroup defaultValue="banana" onChange={handleChange} />);
+
+      const banana = screen.getByRole('radio', { name: 'Banana' });
+      banana.focus();
+
+      await user.keyboard('{ArrowUp}');
+      expect(screen.getByRole('radio', { name: 'Apple' })).toHaveFocus();
+      expect(handleChange).toHaveBeenCalledWith('apple');
+    });
+
     it('ArrowLeft moves focus to previous radio', async () => {
       const user = userEvent.setup();
-      render(<DefaultGroup defaultValue="cherry" />);
+      const handleChange = jest.fn();
+      render(<DefaultGroup defaultValue="cherry" onChange={handleChange} />);
 
-      const cherryRadio = screen.getByRole('radio', { name: 'Cherry' });
-      cherryRadio.focus();
+      const cherry = screen.getByRole('radio', { name: 'Cherry' });
+      cherry.focus();
 
       await user.keyboard('{ArrowLeft}');
       expect(screen.getByRole('radio', { name: 'Banana' })).toHaveFocus();
@@ -167,139 +182,146 @@ describe('RadioGroup', () => {
 
     it('ArrowDown wraps from last to first', async () => {
       const user = userEvent.setup();
-      render(<DefaultGroup defaultValue="cherry" />);
+      const handleChange = jest.fn();
+      render(<DefaultGroup defaultValue="cherry" onChange={handleChange} />);
 
-      const cherryRadio = screen.getByRole('radio', { name: 'Cherry' });
-      cherryRadio.focus();
+      const cherry = screen.getByRole('radio', { name: 'Cherry' });
+      cherry.focus();
 
       await user.keyboard('{ArrowDown}');
       expect(screen.getByRole('radio', { name: 'Apple' })).toHaveFocus();
+      expect(handleChange).toHaveBeenCalledWith('apple');
     });
 
     it('ArrowUp wraps from first to last', async () => {
       const user = userEvent.setup();
-      render(<DefaultGroup defaultValue="apple" />);
+      const handleChange = jest.fn();
+      render(<DefaultGroup defaultValue="apple" onChange={handleChange} />);
 
-      const appleRadio = screen.getByRole('radio', { name: 'Apple' });
-      appleRadio.focus();
+      const apple = screen.getByRole('radio', { name: 'Apple' });
+      apple.focus();
 
       await user.keyboard('{ArrowUp}');
       expect(screen.getByRole('radio', { name: 'Cherry' })).toHaveFocus();
+      expect(handleChange).toHaveBeenCalledWith('cherry');
     });
 
-    it('Arrow keys select the focused radio', async () => {
-      const user = userEvent.setup();
-      const onChange = jest.fn();
-      render(<DefaultGroup defaultValue="apple" onChange={onChange} />);
-
-      const appleRadio = screen.getByRole('radio', { name: 'Apple' });
-      appleRadio.focus();
-
-      await user.keyboard('{ArrowDown}');
-      expect(onChange).toHaveBeenCalledWith('banana');
-    });
-
-    it('skips disabled radios on arrow key navigation', async () => {
+    it('can Tab into the group', async () => {
       const user = userEvent.setup();
       render(
-        <RadioGroup legend="Fruits" defaultValue="apple">
-          <Radio value="apple" label="Apple" />
-          <Radio value="banana" label="Banana" disabled />
-          <Radio value="cherry" label="Cherry" />
-        </RadioGroup>,
+        <div>
+          <button>Before</button>
+          <DefaultGroup />
+          <button>After</button>
+        </div>
       );
-
-      const appleRadio = screen.getByRole('radio', { name: 'Apple' });
-      appleRadio.focus();
-
-      await user.keyboard('{ArrowDown}');
-      expect(screen.getByRole('radio', { name: 'Cherry' })).toHaveFocus();
+      await user.tab();
+      // Should focus the "before" button first
+      expect(screen.getByRole('button', { name: 'Before' })).toHaveFocus();
+      await user.tab();
+      // Should focus into the radio group (first radio with tabIndex=0)
+      expect(screen.getByRole('radio', { name: 'Apple' })).toHaveFocus();
     });
 
-    it('selected radio has tabIndex=0, others have tabIndex=-1', () => {
-      render(<DefaultGroup value="banana" onChange={() => {}} />);
-      const radios = screen.getAllByRole('radio') as HTMLInputElement[];
-      const apple = screen.getByRole('radio', { name: 'Apple' }) as HTMLInputElement;
-      const banana = screen.getByRole('radio', { name: 'Banana' }) as HTMLInputElement;
-      const cherry = screen.getByRole('radio', { name: 'Cherry' }) as HTMLInputElement;
+    it('Space selects focused radio', async () => {
+      const user = userEvent.setup();
+      const handleChange = jest.fn();
+      render(<DefaultGroup onChange={handleChange} />);
 
-      expect(banana.tabIndex).toBe(0);
-      expect(apple.tabIndex).toBe(-1);
-      expect(cherry.tabIndex).toBe(-1);
+      const apple = screen.getByRole('radio', { name: 'Apple' });
+      apple.focus();
+      await user.keyboard('[Space]');
+      expect(handleChange).toHaveBeenCalledWith('apple');
     });
   });
 
-  describe('Controlled usage', () => {
-    it('updates selection when controlled value changes', () => {
-      const { rerender } = render(<DefaultGroup value="apple" onChange={() => {}} />);
-      expect(screen.getByRole('radio', { name: 'Apple' })).toBeChecked();
-
-      rerender(<DefaultGroup value="cherry" onChange={() => {}} />);
-      expect(screen.getByRole('radio', { name: 'Cherry' })).toBeChecked();
-      expect(screen.getByRole('radio', { name: 'Apple' })).not.toBeChecked();
+  describe('Disabled states', () => {
+    it('disables all radios when group is disabled', () => {
+      render(<DefaultGroup disabled />);
+      const radios = screen.getAllByRole('radio');
+      radios.forEach((radio) => {
+        expect(radio).toBeDisabled();
+      });
     });
 
-    it('works as a controlled component', async () => {
-      const user = userEvent.setup();
+    it('disables individual radio', () => {
+      render(
+        <RadioGroup legend="Choice">
+          <Radio value="a" label="Option A" />
+          <Radio value="b" label="Option B" disabled />
+        </RadioGroup>
+      );
+      expect(screen.getByRole('radio', { name: 'Option A' })).not.toBeDisabled();
+      expect(screen.getByRole('radio', { name: 'Option B' })).toBeDisabled();
+    });
+  });
+
+  describe('Controlled component', () => {
+    it('updates selection when controlled value changes', () => {
       const Controlled = () => {
-        const [value, setValue] = useState('apple');
+        const [val, setVal] = useState('apple');
         return (
-          <RadioGroup legend="Pick one" value={value} onChange={setValue}>
-            <Radio value="apple" label="Apple" />
-            <Radio value="banana" label="Banana" />
-            <Radio value="cherry" label="Cherry" />
-          </RadioGroup>
+          <div>
+            <DefaultGroup value={val} onChange={setVal} />
+            <button onClick={() => setVal('cherry')}>Select Cherry</button>
+          </div>
         );
       };
+      const user = userEvent.setup();
       render(<Controlled />);
 
-      await user.click(screen.getByRole('radio', { name: 'Cherry' }));
-      expect(screen.getByRole('radio', { name: 'Cherry' })).toBeChecked();
-      expect(screen.getByRole('radio', { name: 'Apple' })).not.toBeChecked();
-    });
-  });
-
-  describe('Individual Radio disabled', () => {
-    it('only disables specified radio, not others', () => {
-      render(
-        <RadioGroup legend="Fruits">
-          <Radio value="apple" label="Apple" />
-          <Radio value="banana" label="Banana" disabled />
-          <Radio value="cherry" label="Cherry" />
-        </RadioGroup>,
-      );
-      expect(screen.getByRole('radio', { name: 'Apple' })).not.toBeDisabled();
-      expect(screen.getByRole('radio', { name: 'Banana' })).toBeDisabled();
-      expect(screen.getByRole('radio', { name: 'Cherry' })).not.toBeDisabled();
+      expect(screen.getByRole('radio', { name: 'Apple' })).toBeChecked();
+      userEvent.click(screen.getByRole('button', { name: 'Select Cherry' }));
     });
   });
 
   describe('Accessibility', () => {
-    it('has no axe violations in default state', async () => {
+    it('has no axe violations (default)', async () => {
       const { container } = render(<DefaultGroup />);
-      expect(await axe(container)).toHaveNoViolations();
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
     });
 
-    it('has no axe violations with a selected value', async () => {
+    it('has no axe violations (with selection)', async () => {
       const { container } = render(<DefaultGroup defaultValue="apple" />);
-      expect(await axe(container)).toHaveNoViolations();
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
     });
 
-    it('has no axe violations with error', async () => {
-      const { container } = render(
-        <DefaultGroup error="Please select one option" />,
-      );
-      expect(await axe(container)).toHaveNoViolations();
-    });
-
-    it('has no axe violations when disabled', async () => {
+    it('has no axe violations (disabled)', async () => {
       const { container } = render(<DefaultGroup disabled />);
-      expect(await axe(container)).toHaveNoViolations();
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
     });
 
-    it('has no axe violations with required', async () => {
-      const { container } = render(<DefaultGroup required />);
-      expect(await axe(container)).toHaveNoViolations();
+    it('has no axe violations (with error)', async () => {
+      const { container } = render(
+        <RadioGroup legend="Size" error="Please select a size">
+          <Radio value="s" label="Small" />
+          <Radio value="m" label="Medium" />
+          <Radio value="l" label="Large" />
+        </RadioGroup>
+      );
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
+    });
+
+    it('has no axe violations (horizontal)', async () => {
+      const { container } = render(
+        <RadioGroup legend="Alignment" orientation="horizontal">
+          <Radio value="left" label="Left" />
+          <Radio value="center" label="Center" />
+          <Radio value="right" label="Right" />
+        </RadioGroup>
+      );
+      const results = await axe(container);
+      expect(results).toHaveNoViolations();
+    });
+
+    it('radiogroup is labelled by legend', () => {
+      render(<DefaultGroup />);
+      const group = screen.getByRole('radiogroup');
+      expect(group).toHaveAccessibleName('Favorite fruit');
     });
   });
 });

@@ -1,76 +1,60 @@
-import React, { useId } from 'react';
+import React, { type ReactNode } from 'react';
 import styles from './CheckboxGroup.module.css';
+import { classNames } from '../../utils/classNames';
 
 export interface CheckboxGroupProps {
-  legend: React.ReactNode;
-  children: React.ReactNode;
+  /** Group label rendered as a legend */
+  legend: ReactNode;
+  /** Whether at least one checkbox is required */
   required?: boolean;
-  error?: string;
+  /** Helper text for the group */
   helperText?: string;
+  /** Error message for the group */
+  error?: string;
+  /** Layout direction */
   orientation?: 'vertical' | 'horizontal';
+  /** Checkbox children */
+  children: ReactNode;
   className?: string;
-  disabled?: boolean;
 }
 
 export const CheckboxGroup: React.FC<CheckboxGroupProps> = ({
   legend,
-  children,
-  required,
-  error,
+  required = false,
   helperText,
+  error,
   orientation = 'vertical',
+  children,
   className,
-  disabled,
 }) => {
-  const id = useId();
-  const errorId = `${id}-error`;
-  const helperTextId = `${id}-helper`;
+  const groupId = React.useId();
+  const helperTextId = helperText ? `${groupId}-helper` : undefined;
+  const errorId = error ? `${groupId}-error` : undefined;
 
-  const describedBy = [
-    helperText ? helperTextId : '',
-    error ? errorId : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const describedByIds = [helperTextId, errorId].filter(Boolean).join(' ');
 
   return (
     <fieldset
-      className={[styles.fieldset, className ?? ''].filter(Boolean).join(' ')}
-      aria-required={required ? true : undefined}
-      aria-describedby={describedBy || undefined}
-      aria-errormessage={error ? errorId : undefined}
-      disabled={disabled}
+      className={classNames(styles.group, className)}
+      aria-required={required || undefined}
+      aria-describedby={describedByIds || undefined}
+      aria-invalid={error ? true : undefined}
     >
-      <legend
-        className={[styles.legend, required ? styles.required : '']
-          .filter(Boolean)
-          .join(' ')}
-      >
+      <legend className={classNames(styles.legend, required && styles.required)}>
         {legend}
-        {required && <span aria-hidden="true"> *</span>}
       </legend>
-
-      <div
-        className={[
-          styles.group,
-          orientation === 'horizontal' ? styles.horizontal : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
+      <div className={classNames(styles.items, orientation === 'horizontal' && styles.horizontal)}>
         {children}
       </div>
-
       {helperText && !error && (
-        <p id={helperTextId} className={styles.helperText}>
+        <span id={helperTextId} className={styles.helperText}>
           {helperText}
-        </p>
+        </span>
       )}
-
       {error && (
-        <p id={errorId} className={styles.error} role="alert">
+        <span id={errorId} className={styles.error} role="alert">
           {error}
-        </p>
+        </span>
       )}
     </fieldset>
   );

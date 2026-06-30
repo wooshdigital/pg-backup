@@ -1,42 +1,46 @@
-.fieldset {
+.group {
   border: none;
-  margin: 0;
   padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 
 .legend {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text, #111827);
+  padding: 0;
   margin-bottom: 0.5rem;
 }
 
-.legend.required::after {
-  content: " *";
+.required::after {
+  content: ' *';
   color: var(--color-error, #dc2626);
   aria-hidden: true;
 }
 
-.group {
+.items {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.group.horizontal {
+.items.horizontal {
   flex-direction: row;
   flex-wrap: wrap;
   gap: 1rem;
 }
 
-.error {
-  color: var(--color-error, #dc2626);
+.helperText {
+  display: block;
   font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
   margin-top: 0.375rem;
 }
 
-.helperText {
+.error {
+  display: block;
   font-size: 0.75rem;
-  color: var(--color-text-muted, #6b7280);
-  margin-top: 0.25rem;
+  color: var(--color-error, #dc2626);
+  margin-top: 0.375rem;
 }

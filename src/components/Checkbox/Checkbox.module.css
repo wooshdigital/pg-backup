@@ -3,7 +3,7 @@
   align-items: flex-start;
   gap: 0.5rem;
   cursor: pointer;
-  position: relative;
+  user-select: none;
 }
 
 .wrapper.disabled {
@@ -33,17 +33,56 @@
   width: 1.125rem;
   height: 1.125rem;
   border: 2px solid var(--color-border, #6b7280);
-  border-radius: 0.25rem;
+  border-radius: 3px;
   background-color: var(--color-surface, #ffffff);
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 150ms ease, border-color 150ms ease;
   margin-top: 0.125rem;
 }
 
+/* Checkmark SVG icon */
+.checkmark {
+  display: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  color: #ffffff;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Indeterminate dash */
+.dash {
+  display: none;
+  width: 0.625rem;
+  height: 2px;
+  background-color: #ffffff;
+  border-radius: 1px;
+}
+
 /* Checked state */
-.input:checked + .indicator,
-.input[data-indeterminate="true"] + .indicator {
+.input:checked + .indicator {
   background-color: var(--color-primary, #4f46e5);
   border-color: var(--color-primary, #4f46e5);
+}
+
+.input:checked + .indicator .checkmark {
+  display: block;
+}
+
+/* Indeterminate state */
+.indicator.indeterminate {
+  background-color: var(--color-primary, #4f46e5);
+  border-color: var(--color-primary, #4f46e5);
+}
+
+.indicator.indeterminate .dash {
+  display: block;
+}
+
+.indicator.indeterminate .checkmark {
+  display: none;
 }
 
 /* Focus ring */
@@ -52,65 +91,41 @@
   outline-offset: 2px;
 }
 
-/* Check mark SVG icon */
-.checkIcon {
-  display: none;
-  width: 0.75rem;
-  height: 0.75rem;
-  color: #ffffff;
-  pointer-events: none;
+/* Disabled */
+.input:disabled + .indicator {
+  background-color: var(--color-surface-disabled, #f3f4f6);
+  border-color: var(--color-border-disabled, #d1d5db);
 }
 
-.input:checked + .indicator .checkIcon {
-  display: block;
-  animation: checkAppear 0.1s ease-in-out;
-}
-
-/* Indeterminate dash */
-.indeterminateIcon {
-  display: none;
-  width: 0.625rem;
-  height: 2px;
-  background-color: #ffffff;
-  border-radius: 1px;
-  pointer-events: none;
-}
-
-.indicator.indeterminate .indeterminateIcon {
-  display: block;
-}
-
-@keyframes checkAppear {
-  from {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.input:disabled:checked + .indicator {
+  background-color: var(--color-primary-disabled, #a5b4fc);
+  border-color: var(--color-primary-disabled, #a5b4fc);
 }
 
 .label {
   font-size: 0.875rem;
-  line-height: 1.25rem;
+  line-height: 1.5;
   color: var(--color-text, #111827);
-  user-select: none;
 }
 
-.description {
+.wrapper.disabled .label {
+  color: var(--color-text-disabled, #9ca3af);
+}
+
+.helperText {
+  display: block;
   font-size: 0.75rem;
   color: var(--color-text-muted, #6b7280);
   margin-top: 0.125rem;
 }
 
-.labelContent {
-  display: flex;
-  flex-direction: column;
+.error {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-error, #dc2626);
+  margin-top: 0.125rem;
 }
 
-.error {
-  color: var(--color-error, #dc2626);
-  font-size: 0.75rem;
-  margin-top: 0.25rem;
+.indicator.hasError {
+  border-color: var(--color-error, #dc2626);
 }
