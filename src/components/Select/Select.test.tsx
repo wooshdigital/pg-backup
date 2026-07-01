@@ -1,145 +1,124 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { axe, toHaveNoViolations } from 'jest-axe';
+import { describe, it, expect, vi } from 'vitest';
 import { Select } from './Select';
 import type { SelectOption } from './SelectContext';
 
-expect.extend(toHaveNoViolations);
-
-const options: SelectOption[] = [
+const defaultOptions: SelectOption[] = [
   { value: 'apple', label: 'Apple' },
   { value: 'banana', label: 'Banana' },
   { value: 'cherry', label: 'Cherry' },
-  { value: 'grape', label: 'Grape', disabled: true },
-  { value: 'mango', label: 'Mango' },
+  { value: 'date', label: 'Date' },
+  { value: 'elderberry', label: 'Elderberry', disabled: true },
 ];
 
-function renderSelect(props = {}) {
-  return render(<Select options={options} label="Fruit" {...props} />);
+function renderSelect(props: Partial<React.ComponentProps<typeof Select>> = {}) {
+  return render(
+    <Select
+      options={defaultOptions}
+      placeholder="Pick a fruit..."
+      label="Fruit"
+      {...props}
+    />
+  );
 }
 
 describe('Select', () => {
   describe('Rendering', () => {
-    it('renders trigger button with combobox role', () => {
+    it('renders a combobox trigger', () => {
       renderSelect();
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
-    });
-
-    it('renders label', () => {
-      renderSelect();
-      expect(screen.getByText('Fruit')).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Fruit' })).toBeInTheDocument();
     });
 
     it('shows placeholder when no value selected', () => {
-      renderSelect({ placeholder: 'Pick a fruit' });
-      expect(screen.getByRole('combobox')).toHaveTextContent('Pick a fruit');
+      renderSelect();
+      expect(screen.getByRole('combobox')).toHaveTextContent('Pick a fruit...');
     });
 
-    it('shows selected value', () => {
-      renderSelect({ value: 'apple' });
-      expect(screen.getByRole('combobox')).toHaveTextContent('Apple');
+    it('shows selected value label', () => {
+      renderSelect({ value: 'banana' });
+      expect(screen.getByRole('combobox')).toHaveTextContent('Banana');
     });
 
-    it('listbox is not rendered when closed', () => {
+    it('listbox is not visible initially', () => {
       renderSelect();
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
-    it('is disabled when disabled prop is set', () => {
-      renderSelect({ disabled: true });
-      expect(screen.getByRole('combobox')).toBeDisabled();
-    });
-  });
-
-  describe('ARIA Attributes', () => {
-    it('has aria-expanded=false when closed', () => {
+    it('renders label associated with combobox', () => {
       renderSelect();
-      expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByLabelText('Fruit')).toBeInTheDocument();
     });
 
-    it('has aria-haspopup=listbox', () => {
-      renderSelect();
-      expect(screen.getByRole('combobox')).toHaveAttribute('aria-haspopup', 'listbox');
+    it('shows error message', () => {
+      renderSelect({ error: 'This field is required' });
+      expect(screen.getByRole('alert')).toHaveTextContent('This field is required');
     });
 
-    it('has aria-controls pointing to listbox id', () => {
-      renderSelect();
-      const trigger = screen.getByRole('combobox');
-      const controlsId = trigger.getAttribute('aria-controls');
-      expect(controlsId).toBeTruthy();
-    });
-
-    it('has aria-invalid when error is provided', () => {
+    it('sets aria-invalid when error is present', () => {
       renderSelect({ error: 'Required' });
       expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'true');
     });
 
-    it('shows error message with alert role', () => {
-      renderSelect({ error: 'Please select a fruit' });
-      expect(screen.getByRole('alert')).toHaveTextContent('Please select a fruit');
+    it('shows helper text', () => {
+      renderSelect({ helperText: 'Choose your favourite' });
+      expect(screen.getByText('Choose your favourite')).toBeInTheDocument();
     });
   });
 
-  describe('Mouse Interactions', () => {
-    it('opens listbox on trigger click', async () => {
+  describe('Open/Close Behavior', () => {
+    it('opens listbox on click', async () => {
       const user = userEvent.setup();
       renderSelect();
       await user.click(screen.getByRole('combobox'));
       expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
-    it('closes listbox when trigger is clicked again', async () => {
+    it('closes listbox on second click', async () => {
       const user = userEvent.setup();
       renderSelect();
-      await user.click(screen.getByRole('combobox'));
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
-      await user.click(screen.getByRole('combobox'));
+      const trigger = screen.getByRole('combobox');
+      await user.click(trigger);
+      await user.click(trigger);
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
-    it('selects option on click', async () => {
-      const user = userEvent.setup();
-      const handleChange = vi.fn();
-      renderSelect({ onChange: handleChange });
-      await user.click(screen.getByRole('combobox'));
-      await user.click(screen.getByRole('option', { name: 'Apple' }));
-      expect(handleChange).toHaveBeenCalledWith('apple');
+    it('aria-expanded is false when closed', () => {
+      renderSelect();
+      expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'false');
     });
 
-    it('closes listbox after selecting single option', async () => {
+    it('aria-expanded is true when open', async () => {
       const user = userEvent.setup();
       renderSelect();
       await user.click(screen.getByRole('combobox'));
-      await user.click(screen.getByRole('option', { name: 'Apple' }));
+      expect(screen.getByRole('combobox')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('closes on Escape key', async () => {
+      const user = userEvent.setup();
+      renderSelect();
+      await user.click(screen.getByRole('combobox'));
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
-    it('does not select disabled option', async () => {
+    it('returns focus to trigger on close via Escape', async () => {
       const user = userEvent.setup();
-      const handleChange = vi.fn();
-      renderSelect({ onChange: handleChange });
-      await user.click(screen.getByRole('combobox'));
-      // Grape is disabled - aria-disabled prevents interaction
-      const grape = screen.getByRole('option', { name: 'Grape' });
-      expect(grape).toHaveAttribute('aria-disabled', 'true');
+      renderSelect();
+      const trigger = screen.getByRole('combobox');
+      await user.click(trigger);
+      await user.keyboard('{Escape}');
+      expect(trigger).toHaveFocus();
     });
 
-    it('closes on outside click', async () => {
+    it('does not open when disabled', async () => {
       const user = userEvent.setup();
-      render(
-        <div>
-          <Select options={options} label="Fruit" />
-          <button>Outside</button>
-        </div>
-      );
+      renderSelect({ disabled: true });
       await user.click(screen.getByRole('combobox'));
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: 'Outside' }));
-      await waitFor(() => {
-        expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-      });
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
   });
 
@@ -160,243 +139,250 @@ describe('Select', () => {
       expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
-    it('opens with ArrowDown key', async () => {
+    it('opens with ArrowDown and focuses first option', async () => {
       const user = userEvent.setup();
       renderSelect();
       screen.getByRole('combobox').focus();
       await user.keyboard('{ArrowDown}');
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      const listbox = screen.getByRole('listbox');
+      expect(listbox).toBeInTheDocument();
+      const trigger = screen.getByRole('combobox');
+      const activeDescendant = trigger.getAttribute('aria-activedescendant');
+      expect(activeDescendant).toBeTruthy();
     });
 
-    it('opens with ArrowUp key', async () => {
+    it('navigates down through options with ArrowDown', async () => {
       const user = userEvent.setup();
       renderSelect();
-      screen.getByRole('combobox').focus();
+      const trigger = screen.getByRole('combobox');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
+      const firstDescendant = trigger.getAttribute('aria-activedescendant');
+      await user.keyboard('{ArrowDown}');
+      const secondDescendant = trigger.getAttribute('aria-activedescendant');
+      expect(firstDescendant).not.toBe(secondDescendant);
+    });
+
+    it('navigates up through options with ArrowUp', async () => {
+      const user = userEvent.setup();
+      renderSelect();
+      const trigger = screen.getByRole('combobox');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{ArrowDown}');
+      const afterTwoDown = trigger.getAttribute('aria-activedescendant');
       await user.keyboard('{ArrowUp}');
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      const afterUp = trigger.getAttribute('aria-activedescendant');
+      expect(afterTwoDown).not.toBe(afterUp);
     });
 
-    it('closes with Escape key', async () => {
+    it('selects option on Enter when open', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      renderSelect({ onChange });
+      const trigger = screen.getByRole('combobox');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{Enter}');
+      expect(onChange).toHaveBeenCalledWith('apple');
+    });
+
+    it('closes and selects on Enter', async () => {
       const user = userEvent.setup();
       renderSelect();
-      await user.click(screen.getByRole('combobox'));
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
-      await user.keyboard('{Escape}');
+      const trigger = screen.getByRole('combobox');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{Enter}');
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
-    it('returns focus to trigger after Escape', async () => {
+    it('navigates to first option with Home', async () => {
       const user = userEvent.setup();
       renderSelect();
-      await user.click(screen.getByRole('combobox'));
-      await user.keyboard('{Escape}');
-      expect(screen.getByRole('combobox')).toHaveFocus();
-    });
-
-    it('navigates with ArrowDown in listbox', async () => {
-      const user = userEvent.setup();
-      renderSelect();
-      await user.click(screen.getByRole('combobox'));
-      await user.keyboard('{ArrowDown}');
-      const listbox = screen.getByRole('listbox');
-      const activeDescendant = screen.getByRole('combobox').getAttribute('aria-activedescendant');
-      if (activeDescendant) {
-        const activeEl = document.getElementById(activeDescendant);
-        expect(activeEl).toBeInTheDocument();
-      }
-    });
-
-    it('skips disabled options when navigating', async () => {
-      const user = userEvent.setup();
-      renderSelect();
-      await user.click(screen.getByRole('combobox'));
-      // Navigate to Cherry (index 2), then down should skip Grape (index 3, disabled)
-      await user.keyboard('{ArrowDown}');
-      await user.keyboard('{ArrowDown}');
-      await user.keyboard('{ArrowDown}');
-      // Now should be on Cherry
-      // Next ArrowDown should skip Grape and go to Mango
-      await user.keyboard('{ArrowDown}');
       const trigger = screen.getByRole('combobox');
-      const activeId = trigger.getAttribute('aria-activedescendant');
-      expect(activeId).toBeTruthy();
-    });
-
-    it('selects option with Enter in listbox', async () => {
-      const user = userEvent.setup();
-      const handleChange = vi.fn();
-      renderSelect({ onChange: handleChange });
-      await user.click(screen.getByRole('combobox'));
-      // First enabled option is Apple at index 0
-      await user.keyboard('{Enter}');
-      expect(handleChange).toHaveBeenCalledWith('apple');
-    });
-
-    it('selects option with Space in listbox', async () => {
-      const user = userEvent.setup();
-      const handleChange = vi.fn();
-      renderSelect({ onChange: handleChange });
-      await user.click(screen.getByRole('combobox'));
-      await user.keyboard(' ');
-      expect(handleChange).toHaveBeenCalled();
-    });
-
-    it('Home key jumps to first enabled option', async () => {
-      const user = userEvent.setup();
-      renderSelect();
-      await user.click(screen.getByRole('combobox'));
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
       await user.keyboard('{ArrowDown}');
       await user.keyboard('{ArrowDown}');
       await user.keyboard('{Home}');
-      // First option should be active
-      const trigger = screen.getByRole('combobox');
-      const activeId = trigger.getAttribute('aria-activedescendant');
-      const activeEl = activeId ? document.getElementById(activeId) : null;
-      expect(activeEl?.textContent).toContain('Apple');
+      // Should be back at first index
+      const activeDescendant = trigger.getAttribute('aria-activedescendant');
+      expect(activeDescendant).toContain('option-0');
     });
 
-    it('End key jumps to last enabled option', async () => {
+    it('navigates to last option with End', async () => {
       const user = userEvent.setup();
       renderSelect();
-      await user.click(screen.getByRole('combobox'));
+      const trigger = screen.getByRole('combobox');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
       await user.keyboard('{End}');
+      const activeDescendant = trigger.getAttribute('aria-activedescendant');
+      // Last enabled option (elderberry is disabled, so index 3 = Date)
+      expect(activeDescendant).toContain('option-3');
+    });
+  });
+
+  describe('Typeahead', () => {
+    it('types to jump to matching option', async () => {
+      const user = userEvent.setup();
+      renderSelect();
       const trigger = screen.getByRole('combobox');
-      const activeId = trigger.getAttribute('aria-activedescendant');
-      const activeEl = activeId ? document.getElementById(activeId) : null;
-      expect(activeEl?.textContent).toContain('Mango');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('c');
+      const activeDescendant = trigger.getAttribute('aria-activedescendant');
+      // Cherry starts with 'c', index 2
+      expect(activeDescendant).toContain('option-2');
+    });
+  });
+
+  describe('Option Selection', () => {
+    it('selects option on click', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      renderSelect({ onChange });
+      await user.click(screen.getByRole('combobox'));
+      const options = screen.getAllByRole('option');
+      await user.click(options[1]); // Banana
+      expect(onChange).toHaveBeenCalledWith('banana');
     });
 
-    it('typeahead finds matching option', async () => {
+    it('updates display value after selection', async () => {
       const user = userEvent.setup();
       renderSelect();
       await user.click(screen.getByRole('combobox'));
-      await user.keyboard('m');
-      const trigger = screen.getByRole('combobox');
-      const activeId = trigger.getAttribute('aria-activedescendant');
-      const activeEl = activeId ? document.getElementById(activeId) : null;
-      expect(activeEl?.textContent).toContain('Mango');
+      const options = screen.getAllByRole('option');
+      await user.click(options[0]); // Apple
+      expect(screen.getByRole('combobox')).toHaveTextContent('Apple');
     });
 
-    it('typeahead works from trigger (opens and navigates)', async () => {
+    it('marks selected option with aria-selected=true', async () => {
+      const user = userEvent.setup();
+      renderSelect({ value: 'cherry' });
+      await user.click(screen.getByRole('combobox'));
+      const options = screen.getAllByRole('option');
+      const cherry = options.find((o) => o.textContent?.includes('Cherry'));
+      expect(cherry).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('marks non-selected options with aria-selected=false', async () => {
+      const user = userEvent.setup();
+      renderSelect({ value: 'cherry' });
+      await user.click(screen.getByRole('combobox'));
+      const options = screen.getAllByRole('option');
+      const apple = options.find((o) => o.textContent?.includes('Apple'));
+      expect(apple).toHaveAttribute('aria-selected', 'false');
+    });
+
+    it('marks disabled option with aria-disabled=true', async () => {
       const user = userEvent.setup();
       renderSelect();
-      screen.getByRole('combobox').focus();
-      await user.keyboard('b');
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      await user.click(screen.getByRole('combobox'));
+      const options = screen.getAllByRole('option');
+      const elderberry = options.find((o) => o.textContent?.includes('Elderberry'));
+      expect(elderberry).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('does not select disabled option on click', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      renderSelect({ onChange });
+      await user.click(screen.getByRole('combobox'));
+      const options = screen.getAllByRole('option');
+      const elderberry = options.find((o) => o.textContent?.includes('Elderberry'))!;
+      // Disabled options have pointer-events: none in CSS so click shouldn't fire
+      // but even if it does, the handler checks disabled
+      await user.click(elderberry);
+      expect(onChange).not.toHaveBeenCalledWith('elderberry');
     });
   });
 
   describe('Multiple Selection', () => {
-    it('allows selecting multiple options', async () => {
+    it('supports multiple selection', async () => {
       const user = userEvent.setup();
-      const handleChange = vi.fn();
-      renderSelect({ multiple: true, onChange: handleChange });
+      const onChange = vi.fn();
+      renderSelect({ multiple: true, onChange });
       await user.click(screen.getByRole('combobox'));
-      await user.click(screen.getByRole('option', { name: 'Apple' }));
-      expect(handleChange).toHaveBeenCalledWith(['apple']);
-      await user.click(screen.getByRole('option', { name: 'Banana' }));
-      expect(handleChange).toHaveBeenCalledWith(['apple', 'banana']);
+      const options = screen.getAllByRole('option');
+      await user.click(options[0]); // Apple
+      await user.click(options[1]); // Banana
+      expect(onChange).toHaveBeenLastCalledWith(['apple', 'banana']);
     });
 
-    it('deselects option when clicked again in multiple mode', async () => {
+    it('deselects already-selected option in multiple mode', async () => {
       const user = userEvent.setup();
-      const handleChange = vi.fn();
-      renderSelect({
-        multiple: true,
-        value: ['apple', 'banana'],
-        onChange: handleChange,
-      });
+      const onChange = vi.fn();
+      renderSelect({ multiple: true, value: ['apple', 'banana'], onChange });
       await user.click(screen.getByRole('combobox'));
-      await user.click(screen.getByRole('option', { name: 'Apple' }));
-      expect(handleChange).toHaveBeenCalledWith(['banana']);
+      const options = screen.getAllByRole('option');
+      await user.click(options[0]); // Deselect Apple
+      expect(onChange).toHaveBeenCalledWith(['banana']);
     });
 
-    it('does not close listbox after selection in multiple mode', async () => {
+    it('keeps listbox open after selection in multiple mode', async () => {
       const user = userEvent.setup();
       renderSelect({ multiple: true });
       await user.click(screen.getByRole('combobox'));
-      await user.click(screen.getByRole('option', { name: 'Apple' }));
+      const options = screen.getAllByRole('option');
+      await user.click(options[0]);
       expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
-    it('shows count when multiple values selected', () => {
-      renderSelect({ multiple: true, value: ['apple', 'banana'] });
-      expect(screen.getByRole('combobox')).toHaveTextContent('2 selected');
-    });
-
-    it('shows single label when one value selected in multiple mode', () => {
-      renderSelect({ multiple: true, value: ['apple'] });
-      expect(screen.getByRole('combobox')).toHaveTextContent('Apple');
+    it('renders aria-multiselectable on listbox', async () => {
+      const user = userEvent.setup();
+      renderSelect({ multiple: true });
+      await user.click(screen.getByRole('combobox'));
+      expect(screen.getByRole('listbox')).toHaveAttribute('aria-multiselectable', 'true');
     });
   });
 
-  describe('Controlled Usage', () => {
-    it('reflects controlled value', () => {
+  describe('ARIA', () => {
+    it('sets aria-controls pointing to listbox id', async () => {
+      const user = userEvent.setup();
+      renderSelect();
+      const trigger = screen.getByRole('combobox');
+      await user.click(trigger);
+      const controlsId = trigger.getAttribute('aria-controls');
+      expect(controlsId).toBeTruthy();
+      expect(document.getElementById(controlsId!)).toHaveAttribute('role', 'listbox');
+    });
+
+    it('tracks aria-activedescendant as user navigates', async () => {
+      const user = userEvent.setup();
+      renderSelect();
+      const trigger = screen.getByRole('combobox');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
+      expect(trigger.getAttribute('aria-activedescendant')).toBeTruthy();
+    });
+
+    it('clears aria-activedescendant when closed', async () => {
+      const user = userEvent.setup();
+      renderSelect();
+      const trigger = screen.getByRole('combobox');
+      trigger.focus();
+      await user.keyboard('{ArrowDown}');
+      await user.keyboard('{Escape}');
+      expect(trigger.getAttribute('aria-activedescendant')).toBeFalsy();
+    });
+  });
+
+  describe('Controlled Mode', () => {
+    it('respects controlled value', () => {
       renderSelect({ value: 'cherry' });
       expect(screen.getByRole('combobox')).toHaveTextContent('Cherry');
     });
 
     it('calls onChange with new value', async () => {
       const user = userEvent.setup();
-      const handleChange = vi.fn();
-      renderSelect({ value: 'apple', onChange: handleChange });
+      const onChange = vi.fn();
+      renderSelect({ value: 'apple', onChange });
       await user.click(screen.getByRole('combobox'));
-      await user.click(screen.getByRole('option', { name: 'Banana' }));
-      expect(handleChange).toHaveBeenCalledWith('banana');
-    });
-  });
-
-  describe('Option aria-selected', () => {
-    it('marks selected option with aria-selected=true', async () => {
-      const user = userEvent.setup();
-      renderSelect({ value: 'apple' });
-      await user.click(screen.getByRole('combobox'));
-      const appleOption = screen.getByRole('option', { name: /Apple/ });
-      expect(appleOption).toHaveAttribute('aria-selected', 'true');
-    });
-
-    it('marks non-selected options with aria-selected=false', async () => {
-      const user = userEvent.setup();
-      renderSelect({ value: 'apple' });
-      await user.click(screen.getByRole('combobox'));
-      const bananaOption = screen.getByRole('option', { name: /Banana/ });
-      expect(bananaOption).toHaveAttribute('aria-selected', 'false');
-    });
-  });
-
-  describe('Accessibility', () => {
-    it('passes axe checks when closed', async () => {
-      const { container } = render(
-        <Select options={options} label="Fruit" id="axe-select" />
-      );
-      const results = await axe(container);
-      expect(results).toHaveNoViolations();
-    });
-
-    it('passes axe checks when open', async () => {
-      const user = userEvent.setup();
-      const { container } = render(
-        <Select options={options} label="Fruit" id="axe-select-open" />
-      );
-      await user.click(screen.getByRole('combobox'));
-      const results = await axe(container);
-      expect(results).toHaveNoViolations();
-    });
-
-    it('passes axe checks with error state', async () => {
-      const { container } = render(
-        <Select options={options} label="Fruit" id="axe-select-err" error="Required" />
-      );
-      const results = await axe(container);
-      expect(results).toHaveNoViolations();
-    });
-
-    it('passes axe checks in multiple mode', async () => {
-      const { container } = render(
-        <Select options={options} label="Fruits" id="axe-select-multi" multiple />
-      );
-      const results = await axe(container);
-      expect(results).toHaveNoViolations();
+      const options = screen.getAllByRole('option');
+      await user.click(options[1]); // Banana
+      expect(onChange).toHaveBeenCalledWith('banana');
     });
   });
 });

@@ -4,34 +4,37 @@ import type { SelectOption as SelectOptionType } from './SelectContext';
 import styles from './Select.module.css';
 import { classNames } from '../../utils/classNames';
 
-export interface SelectOptionProps {
+interface SelectOptionProps {
+  id: string;
   option: SelectOptionType;
-  index: number;
-  isActive: boolean;
   isSelected: boolean;
+  isActive: boolean;
+  index: number;
   onSetActiveIndex: (index: number) => void;
 }
 
 export function SelectOption({
+  id,
   option,
-  index,
-  isActive,
   isSelected,
+  isActive,
+  index,
   onSetActiveIndex,
 }: SelectOptionProps) {
-  const { selectOption, getOptionId } = useSelectContext();
+  const { onSelect } = useSelectContext();
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       if (!option.disabled) {
-        selectOption(option.value);
+        onSelect(option.value);
+        onSetActiveIndex(index);
       }
     },
-    [option, selectOption]
+    [option, onSelect, onSetActiveIndex, index]
   );
 
-  const handleMouseMove = useCallback(() => {
+  const handleMouseEnter = useCallback(() => {
     if (!option.disabled) {
       onSetActiveIndex(index);
     }
@@ -39,10 +42,10 @@ export function SelectOption({
 
   return (
     <div
-      id={getOptionId(option.value)}
+      id={id}
       role="option"
       aria-selected={isSelected}
-      aria-disabled={option.disabled ? 'true' : undefined}
+      aria-disabled={option.disabled ? true : undefined}
       className={classNames(
         styles.option,
         isActive && styles.optionActive,
@@ -50,20 +53,14 @@ export function SelectOption({
         option.disabled && styles.optionDisabled
       )}
       onClick={handleClick}
-      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
     >
       <span className={styles.optionLabel}>{option.label}</span>
       {isSelected && (
         <span className={styles.optionCheck} aria-hidden="true">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 14 14"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path
-              d="M2 7L5.5 10.5L12 3.5"
+              d="M2.5 7L5.5 10L11.5 4"
               stroke="currentColor"
               strokeWidth="1.5"
               strokeLinecap="round"
@@ -75,5 +72,3 @@ export function SelectOption({
     </div>
   );
 }
-
-export default SelectOption;

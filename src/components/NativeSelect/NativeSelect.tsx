@@ -10,20 +10,7 @@ export interface NativeSelectProps extends React.SelectHTMLAttributes<HTMLSelect
 }
 
 export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
-  (
-    {
-      label,
-      error,
-      helperText,
-      fullWidth = false,
-      disabled,
-      id: idProp,
-      className,
-      children,
-      ...rest
-    },
-    ref
-  ) => {
+  ({ label, error, helperText, fullWidth, className, id: idProp, disabled, children, ...rest }, ref) => {
     const generatedId = useId();
     const id = idProp ?? generatedId;
     const errorId = `${id}-error`;
@@ -34,51 +21,27 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
       .join(' ') || undefined;
 
     return (
-      <div
-        className={classNames(
-          styles.wrapper,
-          fullWidth && styles.fullWidth,
-          className
-        )}
-      >
+      <div className={classNames(styles.wrapper, fullWidth && styles.fullWidth)}>
         {label && (
           <label htmlFor={id} className={styles.label}>
             {label}
           </label>
         )}
-        <div
-          className={classNames(
-            styles.selectWrapper,
-            error && styles.hasError,
-            disabled && styles.disabled
-          )}
-        >
+        <div className={classNames(styles.selectWrapper, error && styles.hasError, disabled && styles.disabled)}>
           <select
             ref={ref}
             id={id}
             disabled={disabled}
-            aria-invalid={error ? 'true' : undefined}
             aria-describedby={describedBy}
-            className={styles.select}
+            aria-invalid={error ? true : undefined}
+            className={classNames(styles.select, className)}
             {...rest}
           >
             {children}
           </select>
           <span className={styles.chevron} aria-hidden="true">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M4 6L8 10L12 6"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </span>
         </div>
@@ -98,5 +61,3 @@ export const NativeSelect = forwardRef<HTMLSelectElement, NativeSelectProps>(
 );
 
 NativeSelect.displayName = 'NativeSelect';
-
-export default NativeSelect;

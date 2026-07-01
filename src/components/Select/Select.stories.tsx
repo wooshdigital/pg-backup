@@ -7,13 +7,9 @@ const meta: Meta<typeof Select> = {
   title: 'Components/Select',
   component: Select,
   tags: ['autodocs'],
-  argTypes: {
-    disabled: { control: 'boolean' },
-    multiple: { control: 'boolean' },
-    error: { control: 'text' },
-    helperText: { control: 'text' },
-    label: { control: 'text' },
-    placeholder: { control: 'text' },
+  args: {
+    label: 'Select an option',
+    placeholder: 'Choose...',
   },
 };
 
@@ -24,189 +20,156 @@ const fruitOptions: SelectOption[] = [
   { value: 'apple', label: 'Apple' },
   { value: 'banana', label: 'Banana' },
   { value: 'cherry', label: 'Cherry' },
-  { value: 'durian', label: 'Durian' },
+  { value: 'date', label: 'Date' },
   { value: 'elderberry', label: 'Elderberry' },
-  { value: 'fig', label: 'Fig' },
-  { value: 'grape', label: 'Grape' },
-  { value: 'honeydew', label: 'Honeydew' },
 ];
 
-const countryOptions: SelectOption[] = [
-  { value: 'us', label: 'United States' },
-  { value: 'gb', label: 'United Kingdom' },
-  { value: 'ca', label: 'Canada' },
-  { value: 'au', label: 'Australia' },
-  { value: 'de', label: 'Germany' },
-  { value: 'fr', label: 'France' },
-  { value: 'jp', label: 'Japan' },
-  { value: 'br', label: 'Brazil' },
-  { value: 'in', label: 'India' },
-  { value: 'cn', label: 'China' },
+const fruitOptionsWithDisabled: SelectOption[] = [
+  { value: 'apple', label: 'Apple' },
+  { value: 'banana', label: 'Banana' },
+  { value: 'cherry', label: 'Cherry', disabled: true },
+  { value: 'date', label: 'Date' },
+  { value: 'elderberry', label: 'Elderberry', disabled: true },
 ];
 
 export const Default: Story = {
   args: {
-    label: 'Fruit',
     options: fruitOptions,
-    placeholder: 'Select a fruit',
+    label: 'Fruit',
   },
 };
 
 export const Controlled: Story = {
-  render: () => {
-    const [value, setValue] = useState('');
+  render: (args) => {
+    const [value, setValue] = useState('banana');
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div>
         <Select
-          label="Fruit"
+          {...args}
           options={fruitOptions}
+          label="Fruit (Controlled)"
           value={value}
           onChange={(v) => setValue(v as string)}
-          placeholder="Select a fruit"
         />
-        <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-          Selected: {value || '(none)'}
+        <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>
+          Selected: <strong>{value}</strong>
         </p>
       </div>
-    );
-  },
-};
-
-export const WithHelperText: Story = {
-  args: {
-    label: 'Fruit',
-    options: fruitOptions,
-    helperText: 'Choose your favourite fruit',
-    placeholder: 'Select a fruit',
-  },
-};
-
-export const WithError: Story = {
-  args: {
-    label: 'Fruit',
-    options: fruitOptions,
-    error: 'Please select a fruit',
-    placeholder: 'Select a fruit',
-  },
-};
-
-export const Disabled: Story = {
-  args: {
-    label: 'Fruit',
-    options: fruitOptions,
-    disabled: true,
-    placeholder: 'Select a fruit',
-  },
-};
-
-export const WithDisabledOptions: Story = {
-  args: {
-    label: 'Fruit',
-    options: [
-      { value: 'apple', label: 'Apple' },
-      { value: 'banana', label: 'Banana (unavailable)', disabled: true },
-      { value: 'cherry', label: 'Cherry' },
-      { value: 'durian', label: 'Durian (unavailable)', disabled: true },
-      { value: 'elderberry', label: 'Elderberry' },
-    ],
-    placeholder: 'Select a fruit',
-    label: 'Fruit',
-  },
-};
-
-export const Multiple: Story = {
-  render: () => {
-    const [values, setValues] = useState<string[]>([]);
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Select
-          label="Fruits"
-          options={fruitOptions}
-          multiple
-          value={values}
-          onChange={(v) => setValues(v as string[])}
-          placeholder="Select fruits"
-        />
-        <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-          Selected: {values.length > 0 ? values.join(', ') : '(none)'}
-        </p>
-      </div>
-    );
-  },
-};
-
-export const LongList: Story = {
-  render: () => {
-    const longOptions: SelectOption[] = Array.from({ length: 200 }, (_, i) => ({
-      value: `option-${i + 1}`,
-      label: `Option ${i + 1}`,
-    }));
-    const [value, setValue] = useState('');
-    return (
-      <Select
-        label="Item"
-        options={longOptions}
-        value={value}
-        onChange={(v) => setValue(v as string)}
-        placeholder="Select an item"
-      />
     );
   },
 };
 
 export const WithSearch: Story = {
-  render: () => {
+  render: (args) => {
     const [value, setValue] = useState('');
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-          Tip: With the listbox open, type a letter to jump to matching options.
-        </p>
+      <Select
+        {...args}
+        options={fruitOptions}
+        label="Type to search"
+        placeholder="Type a letter..."
+        value={value}
+        onChange={(v) => setValue(v as string)}
+      />
+    );
+  },
+};
+
+export const LongList: Story = {
+  render: (args) => {
+    const longOptions: SelectOption[] = Array.from({ length: 200 }, (_, i) => ({
+      value: `option-${i}`,
+      label: `Option ${i + 1}`,
+    }));
+    return (
+      <Select
+        {...args}
+        options={longOptions}
+        label="Long List (200 items)"
+        placeholder="Select from 200 options..."
+      />
+    );
+  },
+};
+
+export const Grouped: Story = {
+  render: (args) => {
+    const groupedOptions: SelectOption[] = [
+      { value: 'apple', label: '🍎 Apple' },
+      { value: 'banana', label: '🍌 Banana' },
+      { value: 'cherry', label: '🍒 Cherry' },
+      { value: 'carrot', label: '🥕 Carrot' },
+      { value: 'broccoli', label: '🥦 Broccoli' },
+      { value: 'spinach', label: '🥬 Spinach' },
+    ];
+    return (
+      <Select
+        {...args}
+        options={groupedOptions}
+        label="Food"
+        placeholder="Select food..."
+      />
+    );
+  },
+};
+
+export const Disabled: Story = {
+  args: {
+    options: fruitOptions,
+    label: 'Disabled Select',
+    disabled: true,
+    value: 'apple',
+  },
+};
+
+export const WithDisabledOptions: Story = {
+  args: {
+    options: fruitOptionsWithDisabled,
+    label: 'Fruit (some disabled)',
+  },
+};
+
+export const Multiple: Story = {
+  render: (args) => {
+    const [value, setValue] = useState<string[]>([]);
+    return (
+      <div>
         <Select
-          label="Country"
-          options={countryOptions}
+          {...args}
+          options={fruitOptions}
+          label="Fruits (Multiple)"
+          multiple
           value={value}
-          onChange={(v) => setValue(v as string)}
-          placeholder="Select a country"
+          onChange={(v) => setValue(v as string[])}
         />
-        <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-          Selected: {value || '(none)'}
+        <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>
+          Selected: <strong>{(value as string[]).join(', ') || 'none'}</strong>
         </p>
       </div>
     );
   },
 };
 
-export const Grouped: Story = {
-  render: () => {
-    const groupedOptions: SelectOption[] = [
-      { value: 'section-fruits', label: '── Fruits ──', disabled: true },
-      { value: 'apple', label: 'Apple' },
-      { value: 'banana', label: 'Banana' },
-      { value: 'cherry', label: 'Cherry' },
-      { value: 'section-veggies', label: '── Vegetables ──', disabled: true },
-      { value: 'carrot', label: 'Carrot' },
-      { value: 'broccoli', label: 'Broccoli' },
-      { value: 'spinach', label: 'Spinach' },
-    ];
-    const [value, setValue] = useState('');
-    return (
-      <Select
-        label="Food"
-        options={groupedOptions}
-        value={value}
-        onChange={(v) => setValue(v as string)}
-        placeholder="Select a food"
-      />
-    );
+export const WithError: Story = {
+  args: {
+    options: fruitOptions,
+    label: 'Fruit',
+    error: 'Please select a fruit',
+  },
+};
+
+export const WithHelperText: Story = {
+  args: {
+    options: fruitOptions,
+    label: 'Fruit',
+    helperText: 'Choose your favourite fruit from the list',
   },
 };
 
 export const FullWidth: Story = {
   args: {
-    label: 'Fruit',
     options: fruitOptions,
-    placeholder: 'Select a fruit',
+    label: 'Full Width Select',
     fullWidth: true,
   },
 };

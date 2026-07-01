@@ -1,126 +1,118 @@
 import React, { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useSelectContext } from './SelectContext';
-import { SelectOption as SelectOptionComponent } from './SelectOption';
-import type { SelectOption } from './SelectContext';
+import { SelectOption } from './SelectOption';
+import { useSelectKeyboard } from './useSelectKeyboard';
 import styles from './Select.module.css';
 
-export interface SelectListboxProps {
-  options: SelectOption[];
+interface SelectListboxProps {
   activeIndex: number;
-  onKeyDown: (e: React.KeyboardEvent) => void;
   onSetActiveIndex: (index: number) => void;
+  maxHeight: number;
+  triggerRef: React.RefObject<HTMLButtonElement>;
 }
 
-const ITEM_HEIGHT = 36;
-const MAX_VISIBLE_ITEMS = 8;
-
 export function SelectListbox({
-  options,
   activeIndex,
-  onKeyDown,
   onSetActiveIndex,
+  maxHeight,
+  triggerRef,
 }: SelectListboxProps) {
-  const { listboxId, getOptionId, isSelected } = useSelectContext();
-  const listboxRef = useRef<HTMLDivElement>(null);
+  const {
+    options,
+    isOpen,
+    selectedValues,
+    multiple,
+    listboxId,
+    onClose,
+    onSelect,
+    onOpen,
+    activeDescendant,
+  } = useSelectContext();
 
-  const useVirtual = options.length > 50;
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const rowVirtualizer = useVirtualizer({
+  const { handleListboxKeyDown } = useSelectKeyboard({
+    options,
+    isOpen,
+    activeIndex,
+    onOpen,
+    onClose,
+    onSetActiveIndex,
+    onSelect,
+    multiple,
+  });
+
+  const virtualizer = useVirtualizer({
     count: options.length,
-    getScrollElement: () => (useVirtual ? listboxRef.current : null),
-    estimateSize: () => ITEM_HEIGHT,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 36,
     overscan: 5,
-    enabled: useVirtual,
   });
 
   // Scroll active item into view
   useEffect(() => {
-    if (activeIndex < 0) return;
-    if (useVirtual) {
-      rowVirtualizer.scrollToIndex(activeIndex, { align: 'auto' });
-    } else {
-      const el = document.getElementById(getOptionId(options[activeIndex]?.value ?? ''));
-      el?.scrollIntoView({ block: 'nearest' });
+    if (activeIndex >= 0) {
+      virtualizer.scrollToIndex(activeIndex, { align: 'auto' });
     }
-  }, [activeIndex, useVirtual, rowVirtualizer, getOptionId, options]);
+  }, [activeIndex, virtualizer]);
 
-  // Focus listbox on open
+  // Focus the listbox when opened
   useEffect(() => {
-    listboxRef.current?.focus();
-  }, []);
-
-  const maxHeight = Math.min(options.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
-
-  if (useVirtual) {
-    return (
-      <div
-        ref={listboxRef}
-        id={listboxId}
-        role="listbox"
-        tabIndex={-1}
-        className={styles.listbox}
-        style={{ maxHeight, overflowY: 'auto' }}
-        onKeyDown={onKeyDown}
-      >
-        <div
-          style={{
-            height: rowVirtualizer.getTotalSize(),
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-            const option = options[virtualItem.index];
-            return (
-              <div
-                key={option.value}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: ITEM_HEIGHT,
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <SelectOptionComponent
-                  option={option}
-                  index={virtualItem.index}
-                  isActive={virtualItem.index === activeIndex}
-                  isSelected={isSelected(option.value)}
-                  onSetActiveIndex={onSetActiveIndex}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
+    if (isOpen && listRef.current) {
+      listRef.current.focus();
+    }
+  }, [isOpen]);
 
   return (
     <div
-      ref={listboxRef}
+      ref={listRef}
       id={listboxId}
       role="listbox"
+      aria-multiselectable={multiple || undefined}
+      aria-activedescendant={activeDescendant}
       tabIndex={-1}
       className={styles.listbox}
-      style={{ maxHeight, overflowY: 'auto' }}
-      onKeyDown={onKeyDown}
+      style={{ maxHeight }}
+      onKeyDown={handleListboxKeyDown}
     >
-      {options.map((option, index) => (
-        <SelectOptionComponent
-          key={option.value}
-          option={option}
-          index={index}
-          isActive={index === activeIndex}
-          isSelected={isSelected(option.value)}
-          onSetActiveIndex={onSetActiveIndex}
-        />
-      ))}
+      <div
+        style={{
+          height: virtualizer.getTotalSize(),
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualItem) => {
+          const option = options[virtualItem.index];
+          const optionId = `${listboxId}-option-${virtualItem.index}`;
+          const isSelected = selectedValues.includes(option.value);
+          const isActive = virtualItem.index === activeIndex;
+
+          return (
+            <div
+              key={virtualItem.key}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualItem.size}px`,
+                transform: `translateY(${virtualItem.start}px)`,
+              }}
+            >
+              <SelectOption
+                id={optionId}
+                option={option}
+                isSelected={isSelected}
+                isActive={isActive}
+                index={virtualItem.index}
+                onSetActiveIndex={onSetActiveIndex}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
-
-export default SelectListbox;

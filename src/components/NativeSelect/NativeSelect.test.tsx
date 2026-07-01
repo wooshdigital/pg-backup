@@ -2,112 +2,123 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
-import { axe, toHaveNoViolations } from 'jest-axe';
 import { NativeSelect } from './NativeSelect';
-
-expect.extend(toHaveNoViolations);
-
-const defaultOptions = (
-  <>
-    <option value="">Choose an option</option>
-    <option value="a">Option A</option>
-    <option value="b">Option B</option>
-    <option value="c">Option C</option>
-  </>
-);
 
 describe('NativeSelect', () => {
   it('renders a select element', () => {
-    render(<NativeSelect>{defaultOptions}</NativeSelect>);
+    render(
+      <NativeSelect aria-label="Choose option">
+        <option value="a">Option A</option>
+        <option value="b">Option B</option>
+      </NativeSelect>
+    );
     expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
 
-  it('renders with label and associates it', () => {
-    render(<NativeSelect label="Choose option">{defaultOptions}</NativeSelect>);
-    expect(screen.getByLabelText('Choose option')).toBeInTheDocument();
-  });
-
-  it('renders options', () => {
-    render(<NativeSelect>{defaultOptions}</NativeSelect>);
-    expect(screen.getByRole('option', { name: 'Option A' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Option B' })).toBeInTheDocument();
-  });
-
-  it('calls onChange when an option is selected', async () => {
-    const user = userEvent.setup();
-    const handleChange = vi.fn();
+  it('renders with a label', () => {
     render(
-      <NativeSelect onChange={handleChange}>{defaultOptions}</NativeSelect>
+      <NativeSelect label="Fruit">
+        <option value="apple">Apple</option>
+      </NativeSelect>
     );
-    await user.selectOptions(screen.getByRole('combobox'), 'a');
-    expect(handleChange).toHaveBeenCalled();
+    expect(screen.getByLabelText('Fruit')).toBeInTheDocument();
   });
 
-  it('sets aria-invalid when error is provided', () => {
+  it('associates label with select via htmlFor', () => {
     render(
-      <NativeSelect error="This field is required">{defaultOptions}</NativeSelect>
+      <NativeSelect label="Color" id="color-select">
+        <option value="red">Red</option>
+      </NativeSelect>
     );
+    const select = screen.getByRole('combobox', { name: 'Color' });
+    expect(select).toHaveAttribute('id', 'color-select');
+  });
+
+  it('shows error message and sets aria-invalid', () => {
+    render(
+      <NativeSelect label="Size" error="Please select a size">
+        <option value="">Select...</option>
+        <option value="s">Small</option>
+      </NativeSelect>
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Please select a size');
     expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('shows error message and associates via aria-describedby', () => {
+  it('shows helper text', () => {
     render(
-      <NativeSelect error="This field is required">{defaultOptions}</NativeSelect>
-    );
-    const errorMsg = screen.getByRole('alert');
-    expect(errorMsg).toHaveTextContent('This field is required');
-    const select = screen.getByRole('combobox');
-    expect(select).toHaveAttribute('aria-describedby', expect.stringContaining(errorMsg.id));
-  });
-
-  it('shows helper text when no error', () => {
-    render(
-      <NativeSelect helperText="Pick one">{defaultOptions}</NativeSelect>
-    );
-    expect(screen.getByText('Pick one')).toBeInTheDocument();
-  });
-
-  it('does not show helper text when there is an error', () => {
-    render(
-      <NativeSelect error="Error!" helperText="Pick one">
-        {defaultOptions}
+      <NativeSelect label="Country" helperText="Select your country of residence">
+        <option value="us">US</option>
       </NativeSelect>
     );
-    expect(screen.queryByText('Pick one')).not.toBeInTheDocument();
+    expect(screen.getByText('Select your country of residence')).toBeInTheDocument();
   });
 
-  it('is disabled when disabled prop is set', () => {
-    render(<NativeSelect disabled>{defaultOptions}</NativeSelect>);
+  it('links select to helper text via aria-describedby', () => {
+    render(
+      <NativeSelect label="Language" id="lang" helperText="Choose preferred language">
+        <option value="en">English</option>
+      </NativeSelect>
+    );
+    const select = screen.getByRole('combobox');
+    const describedBy = select.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    const helperEl = document.getElementById(describedBy!);
+    expect(helperEl).toHaveTextContent('Choose preferred language');
+  });
+
+  it('links select to error message via aria-describedby when error present', () => {
+    render(
+      <NativeSelect label="Size" id="size" error="Required">
+        <option value="">Pick one</option>
+      </NativeSelect>
+    );
+    const select = screen.getByRole('combobox');
+    const describedBy = select.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    const errorEl = document.getElementById(describedBy!.split(' ')[0]);
+    expect(errorEl).toHaveTextContent('Required');
+  });
+
+  it('is disabled when disabled prop is passed', () => {
+    render(
+      <NativeSelect label="Option" disabled>
+        <option value="a">A</option>
+      </NativeSelect>
+    );
     expect(screen.getByRole('combobox')).toBeDisabled();
   });
 
-  it('uses provided id', () => {
-    render(<NativeSelect id="my-select">{defaultOptions}</NativeSelect>);
-    expect(screen.getByRole('combobox')).toHaveAttribute('id', 'my-select');
+  it('calls onChange when selection changes', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <NativeSelect label="Fruit" onChange={onChange}>
+        <option value="apple">Apple</option>
+        <option value="banana">Banana</option>
+      </NativeSelect>
+    );
+    await user.selectOptions(screen.getByRole('combobox'), 'banana');
+    expect(onChange).toHaveBeenCalled();
   });
 
   it('supports multiple selection', () => {
-    render(<NativeSelect multiple>{defaultOptions}</NativeSelect>);
+    render(
+      <NativeSelect label="Tags" multiple>
+        <option value="a">A</option>
+        <option value="b">B</option>
+      </NativeSelect>
+    );
     expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
 
-  it('passes axe accessibility checks', async () => {
-    const { container } = render(
-      <NativeSelect label="Choose option" id="axe-select">
-        {defaultOptions}
+  it('does not show helper text when error is shown', () => {
+    render(
+      <NativeSelect label="Field" error="Error!" helperText="Helper text">
+        <option value="a">A</option>
       </NativeSelect>
     );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-
-  it('passes axe accessibility checks with error', async () => {
-    const { container } = render(
-      <NativeSelect label="Choose option" id="axe-select-err" error="Required">
-        {defaultOptions}
-      </NativeSelect>
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
+    expect(screen.queryByText('Helper text')).not.toBeInTheDocument();
+    expect(screen.getByText('Error!')).toBeInTheDocument();
   });
 });

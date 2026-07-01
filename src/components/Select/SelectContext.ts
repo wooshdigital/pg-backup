@@ -12,12 +12,13 @@ export interface SelectContextValue {
   activeDescendant: string | undefined;
   multiple: boolean;
   listboxId: string;
-  toggleOpen: () => void;
-  closeSelect: () => void;
-  selectOption: (value: string) => void;
+  disabled: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onToggle: () => void;
+  onSelect: (value: string) => void;
   setActiveDescendant: (id: string | undefined) => void;
-  isSelected: (value: string) => boolean;
-  getOptionId: (value: string) => string;
+  options: SelectOption[];
 }
 
 export const SelectContext = createContext<SelectContextValue | null>(null);

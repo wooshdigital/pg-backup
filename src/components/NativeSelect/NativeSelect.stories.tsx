@@ -6,110 +6,100 @@ const meta: Meta<typeof NativeSelect> = {
   title: 'Components/NativeSelect',
   component: NativeSelect,
   tags: ['autodocs'],
-  argTypes: {
-    disabled: { control: 'boolean' },
-    error: { control: 'text' },
-    helperText: { control: 'text' },
-    label: { control: 'text' },
+  args: {
+    label: 'Select an option',
   },
 };
 
 export default meta;
 type Story = StoryObj<typeof NativeSelect>;
 
-const countryOptions = (
-  <>
-    <option value="">Select a country</option>
-    <option value="us">United States</option>
-    <option value="gb">United Kingdom</option>
-    <option value="ca">Canada</option>
-    <option value="au">Australia</option>
-    <option value="de">Germany</option>
-    <option value="fr">France</option>
-    <option value="jp">Japan</option>
-  </>
-);
-
 export const Default: Story = {
-  args: {
-    label: 'Country',
-  },
-  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
-};
-
-export const WithPlaceholder: Story = {
-  render: () => (
-    <NativeSelect label="Country">
-      <option value="" disabled>
-        Select a country...
-      </option>
-      <option value="us">United States</option>
-      <option value="gb">United Kingdom</option>
-      <option value="ca">Canada</option>
+  render: (args) => (
+    <NativeSelect {...args}>
+      <option value="">Choose...</option>
+      <option value="apple">Apple</option>
+      <option value="banana">Banana</option>
+      <option value="cherry">Cherry</option>
     </NativeSelect>
   ),
 };
 
-export const Controlled: Story = {
-  render: () => {
-    const [value, setValue] = useState('');
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <NativeSelect
-          label="Country"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-        >
-          {countryOptions}
-        </NativeSelect>
-        <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
-          Selected: {value || '(none)'}
-        </p>
-      </div>
-    );
-  },
+export const WithPlaceholder: Story = {
+  render: (args) => (
+    <NativeSelect {...args} label="Fruit">
+      <option value="" disabled hidden>Select a fruit...</option>
+      <option value="apple">Apple</option>
+      <option value="banana">Banana</option>
+      <option value="cherry">Cherry</option>
+      <option value="date">Date</option>
+      <option value="elderberry">Elderberry</option>
+    </NativeSelect>
+  ),
 };
 
 export const Multiple: Story = {
-  render: () => (
-    <NativeSelect label="Countries" multiple size={5} style={{ height: 'auto' }}>
-      <option value="us">United States</option>
-      <option value="gb">United Kingdom</option>
-      <option value="ca">Canada</option>
-      <option value="au">Australia</option>
-      <option value="de">Germany</option>
+  render: (args) => (
+    <NativeSelect {...args} label="Interests" multiple size={4}>
+      <option value="tech">Technology</option>
+      <option value="art">Art</option>
+      <option value="sports">Sports</option>
+      <option value="music">Music</option>
+      <option value="cooking">Cooking</option>
     </NativeSelect>
   ),
 };
 
 export const Disabled: Story = {
-  args: {
-    label: 'Country',
-    disabled: true,
-  },
-  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
+  render: (args) => (
+    <NativeSelect {...args} label="Disabled Select" disabled>
+      <option value="">Cannot change</option>
+      <option value="a">Option A</option>
+    </NativeSelect>
+  ),
 };
 
 export const WithError: Story = {
-  args: {
-    label: 'Country',
-    error: 'Please select a country',
-  },
-  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
+  render: (args) => (
+    <NativeSelect {...args} label="Country" error="Please select a country">
+      <option value="">Select country...</option>
+      <option value="us">United States</option>
+      <option value="uk">United Kingdom</option>
+      <option value="ca">Canada</option>
+    </NativeSelect>
+  ),
 };
 
 export const WithHelperText: Story = {
-  args: {
-    label: 'Country',
-    helperText: 'Select the country where you reside',
-  },
-  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
+  render: (args) => (
+    <NativeSelect {...args} label="Time Zone" helperText="Select your local time zone for accurate scheduling">
+      <option value="">Select timezone...</option>
+      <option value="utc">UTC</option>
+      <option value="est">Eastern Time (ET)</option>
+      <option value="pst">Pacific Time (PT)</option>
+    </NativeSelect>
+  ),
 };
 
-export const FullWidth: Story = {
-  args: {
-    label: 'Country',
-    fullWidth: true,
+export const Controlled: Story = {
+  render: (args) => {
+    const [value, setValue] = useState('banana');
+    return (
+      <div>
+        <NativeSelect
+          {...args}
+          label="Controlled Select"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        >
+          <option value="apple">Apple</option>
+          <option value="banana">Banana</option>
+          <option value="cherry">Cherry</option>
+        </NativeSelect>
+        <p style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
+          Selected: <strong>{value}</strong>
+        </p>
+      </div>
+    );
   },
-  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
 };

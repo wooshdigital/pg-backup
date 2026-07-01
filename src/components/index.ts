@@ -8,4 +8,3 @@ export * from './RadioGroup';
 export * from './Select';
 export * from './TextInput';
 export * from './Textarea';
-export * from './common';
