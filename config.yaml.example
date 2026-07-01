@@ -1,24 +1,31 @@
-# Cron schedule for backup jobs.
-# Standard 5-field POSIX cron or robfig special strings (@daily, @every 1h, etc.)
-# Examples:
-#   "0 2 * * *"   – every day at 02:00 AM
-#   "@daily"       – alias for midnight daily
-#   "@every 6h"    – every six hours
-schedule: "0 2 * * *"
-
+# Database connection
 database:
-  driver: postgres          # postgres | mysql
-  host: localhost
+  host: "localhost"
   port: 5432
-  name: mydb
-  user: backup_user
-  password: s3cr3t
+  name: "mydb"
+  user: "postgres"
+  password: "secret"
 
-storage:
-  type: s3                  # local | s3
-  path: my-backup-bucket
-  region: us-east-1
+# Backup schedule (cron expression, standard 5-field format)
+schedule:
+  # Default: every day at 02:00 AM
+  cron_expression: "0 2 * * *"
 
+# Compression settings
 compress:
-  algorithm: gzip           # gzip | zstd
-  level: 6
+  algorithm: "gzip"   # supported: gzip, zstd
+
+# Storage backend
+storage:
+  backend: "s3"       # supported: s3, local
+  bucket: "my-backups"
+  prefix: "postgres"
+  region: "us-east-1"
+  endpoint: ""        # leave empty for AWS S3; set for MinIO, etc.
+
+# Local storage (used when storage.backend = "local")
+local:
+  path: "/var/backups/postgres"
+
+# Temporary directory for dump and archive files
+temp_dir: "/tmp"

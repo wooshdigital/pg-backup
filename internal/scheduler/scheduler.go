@@ -2,107 +2,132 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
 )
 
-// Job is a function that can be scheduled. It receives a context so it can
-// respect cancellation signals.
-type Job func(ctx context.Context) error
+// JobFunc is the function signature for jobs registered with the Scheduler.
+// The context is cancelled when the scheduler is stopping.
+type JobFunc func(ctx context.Context) error
 
-// Scheduler wraps robfig/cron and provides a clean interface for registering
-// jobs, querying the next run time, and stopping gracefully.
+// Scheduler wraps robfig/cron to provide a simpler, context-aware interface
+// with built-in skip-if-still-running protection.
 type Scheduler struct {
-	c          *cron.Cron
 	mu         sync.Mutex
-	nextRun    time.Time
+	cr         *cron.Cron
 	entryID    cron.EntryID
+	logger     *log.Logger
 	expression string
+	cancelRun  context.CancelFunc
+	stopCtx    context.Context
+	stopCancel context.CancelFunc
 }
 
-// New creates a new Scheduler. It uses the local timezone by default and
-// enables second-level precision for testing (using cron.WithSeconds() is
-// opt-in; here we keep standard 5-field expressions for production).
-func New() *Scheduler {
-	c := cron.New(
-		cron.WithLocation(time.Local),
+// New creates a new Scheduler that will fire jobs according to the given cron
+// expression. The logger is used for informational messages.
+func New(expression string, logger *log.Logger) (*Scheduler, error) {
+	if expression == "" {
+		return nil, fmt.Errorf("cron expression must not be empty")
+	}
+
+	// Validate the expression up-front.
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	if _, err := parser.Parse(expression); err != nil {
+		return nil, fmt.Errorf("invalid cron expression %q: %w", expression, err)
+	}
+
+	if logger == nil {
+		logger = log.Default()
+	}
+
+	stopCtx, stopCancel := context.WithCancel(context.Background())
+
+	cr := cron.New(
+		cron.WithParser(parser),
 		cron.WithChain(
 			cron.SkipIfStillRunning(cron.DefaultLogger),
 		),
+		cron.WithLogger(cron.DefaultLogger),
 	)
-	return &Scheduler{c: c}
+
+	return &Scheduler{
+		cr:         cr,
+		logger:     logger,
+		expression: expression,
+		stopCtx:    stopCtx,
+		stopCancel: stopCancel,
+	}, nil
 }
 
-// NewWithSeconds creates a Scheduler that accepts 6-field cron expressions
-// (with a leading seconds field). Useful in tests where you want sub-minute
-// precision.
-func NewWithSeconds() *Scheduler {
-	c := cron.New(
-		cron.WithSeconds(),
-		cron.WithLocation(time.UTC),
-		cron.WithChain(
-			cron.SkipIfStillRunning(cron.DefaultLogger),
-		),
-	)
-	return &Scheduler{c: c}
-}
-
-// Register adds a job to the scheduler using the given cron expression. The
-// job function receives the provided context so it can honour cancellation.
+// Register adds a JobFunc to the scheduler. It must be called before Start().
 // Only one job can be registered at a time; calling Register again replaces
 // the previous job.
-func (s *Scheduler) Register(ctx context.Context, expression string, job Job) error {
+func (s *Scheduler) Register(fn JobFunc) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Remove previous entry if one exists.
+	// Remove any previously registered entry.
 	if s.entryID != 0 {
-		s.c.Remove(s.entryID)
+		s.cr.Remove(s.entryID)
 	}
 
-	id, err := s.c.AddFunc(expression, func() {
-		if err := job(ctx); err != nil {
-			cron.DefaultLogger.Error(err, "backup job failed")
-		}
-		// Update next run time after the job completes.
+	id, err := s.cr.AddFunc(s.expression, func() {
+		// Each invocation gets its own cancellable context derived from the
+		// scheduler-level stop context so that Stop() propagates cancellation
+		// to any in-flight job.
+		ctx, cancel := context.WithCancel(s.stopCtx)
 		s.mu.Lock()
-		entry := s.c.Entry(s.entryID)
-		s.nextRun = entry.Next
+		s.cancelRun = cancel
 		s.mu.Unlock()
+
+		defer func() {
+			cancel()
+			s.mu.Lock()
+			s.cancelRun = nil
+			s.mu.Unlock()
+		}()
+
+		if err := fn(ctx); err != nil {
+			s.logger.Printf("scheduler: job error: %v", err)
+		}
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("register cron job: %w", err)
 	}
 
 	s.entryID = id
-	s.expression = expression
 	return nil
 }
 
-// Start begins the scheduler in a background goroutine.
+// Start begins the cron scheduler in the background.
 func (s *Scheduler) Start() {
-	s.c.Start()
+	s.cr.Start()
+}
 
-	// Capture the initial next-run time.
-	s.mu.Lock()
-	if s.entryID != 0 {
-		entry := s.c.Entry(s.entryID)
-		s.nextRun = entry.Next
+// Stop signals any in-progress job to cancel via context, then waits for the
+// cron scheduler to drain (robfig/cron's Stop() returns a context that is done
+// when all running jobs have finished).
+func (s *Scheduler) Stop() {
+	// Cancel the stop context so running jobs see ctx.Done().
+	s.stopCancel()
+
+	// cron.Stop() returns after all running jobs finish.
+	stopCtx := s.cr.Stop()
+
+	select {
+	case <-stopCtx.Done():
+		s.logger.Println("scheduler: all jobs finished")
+	case <-time.After(5 * time.Minute):
+		s.logger.Println("scheduler: timed out waiting for jobs to finish")
 	}
-	s.mu.Unlock()
 }
 
-// Stop signals the scheduler to stop accepting new jobs and waits for any
-// currently-running job to finish before returning. This makes it safe to call
-// during graceful shutdown.
-func (s *Scheduler) Stop() context.Context {
-	return s.c.Stop()
-}
-
-// NextRun returns the next scheduled execution time for the registered job.
-// Returns the zero time if no job has been registered.
+// NextRun returns the next scheduled run time for the registered job.
+// Returns a zero time if no job is registered or the scheduler has not started.
 func (s *Scheduler) NextRun() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -110,13 +135,6 @@ func (s *Scheduler) NextRun() time.Time {
 	if s.entryID == 0 {
 		return time.Time{}
 	}
-	entry := s.c.Entry(s.entryID)
+	entry := s.cr.Entry(s.entryID)
 	return entry.Next
-}
-
-// Expression returns the cron expression that was used to register the job.
-func (s *Scheduler) Expression() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.expression
 }

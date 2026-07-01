@@ -7,20 +7,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds all application configuration loaded from config.yaml.
+// Config holds all runtime configuration for the backup worker.
 type Config struct {
-	// Schedule is a standard 5-field cron expression (or robfig @every / @daily etc.)
-	// Example: "0 2 * * *" runs at 02:00 AM daily.
-	Schedule string `yaml:"schedule"`
-
-	Database DatabaseConfig `yaml:"database"`
-	Storage  StorageConfig  `yaml:"storage"`
-	Compress CompressConfig `yaml:"compress"`
+	Database Database `yaml:"database"`
+	Schedule Schedule `yaml:"schedule"`
+	Compress Compress `yaml:"compress"`
+	Storage  Storage  `yaml:"storage"`
+	Local    Local    `yaml:"local"`
+	TempDir  string   `yaml:"temp_dir"`
 }
 
-// DatabaseConfig contains the database connection parameters.
-type DatabaseConfig struct {
-	Driver   string `yaml:"driver"`
+// Database contains the PostgreSQL connection parameters.
+type Database struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	Name     string `yaml:"name"`
@@ -28,52 +26,73 @@ type DatabaseConfig struct {
 	Password string `yaml:"password"`
 }
 
-// StorageConfig defines where backups are stored.
-type StorageConfig struct {
-	Type   string `yaml:"type"` // "local" or "s3"
-	Path   string `yaml:"path"` // local directory or S3 bucket
-	Region string `yaml:"region"`
+// Schedule contains the cron scheduling configuration.
+type Schedule struct {
+	CronExpression string `yaml:"cron_expression"`
 }
 
-// CompressConfig defines compression settings.
-type CompressConfig struct {
-	Algorithm string `yaml:"algorithm"` // "gzip", "zstd", etc.
-	Level     int    `yaml:"level"`
+// Compress configures the compression algorithm.
+type Compress struct {
+	Algorithm string `yaml:"algorithm"`
 }
 
-// Load reads and parses the YAML configuration file at the given path.
+// Storage configures the storage backend.
+type Storage struct {
+	Backend  string `yaml:"backend"`
+	Bucket   string `yaml:"bucket"`
+	Prefix   string `yaml:"prefix"`
+	Region   string `yaml:"region"`
+	Endpoint string `yaml:"endpoint"`
+}
+
+// Local configures the local filesystem storage backend.
+type Local struct {
+	Path string `yaml:"path"`
+}
+
+// Load reads and parses a YAML configuration file.
 func Load(path string) (*Config, error) {
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("opening config file %q: %w", path, err)
+		return nil, fmt.Errorf("read config file %q: %w", path, err)
 	}
-	defer f.Close()
 
-	var cfg Config
-	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("decoding config file %q: %w", path, err)
+	cfg := &Config{
+		Database: Database{
+			Port: 5432,
+		},
+		Schedule: Schedule{
+			CronExpression: "0 2 * * *",
+		},
+		Compress: Compress{
+			Algorithm: "gzip",
+		},
+		Storage: Storage{
+			Backend: "local",
+		},
+		TempDir: os.TempDir(),
+	}
+
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("parse config file %q: %w", path, err)
 	}
 
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
-// validate performs basic sanity checks on the loaded configuration.
 func (c *Config) validate() error {
-	if c.Schedule == "" {
-		return fmt.Errorf("schedule must not be empty")
-	}
-	if c.Database.Driver == "" {
-		return fmt.Errorf("database.driver must not be empty")
+	if c.Database.Host == "" {
+		return fmt.Errorf("database.host is required")
 	}
 	if c.Database.Name == "" {
-		return fmt.Errorf("database.name must not be empty")
+		return fmt.Errorf("database.name is required")
 	}
-	if c.Storage.Type == "" {
-		return fmt.Errorf("storage.type must not be empty")
+	if c.Schedule.CronExpression == "" {
+		return fmt.Errorf("schedule.cron_expression is required")
 	}
 	return nil
 }

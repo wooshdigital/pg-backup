@@ -1,4 +1,4 @@
-module github.com/example/backupworker
+module github.com/soneralp/backup-worker
 
 go 1.21
 

@@ -2,181 +2,281 @@ package scheduler_test
 
 import (
 	"context"
+	"log"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/example/backupworker/internal/scheduler"
+	"github.com/soneralp/backup-worker/internal/scheduler"
 )
 
-// TestJobFiresAtInterval verifies that a job registered with a sub-second
-// cron expression (using NewWithSeconds) fires the expected number of times
-// within a short window.
-func TestJobFiresAtInterval(t *testing.T) {
-	t.Parallel()
-
-	s := scheduler.NewWithSeconds()
-
-	var callCount atomic.Int64
-
-	ctx := context.Background()
-	// Fire every second using the seconds-enabled scheduler.
-	err := s.Register(ctx, "*/1 * * * * *", func(jobCtx context.Context) error {
-		callCount.Add(1)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Register returned unexpected error: %v", err)
-	}
-
-	s.Start()
-	defer func() {
-		stopCtx := s.Stop()
-		<-stopCtx.Done()
-	}()
-
-	// Wait long enough for the job to fire at least twice (≥2 s) but no more
-	// than 5 seconds to keep the test fast.
-	time.Sleep(2500 * time.Millisecond)
-
-	count := callCount.Load()
-	if count < 2 {
-		t.Errorf("expected job to fire at least 2 times, got %d", count)
-	}
+func testLogger() *log.Logger {
+	return log.New(os.Stdout, "[test-scheduler] ", log.LstdFlags)
 }
 
-// TestNextRunIsInFuture checks that NextRun returns a time after the scheduler
-// has been started.
-func TestNextRunIsInFuture(t *testing.T) {
+// TestSchedulerNew verifies that invalid cron expressions are rejected and
+// valid ones are accepted.
+func TestSchedulerNew(t *testing.T) {
 	t.Parallel()
 
-	s := scheduler.NewWithSeconds()
-
-	ctx := context.Background()
-	err := s.Register(ctx, "*/5 * * * * *", func(jobCtx context.Context) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Register returned unexpected error: %v", err)
+	tests := []struct {
+		name       string
+		expression string
+		wantErr    bool
+	}{
+		{
+			name:       "valid daily expression",
+			expression: "0 2 * * *",
+			wantErr:    false,
+		},
+		{
+			name:       "valid every minute",
+			expression: "* * * * *",
+			wantErr:    false,
+		},
+		{
+			name:       "empty expression",
+			expression: "",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid expression",
+			expression: "not-a-cron",
+			wantErr:    true,
+		},
+		{
+			name:       "too many fields",
+			expression: "0 0 2 * * *", // 6 fields – standard parser expects 5
+			wantErr:    true,
+		},
 	}
 
-	before := time.Now()
-	s.Start()
-	defer func() {
-		stopCtx := s.Stop()
-		<-stopCtx.Done()
-	}()
-
-	next := s.NextRun()
-	if next.IsZero() {
-		t.Fatal("NextRun returned zero time after Start()")
-	}
-	if !next.After(before) {
-		t.Errorf("NextRun %v is not after start time %v", next, before)
-	}
-}
-
-// TestSkipIfStillRunning verifies that a slow job is skipped rather than
-// overlapped when the next tick arrives.
-func TestSkipIfStillRunning(t *testing.T) {
-	t.Parallel()
-
-	s := scheduler.NewWithSeconds()
-
-	var concurrentRuns atomic.Int64
-	var maxConcurrent atomic.Int64
-
-	ctx := context.Background()
-	err := s.Register(ctx, "*/1 * * * * *", func(jobCtx context.Context) error {
-		current := concurrentRuns.Add(1)
-		defer concurrentRuns.Add(-1)
-
-		// Track max concurrent.
-		for {
-			old := maxConcurrent.Load()
-			if current <= old {
-				break
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := scheduler.New(tc.expression, testLogger())
+			if (err != nil) != tc.wantErr {
+				t.Errorf("New(%q) error = %v, wantErr %v", tc.expression, err, tc.wantErr)
 			}
-			if maxConcurrent.CompareAndSwap(old, current) {
-				break
+		})
+	}
+}
+
+// TestSchedulerFiresJob verifies that the scheduler calls the registered job
+// at least once when given an "every minute" cron expression, by using a very
+// short poll interval and waiting up to 90 s (standard CI budget).
+//
+// Because we cannot inject a fake clock into robfig/cron without modifying the
+// library, we use a "* * * * *" expression and wait for it to tick naturally.
+// The test is skipped in short mode to keep `go test -short` fast.
+func TestSchedulerFiresJob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-dependent test in short mode")
+	}
+
+	var callCount int64
+
+	sched, err := scheduler.New("* * * * *", testLogger())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := sched.Register(func(ctx context.Context) error {
+		atomic.AddInt64(&callCount, 1)
+		return nil
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	sched.Start()
+	defer sched.Stop()
+
+	deadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt64(&callCount) >= 1 {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	if atomic.LoadInt64(&callCount) == 0 {
+		t.Error("job was never called within 90 seconds")
+	}
+}
+
+// TestSchedulerSkipsOverlappingRun verifies that a second invocation is
+// skipped while the first is still running.
+func TestSchedulerSkipsOverlappingRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-dependent test in short mode")
+	}
+
+	var callCount int64
+	jobStarted := make(chan struct{})
+	jobBlock := make(chan struct{})
+
+	sched, err := scheduler.New("* * * * *", testLogger())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := sched.Register(func(ctx context.Context) error {
+		count := atomic.AddInt64(&callCount, 1)
+		if count == 1 {
+			close(jobStarted)
+			// Block until the test unblocks us.
+			select {
+			case <-jobBlock:
+			case <-ctx.Done():
 			}
 		}
-
-		// Simulate a job that takes longer than the tick interval.
-		time.Sleep(1500 * time.Millisecond)
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("Register returned unexpected error: %v", err)
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
 	}
 
-	s.Start()
-	// Run for 3 seconds; with a 1s tick and a 1.5s job, we would get overlaps
-	// without SkipIfStillRunning.
-	time.Sleep(3 * time.Second)
+	sched.Start()
 
-	stopCtx := s.Stop()
-	<-stopCtx.Done()
-
-	if max := maxConcurrent.Load(); max > 1 {
-		t.Errorf("expected max concurrent runs to be 1, got %d", max)
-	}
-}
-
-// TestRegisterInvalidExpression checks that an invalid cron expression returns
-// an error instead of panicking.
-func TestRegisterInvalidExpression(t *testing.T) {
-	t.Parallel()
-
-	s := scheduler.New()
-	ctx := context.Background()
-
-	err := s.Register(ctx, "not-a-cron-expression", func(_ context.Context) error {
-		return nil
-	})
-	if err == nil {
-		t.Error("expected error for invalid cron expression, got nil")
-	}
-}
-
-// TestStopWaitsForRunningJob confirms that Stop() blocks until the active job
-// finishes, so no job is torn down mid-execution.
-func TestStopWaitsForRunningJob(t *testing.T) {
-	t.Parallel()
-
-	s := scheduler.NewWithSeconds()
-
-	jobStarted := make(chan struct{})
-	jobFinished := make(chan struct{})
-
-	ctx := context.Background()
-	err := s.Register(ctx, "*/1 * * * * *", func(jobCtx context.Context) error {
-		close(jobStarted)
-		time.Sleep(500 * time.Millisecond)
-		close(jobFinished)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Register returned unexpected error: %v", err)
-	}
-
-	s.Start()
-
-	// Wait until the job has actually started.
+	// Wait for the first invocation.
 	select {
 	case <-jobStarted:
-	case <-time.After(3 * time.Second):
-		t.Fatal("job never started within timeout")
+	case <-time.After(90 * time.Second):
+		t.Fatal("first job invocation never started")
 	}
 
-	// Stop should block until the job is done.
-	stopCtx := s.Stop()
-	<-stopCtx.Done()
+	// Wait more than one minute to give the scheduler a chance to fire again.
+	time.Sleep(65 * time.Second)
+
+	// Unblock the first job.
+	close(jobBlock)
+
+	sched.Stop()
+
+	// The second tick should have been skipped.
+	if got := atomic.LoadInt64(&callCount); got != 1 {
+		t.Errorf("expected exactly 1 job execution (overlapping run skipped), got %d", got)
+	}
+}
+
+// TestSchedulerNextRun verifies that NextRun returns a non-zero time after the
+// scheduler has started.
+func TestSchedulerNextRun(t *testing.T) {
+	t.Parallel()
+
+	sched, err := scheduler.New("* * * * *", testLogger())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := sched.Register(func(ctx context.Context) error {
+		return nil
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// Before Start(), next run may be zero depending on implementation.
+	sched.Start()
+	defer sched.Stop()
+
+	// Give the cron engine a moment to compute the first schedule.
+	time.Sleep(100 * time.Millisecond)
+
+	next := sched.NextRun()
+	if next.IsZero() {
+		t.Error("NextRun() returned zero time after scheduler started")
+	}
+	if next.Before(time.Now()) {
+		t.Errorf("NextRun() = %s is in the past", next)
+	}
+}
+
+// TestSchedulerGracefulShutdown verifies that Stop() waits for an in-progress
+// job to finish before returning.
+func TestSchedulerGracefulShutdown(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-dependent test in short mode")
+	}
+
+	jobDone := make(chan struct{})
+
+	sched, err := scheduler.New("* * * * *", testLogger())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := sched.Register(func(ctx context.Context) error {
+		// Simulate a job that takes 2 seconds.
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+		}
+		close(jobDone)
+		return nil
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	sched.Start()
+
+	// Wait for the job to start.
+	time.Sleep(62 * time.Second) // wait past the minute boundary
+
+	stopDone := make(chan struct{})
+	go func() {
+		sched.Stop()
+		close(stopDone)
+	}()
 
 	select {
-	case <-jobFinished:
-		// Good – the job finished before Stop returned.
+	case <-stopDone:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop() did not return within 10 seconds after job should have completed")
+	}
+
+	select {
+	case <-jobDone:
 	default:
-		t.Error("Stop() returned before the running job finished")
+		t.Error("Stop() returned before the job finished")
+	}
+}
+
+// TestSchedulerContextCancelledOnStop verifies that the job's context is
+// cancelled when Stop() is called.
+func TestSchedulerContextCancelledOnStop(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-dependent test in short mode")
+	}
+
+	ctxCancelled := make(chan struct{})
+
+	sched, err := scheduler.New("* * * * *", testLogger())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := sched.Register(func(ctx context.Context) error {
+		// Wait for context cancellation.
+		<-ctx.Done()
+		close(ctxCancelled)
+		return ctx.Err()
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	sched.Start()
+
+	// Wait for first job tick.
+	time.Sleep(62 * time.Second)
+
+	// Stop should cancel the running job's context.
+	sched.Stop()
+
+	select {
+	case <-ctxCancelled:
+		// Good – context was cancelled.
+	case <-time.After(5 * time.Second):
+		t.Error("job context was not cancelled within 5 seconds of Stop()")
 	}
 }
