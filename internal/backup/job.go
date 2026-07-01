@@ -6,98 +6,98 @@ import (
 	"log"
 	"time"
 
-	"github.com/yourusername/backupworker/internal/config"
+	"github.com/example/backupworker/internal/compress"
+	"github.com/example/backupworker/internal/config"
+	"github.com/example/backupworker/internal/dumper"
+	"github.com/example/backupworker/internal/storage"
+	"github.com/example/backupworker/internal/tempfile"
 )
 
-// Job represents a single backup job that coordinates dumping, compressing,
-// and uploading a database backup.
+// Job holds the dependencies required to perform a single backup cycle.
 type Job struct {
-	cfg    *config.Config
-	logger *log.Logger
+	cfg     *config.Config
+	dumper  dumper.Dumper
+	storage storage.Storage
 }
 
-// NewJob creates a new Job with the provided configuration and logger.
-func NewJob(cfg *config.Config, logger *log.Logger) *Job {
-	return &Job{
-		cfg:    cfg,
-		logger: logger,
-	}
-}
-
-// Run executes the full backup pipeline. It respects context cancellation
-// between stages so that a graceful shutdown does not interrupt an already
-// started stage but prevents new stages from starting.
-func (j *Job) Run(ctx context.Context) error {
-	startTime := time.Now()
-	j.logger.Printf("starting backup pipeline at %s", startTime.Format(time.RFC3339))
-
-	// Stage 1: Dump
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("backup cancelled before dump stage: %w", err)
-	}
-	j.logger.Println("stage 1/3: dumping database")
-	dumpPath, err := j.dump(ctx)
+// NewJob constructs a Job from the application configuration.
+func NewJob(cfg *config.Config) (*Job, error) {
+	d, err := dumper.New(cfg)
 	if err != nil {
+		return nil, fmt.Errorf("creating dumper: %w", err)
+	}
+
+	s, err := storage.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating storage backend: %w", err)
+	}
+
+	return &Job{
+		cfg:     cfg,
+		dumper:  d,
+		storage: s,
+	}, nil
+}
+
+// Run executes one full backup pipeline:
+//  1. Dump the database to a temporary file.
+//  2. Compress the dump.
+//  3. Upload the compressed file to the storage backend.
+//
+// The context is checked between each stage so that an OS signal received
+// during a run causes a clean abort at the next safe boundary rather than
+// partway through an upload.
+func (j *Job) Run(ctx context.Context) error {
+	start := time.Now()
+	log.Printf("[backup] starting backup job at %s", start.Format(time.RFC3339))
+
+	// ── Stage 1: Dump ────────────────────────────────────────────────────────
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("backup aborted before dump stage: %w", err)
+	}
+
+	dumpFile, err := tempfile.New("backup-dump-*.sql")
+	if err != nil {
+		return fmt.Errorf("creating temp file for dump: %w", err)
+	}
+	defer dumpFile.Cleanup()
+
+	log.Printf("[backup] dumping database to %s", dumpFile.Path())
+	if err := j.dumper.Dump(ctx, dumpFile.Path()); err != nil {
 		return fmt.Errorf("dump stage failed: %w", err)
 	}
-	j.logger.Printf("stage 1/3: dump complete -> %s", dumpPath)
+	log.Printf("[backup] dump complete (%.2fs)", time.Since(start).Seconds())
 
-	// Stage 2: Compress
+	// ── Stage 2: Compress ────────────────────────────────────────────────────
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("backup cancelled before compress stage: %w", err)
+		return fmt.Errorf("backup aborted before compress stage: %w", err)
 	}
-	j.logger.Println("stage 2/3: compressing dump")
-	compressedPath, err := j.compress(ctx, dumpPath)
+
+	compressedFile, err := tempfile.New("backup-compressed-*.sql.gz")
 	if err != nil {
+		return fmt.Errorf("creating temp file for compressed output: %w", err)
+	}
+	defer compressedFile.Cleanup()
+
+	compressor := compress.NewFromConfig(j.cfg)
+	log.Printf("[backup] compressing dump")
+	if err := compressor.Compress(ctx, dumpFile.Path(), compressedFile.Path()); err != nil {
 		return fmt.Errorf("compress stage failed: %w", err)
 	}
-	j.logger.Printf("stage 2/3: compression complete -> %s", compressedPath)
+	log.Printf("[backup] compression complete (%.2fs)", time.Since(start).Seconds())
 
-	// Stage 3: Upload
+	// ── Stage 3: Upload ──────────────────────────────────────────────────────
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("backup cancelled before upload stage: %w", err)
+		return fmt.Errorf("backup aborted before upload stage: %w", err)
 	}
-	j.logger.Println("stage 3/3: uploading to storage")
-	if err := j.upload(ctx, compressedPath); err != nil {
+
+	key := storage.BuildKey(j.cfg, start)
+	log.Printf("[backup] uploading to storage key %q", key)
+	if err := j.storage.Put(ctx, key, compressedFile.Path()); err != nil {
 		return fmt.Errorf("upload stage failed: %w", err)
 	}
-	j.logger.Printf("stage 3/3: upload complete")
 
-	elapsed := time.Since(startTime)
-	j.logger.Printf("backup pipeline finished successfully in %s", elapsed.Round(time.Millisecond))
-	return nil
-}
-
-// dump performs the database dump stage. It returns the path to the raw dump
-// file. The context is passed to allow cancellation of long-running dump
-// commands.
-func (j *Job) dump(ctx context.Context) (string, error) {
-	// Real implementation would invoke pg_dump / mysqldump via exec.CommandContext.
-	// For now we simulate work and respect context cancellation.
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case <-time.After(10 * time.Millisecond): // simulate dump
-	}
-	return "/tmp/backup_dump.sql", nil
-}
-
-// compress compresses the dump file and returns the path to the archive.
-func (j *Job) compress(ctx context.Context, dumpPath string) (string, error) {
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case <-time.After(10 * time.Millisecond): // simulate compression
-	}
-	return dumpPath + ".gz", nil
-}
-
-// upload sends the compressed file to the configured storage backend.
-func (j *Job) upload(ctx context.Context, filePath string) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(10 * time.Millisecond): // simulate upload
-	}
+	elapsed := time.Since(start)
+	log.Printf("[backup] backup job finished successfully in %.2fs", elapsed.Seconds())
 	return nil
 }

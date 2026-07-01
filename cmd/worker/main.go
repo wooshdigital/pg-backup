@@ -6,50 +6,84 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/yourusername/backupworker/internal/backup"
-	"github.com/yourusername/backupworker/internal/config"
-	"github.com/yourusername/backupworker/internal/scheduler"
+	"github.com/example/backupworker/internal/backup"
+	"github.com/example/backupworker/internal/config"
+	"github.com/example/backupworker/internal/scheduler"
 )
 
 func main() {
-	logger := log.New(os.Stdout, "[worker] ", log.LstdFlags|log.Lmicroseconds)
-
-	// Load configuration
-	cfg, err := config.Load("config.yaml")
+	// ── Load configuration ────────────────────────────────────────────────────
+	cfg, err := config.Load()
 	if err != nil {
-		logger.Fatalf("failed to load config: %v", err)
+		log.Fatalf("failed to load configuration: %v", err)
 	}
 
-	// Create a context that is cancelled on SIGTERM or SIGINT
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	log.Printf("backup worker starting (schedule: %q)", cfg.Schedule)
+
+	// ── Build the backup job ──────────────────────────────────────────────────
+	job, err := backup.NewJob(cfg)
+	if err != nil {
+		log.Fatalf("failed to initialise backup job: %v", err)
+	}
+
+	// ── Set up OS signal handling ─────────────────────────────────────────────
+	// signal.NotifyContext cancels the returned context when SIGTERM or SIGINT
+	// is received. We pass this context into the scheduler so that any running
+	// backup job can detect cancellation and stop cleanly between pipeline
+	// stages.
+	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// Build the backup job
-	job := backup.NewJob(cfg, logger)
+	// ── Set up the cron scheduler ─────────────────────────────────────────────
+	sched := scheduler.New()
 
-	// Create and configure the scheduler
-	sched, err := scheduler.New(cfg.Schedule, func() {
-		logger.Println("backup job starting")
-		if runErr := job.Run(ctx); runErr != nil {
-			logger.Printf("backup job failed: %v", runErr)
-		} else {
-			logger.Println("backup job completed successfully")
+	if err := sched.Register(rootCtx, cfg.Schedule, func(ctx context.Context) error {
+		if err := job.Run(ctx); err != nil {
+			log.Printf("[worker] backup job returned error: %v", err)
+			return err
 		}
-	}, logger)
-	if err != nil {
-		logger.Fatalf("failed to create scheduler: %v", err)
+		// Log the next scheduled run time after a successful backup.
+		if next := sched.NextRun(); !next.IsZero() {
+			log.Printf("[worker] next backup scheduled for %s", next.Format(time.RFC3339))
+		}
+		return nil
+	}); err != nil {
+		log.Fatalf("failed to register backup job with scheduler: %v", err)
 	}
 
-	// Start the scheduler
 	sched.Start()
-	logger.Printf("scheduler started; next run at %s", sched.NextRun().Format("2006-01-02 15:04:05 MST"))
 
-	// Block until signal received
-	<-ctx.Done()
-	logger.Println("shutdown signal received, waiting for in-progress backup to complete...")
+	next := sched.NextRun()
+	if !next.IsZero() {
+		log.Printf("[worker] scheduler started – next backup at %s", next.Format(time.RFC3339))
+	} else {
+		log.Printf("[worker] scheduler started")
+	}
 
-	// Stop the scheduler – waits for any running job to finish
-	sched.Stop()
-	logger.Println("scheduler stopped cleanly, exiting")
+	// ── Block until a signal is received ─────────────────────────────────────
+	<-rootCtx.Done()
+
+	receivedSignal := rootCtx.Err()
+	log.Printf("[worker] received shutdown signal (%v) – waiting for in-progress backup to finish…", receivedSignal)
+
+	// Stop the scheduler. cron.Stop() returns a context that is cancelled once
+	// all running jobs have returned, so we can wait on it safely.
+	shutdownCtx := sched.Stop()
+
+	// Give the in-flight job up to 10 minutes to complete before we give up
+	// and exit anyway. Adjust this timeout to suit the longest acceptable
+	// backup duration.
+	const shutdownTimeout = 10 * time.Minute
+	timer := time.NewTimer(shutdownTimeout)
+	defer timer.Stop()
+
+	select {
+	case <-shutdownCtx.Done():
+		log.Printf("[worker] all jobs finished – exiting cleanly")
+	case <-timer.C:
+		log.Printf("[worker] shutdown timeout (%s) exceeded – forcing exit", shutdownTimeout)
+		os.Exit(1)
+	}
 }
