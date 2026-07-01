@@ -1,315 +1,324 @@
 import React, {
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useId,
   forwardRef,
+  useCallback,
+  useId,
+  useRef,
+  useState,
+  useEffect,
 } from 'react';
 import { SelectContext } from './SelectContext';
-import type { SelectOption } from './SelectContext';
 import { SelectListbox } from './SelectListbox';
-import type { SelectListboxHandle } from './SelectListbox';
+import type { SelectOption } from './SelectContext';
 import { useSelectKeyboard } from './useSelectKeyboard';
 import styles from './Select.module.css';
+import { classNames } from '../../utils/classNames';
 
 export interface SelectProps {
-  /** Flat list of options */
   options: SelectOption[];
-  /** Controlled selected value (single) */
   value?: string | string[];
-  /** Default value for uncontrolled mode */
   defaultValue?: string | string[];
-  /** Called when selection changes */
   onChange?: (value: string | string[]) => void;
-  /** Allow multiple selections */
-  multiple?: boolean;
-  /** Placeholder text when nothing is selected */
   placeholder?: string;
-  /** Disable the entire select */
+  label?: string;
+  error?: string;
+  helperText?: string;
+  multiple?: boolean;
   disabled?: boolean;
-  /** Whether in error/invalid state */
-  error?: boolean;
-  /** ID for the trigger button */
+  fullWidth?: boolean;
   id?: string;
-  /** aria-label for the trigger */
-  'aria-label'?: string;
-  /** aria-labelledby for the trigger */
-  'aria-labelledby'?: string;
-  /** aria-describedby for the trigger */
-  'aria-describedby'?: string;
-  /** Enable typeahead search filter */
-  searchable?: boolean;
-  /** Custom class for the container */
+  name?: string;
   className?: string;
-}
-
-const ChevronIcon = ({ open }: { open: boolean }) => (
-  <svg
-    viewBox="0 0 20 20"
-    fill="currentColor"
-    aria-hidden="true"
-    focusable="false"
-    className={[styles.chevron, open ? styles.open : ''].filter(Boolean).join(' ')}
-  >
-    <path
-      fillRule="evenodd"
-      d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-      clipRule="evenodd"
-    />
-  </svg>
-);
-
-function toArray(val: string | string[] | undefined): string[] {
-  if (!val) return [];
-  return Array.isArray(val) ? val : [val];
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
 }
 
 export const Select = forwardRef<HTMLButtonElement, SelectProps>(
   (
     {
       options,
-      value,
+      value: valueProp,
       defaultValue,
       onChange,
+      placeholder = 'Select an option',
+      label,
+      error,
+      helperText,
       multiple = false,
-      placeholder = 'Select…',
       disabled = false,
-      error = false,
-      id,
+      fullWidth = false,
+      id: idProp,
+      name,
+      className,
       'aria-label': ariaLabel,
       'aria-labelledby': ariaLabelledBy,
-      'aria-describedby': ariaDescribedBy,
-      searchable = false,
-      className,
     },
     ref
   ) => {
-    const uid = useId();
-    const listboxId = `select-listbox-${uid}`;
-    const optionIdPrefix = `select-option-${uid}`;
-    const triggerId = id ?? `select-trigger-${uid}`;
-
-    // Controlled vs uncontrolled
-    const isControlled = value !== undefined;
-    const [internalSelected, setInternalSelected] = useState<string[]>(() =>
-      toArray(defaultValue)
-    );
-    const selectedValues = isControlled
-      ? toArray(value)
-      : internalSelected;
-
-    const [isOpen, setIsOpen] = useState(false);
-    const [activeIndex, setActiveIndex] = useState(-1);
-    const [searchValue, setSearchValue] = useState('');
+    const generatedId = useId();
+    const id = idProp ?? generatedId;
+    const listboxId = `${id}-listbox`;
+    const labelId = `${id}-label`;
+    const errorId = `${id}-error`;
+    const helperId = `${id}-helper`;
 
     const triggerRef = useRef<HTMLButtonElement>(null);
-    const listboxRef = useRef<SelectListboxHandle>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
 
-    // Merge refs
-    const mergedTriggerRef = (node: HTMLButtonElement | null) => {
-      (triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
-      if (typeof ref === 'function') ref(node);
-      else if (ref) ref.current = node;
-    };
-
-    // Filtered options for searchable
-    const displayOptions = searchable && searchValue
-      ? options.filter((o) =>
-          o.label.toLowerCase().includes(searchValue.toLowerCase())
-        )
-      : options;
-
-    const openListbox = useCallback(() => {
-      if (disabled) return;
-      setIsOpen(true);
-      // Set initial active index to first selected or first enabled
-      const firstSelected = selectedValues.length > 0
-        ? displayOptions.findIndex((o) => o.value === selectedValues[0])
-        : -1;
-      const firstEnabled = displayOptions.findIndex((o) => !o.disabled);
-      setActiveIndex(firstSelected >= 0 ? firstSelected : firstEnabled);
-    }, [disabled, selectedValues, displayOptions]);
-
-    const closeListbox = useCallback(() => {
-      setIsOpen(false);
-      setSearchValue('');
-      setActiveIndex(-1);
-      // Return focus to trigger
-      triggerRef.current?.focus();
-    }, []);
-
-    const toggleListbox = useCallback(() => {
-      if (isOpen) {
-        closeListbox();
-      } else {
-        openListbox();
+    const isControlled = valueProp !== undefined;
+    const [internalValues, setInternalValues] = useState<string[]>(() => {
+      if (defaultValue !== undefined) {
+        return Array.isArray(defaultValue) ? defaultValue : [defaultValue];
       }
-    }, [isOpen, openListbox, closeListbox]);
+      return [];
+    });
 
-    const handleSelectOption = useCallback(
-      (optionValue: string) => {
-        let newSelected: string[];
+    const selectedValues = isControlled
+      ? Array.isArray(valueProp)
+        ? valueProp
+        : valueProp
+        ? [valueProp]
+        : []
+      : internalValues;
 
+    const [isOpen, setIsOpen] = useState(false);
+    const [activeIndex, setActiveIndex] = useState<number>(-1);
+
+    const getOptionId = useCallback(
+      (value: string) => `${id}-option-${value.replace(/\s+/g, '-')}`,
+      [id]
+    );
+
+    const activeDescendant =
+      activeIndex >= 0 && activeIndex < options.length
+        ? getOptionId(options[activeIndex].value)
+        : undefined;
+
+    const isSelected = useCallback(
+      (value: string) => selectedValues.includes(value),
+      [selectedValues]
+    );
+
+    const selectOption = useCallback(
+      (value: string) => {
+        let newValues: string[];
         if (multiple) {
-          if (selectedValues.includes(optionValue)) {
-            newSelected = selectedValues.filter((v) => v !== optionValue);
+          if (selectedValues.includes(value)) {
+            newValues = selectedValues.filter((v) => v !== value);
           } else {
-            newSelected = [...selectedValues, optionValue];
+            newValues = [...selectedValues, value];
           }
         } else {
-          newSelected = [optionValue];
+          newValues = [value];
+          setIsOpen(false);
+          triggerRef.current?.focus();
         }
 
         if (!isControlled) {
-          setInternalSelected(newSelected);
+          setInternalValues(newValues);
         }
-
-        if (onChange) {
-          onChange(multiple ? newSelected : newSelected[0] ?? '');
-        }
-
-        if (!multiple) {
-          closeListbox();
-        }
+        onChange?.(multiple ? newValues : newValues[0] ?? '');
       },
-      [multiple, selectedValues, isControlled, onChange, closeListbox]
+      [multiple, selectedValues, isControlled, onChange]
     );
 
-    // Focus the listbox when it opens
-    useEffect(() => {
-      if (isOpen) {
-        // Defer to allow DOM to render
-        requestAnimationFrame(() => {
-          listboxRef.current?.focus();
-        });
-      }
-    }, [isOpen]);
+    const openSelect = useCallback(() => {
+      if (disabled) return;
+      setIsOpen(true);
+      // Set active index to first selected or first enabled
+      const firstSelected = options.findIndex(
+        (opt) => !opt.disabled && selectedValues.includes(opt.value)
+      );
+      const firstEnabled = options.findIndex((opt) => !opt.disabled);
+      setActiveIndex(firstSelected >= 0 ? firstSelected : firstEnabled);
+    }, [disabled, options, selectedValues]);
+
+    const closeSelect = useCallback(() => {
+      setIsOpen(false);
+      triggerRef.current?.focus();
+    }, []);
+
+    const handleSelectIndex = useCallback(
+      (index: number) => {
+        const option = options[index];
+        if (option && !option.disabled) {
+          selectOption(option.value);
+        }
+      },
+      [options, selectOption]
+    );
+
+    const { handleTriggerKeyDown, handleListboxKeyDown } = useSelectKeyboard({
+      options,
+      activeIndex,
+      isOpen,
+      onOpen: openSelect,
+      onClose: closeSelect,
+      onSelectIndex: handleSelectIndex,
+      onSetActiveIndex: setActiveIndex,
+    });
 
     // Close on outside click
     useEffect(() => {
       if (!isOpen) return;
 
-      const handlePointerDown = (e: PointerEvent) => {
+      const handleOutsideClick = (e: MouseEvent) => {
+        const target = e.target as Node;
+        const triggerEl = triggerRef.current;
+        const listboxEl = document.getElementById(listboxId);
         if (
-          containerRef.current &&
-          !containerRef.current.contains(e.target as Node)
+          triggerEl &&
+          !triggerEl.contains(target) &&
+          listboxEl &&
+          !listboxEl.contains(target)
         ) {
-          closeListbox();
+          closeSelect();
         }
       };
 
-      document.addEventListener('pointerdown', handlePointerDown);
-      return () => {
-        document.removeEventListener('pointerdown', handlePointerDown);
-      };
-    }, [isOpen, closeListbox]);
+      document.addEventListener('mousedown', handleOutsideClick);
+      return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, [isOpen, listboxId, closeSelect]);
 
-    const { handleTriggerKeyDown, handleListboxKeyDown } = useSelectKeyboard({
-      options: displayOptions,
-      activeIndex,
-      setActiveIndex,
-      onSelect: handleSelectOption,
-      onClose: closeListbox,
-      onOpen: openListbox,
-      isOpen,
-    });
-
-    // Build display label
-    const getDisplayLabel = () => {
-      if (selectedValues.length === 0) return null;
+    const displayValue = () => {
+      if (selectedValues.length === 0) return placeholder;
       if (multiple) {
-        const labels = options
-          .filter((o) => selectedValues.includes(o.value))
-          .map((o) => o.label);
-        return labels.join(', ');
+        if (selectedValues.length === 1) {
+          return options.find((o) => o.value === selectedValues[0])?.label ?? placeholder;
+        }
+        return `${selectedValues.length} selected`;
       }
-      const selected = options.find((o) => o.value === selectedValues[0]);
-      return selected?.label ?? null;
+      return options.find((o) => o.value === selectedValues[0])?.label ?? placeholder;
     };
 
-    const displayLabel = getDisplayLabel();
-    const activeDescendant =
-      isOpen && activeIndex >= 0
-        ? `${optionIdPrefix}-${activeIndex}`
-        : undefined;
+    const describedBy = [error ? errorId : null, helperText ? helperId : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
-    const triggerClasses = [
-      styles.trigger,
-      error ? styles.error : '',
-      className || '',
+    const computedAriaLabelledBy = [
+      label ? labelId : null,
+      ariaLabelledBy ?? null,
     ]
       .filter(Boolean)
-      .join(' ');
+      .join(' ') || undefined;
 
     return (
       <SelectContext.Provider
         value={{
           isOpen,
           selectedValues,
-          activeDescendant: activeDescendant ?? null,
-          listboxId,
-          optionIdPrefix,
+          activeDescendant,
           multiple,
-          onSelectOption: handleSelectOption,
-          onToggle: toggleListbox,
-          onClose: closeListbox,
+          listboxId,
+          toggleOpen: isOpen ? closeSelect : openSelect,
+          closeSelect,
+          selectOption,
+          setActiveDescendant: () => {},
+          isSelected,
+          getOptionId,
         }}
       >
         <div
-          ref={containerRef}
-          style={{ position: 'relative', display: 'inline-block', width: '100%' }}
+          className={classNames(
+            styles.container,
+            fullWidth && styles.fullWidth,
+            className
+          )}
         >
-          <button
-            ref={mergedTriggerRef}
-            id={triggerId}
-            type="button"
-            role="combobox"
-            aria-haspopup="listbox"
-            aria-expanded={isOpen}
-            aria-controls={isOpen ? listboxId : undefined}
-            aria-activedescendant={activeDescendant}
-            aria-label={ariaLabel}
-            aria-labelledby={ariaLabelledBy}
-            aria-describedby={ariaDescribedBy}
-            aria-disabled={disabled ? true : undefined}
-            aria-invalid={error ? true : undefined}
-            disabled={disabled}
-            className={triggerClasses}
-            onClick={toggleListbox}
-            onKeyDown={handleTriggerKeyDown}
-          >
-            <span
-              className={[
-                styles.triggerValue,
-                !displayLabel ? styles.triggerPlaceholder : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              {displayLabel ?? placeholder}
+          {label && (
+            <span id={labelId} className={styles.label}>
+              {label}
             </span>
-            <ChevronIcon open={isOpen} />
-          </button>
+          )}
+          <div className={styles.triggerWrapper}>
+            <button
+              ref={(node) => {
+                (triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+                if (typeof ref === 'function') ref(node);
+                else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+              }}
+              id={id}
+              type="button"
+              role="combobox"
+              aria-expanded={isOpen}
+              aria-haspopup="listbox"
+              aria-controls={listboxId}
+              aria-activedescendant={activeDescendant}
+              aria-label={!label ? ariaLabel : undefined}
+              aria-labelledby={computedAriaLabelledBy}
+              aria-describedby={describedBy}
+              aria-invalid={error ? 'true' : undefined}
+              aria-disabled={disabled}
+              disabled={disabled}
+              className={classNames(
+                styles.trigger,
+                isOpen && styles.triggerOpen,
+                error && styles.triggerError,
+                !selectedValues.length && styles.placeholder
+              )}
+              onClick={() => (isOpen ? closeSelect() : openSelect())}
+              onKeyDown={handleTriggerKeyDown}
+            >
+              <span className={styles.triggerText}>{displayValue()}</span>
+              <span className={styles.chevron} aria-hidden="true">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{
+                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.15s ease',
+                  }}
+                >
+                  <path
+                    d="M4 6L8 10L12 6"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </button>
 
-          {isOpen && (
-            <SelectListbox
-              ref={listboxRef}
-              options={displayOptions}
-              selectedValues={selectedValues}
-              activeIndex={activeIndex}
-              listboxId={listboxId}
-              optionIdPrefix={optionIdPrefix}
+            {isOpen && (
+              <SelectListbox
+                options={options}
+                activeIndex={activeIndex}
+                onKeyDown={handleListboxKeyDown}
+                onSetActiveIndex={setActiveIndex}
+              />
+            )}
+          </div>
+
+          {error && (
+            <span id={errorId} className={styles.errorMessage} role="alert">
+              {error}
+            </span>
+          )}
+          {helperText && !error && (
+            <span id={helperId} className={styles.helperText}>
+              {helperText}
+            </span>
+          )}
+
+          {/* Hidden native select for form submission */}
+          {name && (
+            <select
+              name={name}
               multiple={multiple}
-              onSelectOption={handleSelectOption}
-              onActiveIndexChange={setActiveIndex}
-              onKeyDown={handleListboxKeyDown}
-              labelledBy={ariaLabelledBy ?? triggerId}
-              searchable={searchable}
-              searchValue={searchValue}
-              onSearchChange={setSearchValue}
-            />
+              value={multiple ? selectedValues : selectedValues[0] ?? ''}
+              onChange={() => {}}
+              aria-hidden="true"
+              tabIndex={-1}
+              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0 }}
+            >
+              {options.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           )}
         </div>
       </SelectContext.Provider>

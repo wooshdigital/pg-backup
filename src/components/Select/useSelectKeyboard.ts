@@ -4,250 +4,201 @@ import type { SelectOption } from './SelectContext';
 export interface UseSelectKeyboardOptions {
   options: SelectOption[];
   activeIndex: number;
-  setActiveIndex: (index: number) => void;
-  onSelect: (value: string) => void;
-  onClose: () => void;
-  onOpen: () => void;
   isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onSelectIndex: (index: number) => void;
+  onSetActiveIndex: (index: number) => void;
 }
 
 export function useSelectKeyboard({
   options,
   activeIndex,
-  setActiveIndex,
-  onSelect,
-  onClose,
-  onOpen,
   isOpen,
+  onOpen,
+  onClose,
+  onSelectIndex,
+  onSetActiveIndex,
 }: UseSelectKeyboardOptions) {
-  const typeaheadRef = useRef('');
-  const typeaheadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typeaheadBuffer = useRef('');
+  const typeaheadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const getEnabledOptions = useCallback(
-    () => options.filter((o) => !o.disabled),
+  const getEnabledOptions = useCallback(() => {
+    return options.map((opt, index) => ({ opt, index })).filter(({ opt }) => !opt.disabled);
+  }, [options]);
+
+  const findNextEnabled = useCallback(
+    (from: number, direction: 1 | -1): number => {
+      let idx = from + direction;
+      while (idx >= 0 && idx < options.length) {
+        if (!options[idx].disabled) return idx;
+        idx += direction;
+      }
+      return from;
+    },
     [options]
   );
 
-  const getFirstEnabledIndex = useCallback(() => {
-    return options.findIndex((o) => !o.disabled);
+  const findFirstEnabled = useCallback((): number => {
+    for (let i = 0; i < options.length; i++) {
+      if (!options[i].disabled) return i;
+    }
+    return 0;
   }, [options]);
 
-  const getLastEnabledIndex = useCallback(() => {
+  const findLastEnabled = useCallback((): number => {
     for (let i = options.length - 1; i >= 0; i--) {
       if (!options[i].disabled) return i;
     }
-    return -1;
+    return options.length - 1;
   }, [options]);
-
-  const getNextEnabledIndex = useCallback(
-    (from: number) => {
-      for (let i = from + 1; i < options.length; i++) {
-        if (!options[i].disabled) return i;
-      }
-      return from;
-    },
-    [options]
-  );
-
-  const getPrevEnabledIndex = useCallback(
-    (from: number) => {
-      for (let i = from - 1; i >= 0; i--) {
-        if (!options[i].disabled) return i;
-      }
-      return from;
-    },
-    [options]
-  );
 
   const handleTypeahead = useCallback(
     (char: string) => {
-      // Clear previous timer
-      if (typeaheadTimerRef.current) {
-        clearTimeout(typeaheadTimerRef.current);
+      typeaheadBuffer.current += char.toLowerCase();
+
+      if (typeaheadTimer.current) {
+        clearTimeout(typeaheadTimer.current);
       }
-
-      typeaheadRef.current += char.toLowerCase();
-
-      typeaheadTimerRef.current = setTimeout(() => {
-        typeaheadRef.current = '';
+      typeaheadTimer.current = setTimeout(() => {
+        typeaheadBuffer.current = '';
       }, 500);
 
-      const search = typeaheadRef.current;
-      // Search from current position + 1, then wrap
-      const startIndex = activeIndex >= 0 ? activeIndex + 1 : 0;
+      const buffer = typeaheadBuffer.current;
+      const enabledOptions = getEnabledOptions();
 
-      let found = -1;
-      // Search from current position to end
-      for (let i = startIndex; i < options.length; i++) {
-        if (
-          !options[i].disabled &&
-          options[i].label.toLowerCase().startsWith(search)
-        ) {
-          found = i;
-          break;
-        }
-      }
-      // Wrap around from beginning
-      if (found === -1) {
-        for (let i = 0; i < startIndex; i++) {
-          if (
-            !options[i].disabled &&
-            options[i].label.toLowerCase().startsWith(search)
-          ) {
-            found = i;
-            break;
-          }
-        }
-      }
+      // Try to find an option starting after the current activeIndex
+      const searchFrom = activeIndex;
+      const afterCurrent = enabledOptions.filter(({ index }) => index > searchFrom);
+      const beforeAndCurrent = enabledOptions.filter(({ index }) => index <= searchFrom);
+      const searchOrder = [...afterCurrent, ...beforeAndCurrent];
 
-      if (found !== -1) {
-        setActiveIndex(found);
+      const match = searchOrder.find(({ opt }) =>
+        opt.label.toLowerCase().startsWith(buffer)
+      );
+
+      if (match !== undefined) {
+        onSetActiveIndex(match.index);
+        if (!isOpen) {
+          onOpen();
+        }
       }
     },
-    [options, activeIndex, setActiveIndex]
+    [activeIndex, getEnabledOptions, isOpen, onOpen, onSetActiveIndex]
   );
 
-  /**
-   * Handle keydown on the trigger button (when listbox is closed or open)
-   */
   const handleTriggerKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      switch (event.key) {
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
         case 'Enter':
         case ' ':
-          event.preventDefault();
+          e.preventDefault();
           if (!isOpen) {
             onOpen();
-          } else {
-            if (activeIndex >= 0 && !options[activeIndex]?.disabled) {
-              onSelect(options[activeIndex].value);
-            }
           }
           break;
         case 'ArrowDown':
-          event.preventDefault();
+          e.preventDefault();
           if (!isOpen) {
             onOpen();
           } else {
-            setActiveIndex(getNextEnabledIndex(activeIndex));
+            const next = findNextEnabled(activeIndex, 1);
+            onSetActiveIndex(next);
           }
           break;
         case 'ArrowUp':
-          event.preventDefault();
+          e.preventDefault();
           if (!isOpen) {
             onOpen();
           } else {
-            setActiveIndex(getPrevEnabledIndex(activeIndex));
+            const prev = findNextEnabled(activeIndex, -1);
+            onSetActiveIndex(prev);
           }
           break;
         case 'Home':
-          if (isOpen) {
-            event.preventDefault();
-            setActiveIndex(getFirstEnabledIndex());
-          }
+          e.preventDefault();
+          onSetActiveIndex(findFirstEnabled());
+          if (!isOpen) onOpen();
           break;
         case 'End':
-          if (isOpen) {
-            event.preventDefault();
-            setActiveIndex(getLastEnabledIndex());
-          }
+          e.preventDefault();
+          onSetActiveIndex(findLastEnabled());
+          if (!isOpen) onOpen();
           break;
         case 'Escape':
-          if (isOpen) {
-            event.preventDefault();
-            onClose();
-          }
-          break;
-        case 'Tab':
-          if (isOpen) {
-            onClose();
-          }
+          e.preventDefault();
+          onClose();
           break;
         default:
-          if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-            if (!isOpen) {
-              onOpen();
-            }
-            handleTypeahead(event.key);
+          if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+            handleTypeahead(e.key);
           }
-          break;
       }
     },
     [
       isOpen,
+      activeIndex,
       onOpen,
       onClose,
-      onSelect,
-      activeIndex,
-      options,
-      setActiveIndex,
-      getFirstEnabledIndex,
-      getLastEnabledIndex,
-      getNextEnabledIndex,
-      getPrevEnabledIndex,
+      findNextEnabled,
+      findFirstEnabled,
+      findLastEnabled,
+      onSetActiveIndex,
       handleTypeahead,
     ]
   );
 
-  /**
-   * Handle keydown inside the listbox
-   */
   const handleListboxKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      switch (event.key) {
-        case 'Enter':
-        case ' ':
-          event.preventDefault();
-          if (activeIndex >= 0 && !options[activeIndex]?.disabled) {
-            onSelect(options[activeIndex].value);
-          }
-          break;
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
         case 'ArrowDown':
-          event.preventDefault();
-          setActiveIndex(getNextEnabledIndex(activeIndex));
+          e.preventDefault();
+          onSetActiveIndex(findNextEnabled(activeIndex, 1));
           break;
         case 'ArrowUp':
-          event.preventDefault();
-          setActiveIndex(getPrevEnabledIndex(activeIndex));
+          e.preventDefault();
+          onSetActiveIndex(findNextEnabled(activeIndex, -1));
           break;
         case 'Home':
-          event.preventDefault();
-          setActiveIndex(getFirstEnabledIndex());
+          e.preventDefault();
+          onSetActiveIndex(findFirstEnabled());
           break;
         case 'End':
-          event.preventDefault();
-          setActiveIndex(getLastEnabledIndex());
+          e.preventDefault();
+          onSetActiveIndex(findLastEnabled());
+          break;
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          if (activeIndex >= 0 && activeIndex < options.length) {
+            onSelectIndex(activeIndex);
+          }
           break;
         case 'Escape':
-          event.preventDefault();
+          e.preventDefault();
           onClose();
           break;
         case 'Tab':
           onClose();
           break;
         default:
-          if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
-            handleTypeahead(event.key);
+          if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+            handleTypeahead(e.key);
           }
-          break;
       }
     },
     [
       activeIndex,
       options,
-      onSelect,
+      findNextEnabled,
+      findFirstEnabled,
+      findLastEnabled,
+      onSelectIndex,
+      onSetActiveIndex,
       onClose,
-      setActiveIndex,
-      getFirstEnabledIndex,
-      getLastEnabledIndex,
-      getNextEnabledIndex,
-      getPrevEnabledIndex,
       handleTypeahead,
     ]
   );
 
-  return {
-    handleTriggerKeyDown,
-    handleListboxKeyDown,
-  };
+  return { handleTriggerKeyDown, handleListboxKeyDown };
 }

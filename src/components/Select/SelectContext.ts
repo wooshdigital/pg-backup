@@ -4,28 +4,20 @@ export interface SelectOption {
   value: string;
   label: string;
   disabled?: boolean;
-  group?: string;
 }
 
 export interface SelectContextValue {
-  /** Whether the listbox is open */
   isOpen: boolean;
-  /** Currently selected value(s) */
   selectedValues: string[];
-  /** The option that is currently focused/highlighted (for aria-activedescendant) */
-  activeDescendant: string | null;
-  /** ID of the listbox element */
-  listboxId: string;
-  /** ID prefix for option elements */
-  optionIdPrefix: string;
-  /** Whether multiple selection is allowed */
+  activeDescendant: string | undefined;
   multiple: boolean;
-  /** Called when user selects an option */
-  onSelectOption: (value: string) => void;
-  /** Called to open/close the listbox */
-  onToggle: () => void;
-  /** Called to close the listbox */
-  onClose: () => void;
+  listboxId: string;
+  toggleOpen: () => void;
+  closeSelect: () => void;
+  selectOption: (value: string) => void;
+  setActiveDescendant: (id: string | undefined) => void;
+  isSelected: (value: string) => boolean;
+  getOptionId: (value: string) => string;
 }
 
 export const SelectContext = createContext<SelectContextValue | null>(null);
@@ -33,9 +25,7 @@ export const SelectContext = createContext<SelectContextValue | null>(null);
 export function useSelectContext(): SelectContextValue {
   const ctx = useContext(SelectContext);
   if (!ctx) {
-    throw new Error(
-      'useSelectContext must be used within a Select component tree'
-    );
+    throw new Error('useSelectContext must be used within a Select component');
   }
   return ctx;
 }

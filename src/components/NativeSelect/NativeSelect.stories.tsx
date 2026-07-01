@@ -5,20 +5,24 @@ import { NativeSelect } from './NativeSelect';
 const meta: Meta<typeof NativeSelect> = {
   title: 'Components/NativeSelect',
   component: NativeSelect,
-  parameters: {
-    layout: 'centered',
-  },
   tags: ['autodocs'],
+  argTypes: {
+    disabled: { control: 'boolean' },
+    error: { control: 'text' },
+    helperText: { control: 'text' },
+    label: { control: 'text' },
+  },
 };
 
 export default meta;
 type Story = StoryObj<typeof NativeSelect>;
 
-const BasicOptions = () => (
+const countryOptions = (
   <>
+    <option value="">Select a country</option>
     <option value="us">United States</option>
-    <option value="ca">Canada</option>
     <option value="gb">United Kingdom</option>
+    <option value="ca">Canada</option>
     <option value="au">Australia</option>
     <option value="de">Germany</option>
     <option value="fr">France</option>
@@ -27,60 +31,39 @@ const BasicOptions = () => (
 );
 
 export const Default: Story = {
-  render: () => (
-    <div style={{ width: 280 }}>
-      <label
-        htmlFor="default-select"
-        style={{ display: 'block', marginBottom: 4, fontSize: 14, fontWeight: 500 }}
-      >
-        Country
-      </label>
-      <NativeSelect id="default-select">
-        <BasicOptions />
-      </NativeSelect>
-    </div>
-  ),
+  args: {
+    label: 'Country',
+  },
+  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
 };
 
 export const WithPlaceholder: Story = {
   render: () => (
-    <div style={{ width: 280 }}>
-      <label
-        htmlFor="placeholder-select"
-        style={{ display: 'block', marginBottom: 4, fontSize: 14, fontWeight: 500 }}
-      >
-        Country
-      </label>
-      <NativeSelect id="placeholder-select">
-        <option value="" disabled>
-          Select a country…
-        </option>
-        <BasicOptions />
-      </NativeSelect>
-    </div>
+    <NativeSelect label="Country">
+      <option value="" disabled>
+        Select a country...
+      </option>
+      <option value="us">United States</option>
+      <option value="gb">United Kingdom</option>
+      <option value="ca">Canada</option>
+    </NativeSelect>
   ),
 };
 
 export const Controlled: Story = {
   render: () => {
-    const [value, setValue] = useState('ca');
+    const [value, setValue] = useState('');
     return (
-      <div style={{ width: 280 }}>
-        <label
-          htmlFor="controlled-select"
-          style={{ display: 'block', marginBottom: 4, fontSize: 14, fontWeight: 500 }}
-        >
-          Country (controlled)
-        </label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <NativeSelect
-          id="controlled-select"
+          label="Country"
           value={value}
           onChange={(e) => setValue(e.target.value)}
         >
-          <BasicOptions />
+          {countryOptions}
         </NativeSelect>
-        <p style={{ marginTop: 8, fontSize: 13, color: '#6b7280' }}>
-          Selected: <strong>{value}</strong>
+        <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+          Selected: {value || '(none)'}
         </p>
       </div>
     );
@@ -89,60 +72,44 @@ export const Controlled: Story = {
 
 export const Multiple: Story = {
   render: () => (
-    <div style={{ width: 280 }}>
-      <label
-        htmlFor="multiple-select"
-        style={{ display: 'block', marginBottom: 4, fontSize: 14, fontWeight: 500 }}
-      >
-        Countries (hold Ctrl/Cmd to select multiple)
-      </label>
-      <NativeSelect id="multiple-select" multiple size={5}>
-        <BasicOptions />
-      </NativeSelect>
-    </div>
+    <NativeSelect label="Countries" multiple size={5} style={{ height: 'auto' }}>
+      <option value="us">United States</option>
+      <option value="gb">United Kingdom</option>
+      <option value="ca">Canada</option>
+      <option value="au">Australia</option>
+      <option value="de">Germany</option>
+    </NativeSelect>
   ),
 };
 
 export const Disabled: Story = {
-  render: () => (
-    <div style={{ width: 280 }}>
-      <label
-        htmlFor="disabled-select"
-        style={{ display: 'block', marginBottom: 4, fontSize: 14, fontWeight: 500 }}
-      >
-        Country
-      </label>
-      <NativeSelect id="disabled-select" disabled>
-        <option value="us">United States</option>
-        <BasicOptions />
-      </NativeSelect>
-    </div>
-  ),
+  args: {
+    label: 'Country',
+    disabled: true,
+  },
+  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
 };
 
 export const WithError: Story = {
-  render: () => (
-    <div style={{ width: 280 }}>
-      <label
-        htmlFor="error-select"
-        style={{ display: 'block', marginBottom: 4, fontSize: 14, fontWeight: 500 }}
-      >
-        Country
-      </label>
-      <NativeSelect
-        id="error-select"
-        error
-        aria-describedby="error-select-msg"
-      >
-        <option value="">Select a country…</option>
-        <BasicOptions />
-      </NativeSelect>
-      <p
-        id="error-select-msg"
-        style={{ marginTop: 4, fontSize: 13, color: '#ef4444' }}
-      >
-        Please select a country.
-      </p>
-    </div>
-  ),
+  args: {
+    label: 'Country',
+    error: 'Please select a country',
+  },
+  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
+};
+
+export const WithHelperText: Story = {
+  args: {
+    label: 'Country',
+    helperText: 'Select the country where you reside',
+  },
+  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
+};
+
+export const FullWidth: Story = {
+  args: {
+    label: 'Country',
+    fullWidth: true,
+  },
+  render: (args) => <NativeSelect {...args}>{countryOptions}</NativeSelect>,
 };
