@@ -1,65 +1,77 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { roundCurrency } from '../../utils/splitCalculator';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 
 interface SplitBalanceIndicatorProps {
-  total: number;
   diff: number;
-  currency: string;
+  currencySymbol?: string;
+  style?: ViewStyle;
 }
 
-export function SplitBalanceIndicator({ total, diff, currency }: SplitBalanceIndicatorProps) {
+export const SplitBalanceIndicator: React.FC<SplitBalanceIndicatorProps> = ({
+  diff,
+  currencySymbol = '$',
+  style,
+}) => {
+  const isBalanced = diff === 0;
   const isOver = diff < 0;
-  const isExact = diff === 0;
-  const absDiff = Math.abs(roundCurrency(diff));
 
-  if (isExact) {
-    return (
-      <View style={[styles.container, styles.containerSuccess]}>
-        <Text style={[styles.text, styles.textSuccess]}>✓ Split is balanced</Text>
-      </View>
-    );
+  const absVal = Math.abs(diff).toFixed(2);
+
+  let message: string;
+  if (isBalanced) {
+    message = 'Splits are balanced ✓';
+  } else if (isOver) {
+    message = `${currencySymbol}${absVal} over-assigned`;
+  } else {
+    message = `${currencySymbol}${absVal} unassigned`;
   }
 
   return (
-    <View style={[styles.container, isOver ? styles.containerError : styles.containerWarning]}>
-      <Text style={[styles.text, isOver ? styles.textError : styles.textWarning]}>
-        {isOver
-          ? `${currency} ${absDiff.toFixed(2)} over-assigned`
-          : `${currency} ${absDiff.toFixed(2)} unassigned`}
+    <View
+      style={[
+        styles.container,
+        isBalanced && styles.containerBalanced,
+        isOver && styles.containerOver,
+      ]}
+    >
+      <Text
+        style={[
+          styles.text,
+          isBalanced && styles.textBalanced,
+          isOver && styles.textOver,
+        ]}
+      >
+        {message}
       </Text>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFF9C4',
     borderRadius: 8,
-    marginVertical: 8,
     alignItems: 'center',
+    marginHorizontal: 16,
+    marginVertical: 8,
   },
-  containerSuccess: {
+  containerBalanced: {
     backgroundColor: '#E8F5E9',
   },
-  containerWarning: {
-    backgroundColor: '#FFF8E1',
-  },
-  containerError: {
+  containerOver: {
     backgroundColor: '#FFEBEE',
   },
   text: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-  },
-  textSuccess: {
-    color: '#2E7D32',
-  },
-  textWarning: {
     color: '#F57F17',
   },
-  textError: {
+  textBalanced: {
+    color: '#2E7D32',
+  },
+  textOver: {
     color: '#C62828',
   },
 });

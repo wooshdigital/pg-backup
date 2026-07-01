@@ -1,51 +1,59 @@
-export interface Split {
+export type SplitResult = {
   participantId: string;
   amount: number;
-}
+};
 
-export function calculateEqualSplits(
-  participantIds: string[],
-  total: number
-): Split[] {
+export function calculateEqualSplit(
+  totalAmount: number,
+  participantIds: string[]
+): SplitResult[] {
   if (participantIds.length === 0) return [];
-  const base = roundCurrency(total / participantIds.length);
-  const splits: Split[] = participantIds.map((id) => ({
+
+  const share = Math.floor((totalAmount / participantIds.length) * 100) / 100;
+  const remainder =
+    Math.round((totalAmount - share * participantIds.length) * 100) / 100;
+
+  return participantIds.map((id, index) => ({
     participantId: id,
-    amount: base,
+    amount:
+      index === participantIds.length - 1
+        ? Math.round((share + remainder) * 100) / 100
+        : share,
   }));
-  // Fix rounding remainder on last participant
-  const sum = splits.reduce((acc, s) => acc + s.amount, 0);
-  const diff = roundCurrency(total - sum);
-  if (diff !== 0) {
-    splits[splits.length - 1].amount = roundCurrency(
-      splits[splits.length - 1].amount + diff
-    );
-  }
-  return splits;
-}
-
-export function validateCustomSplits(
-  splits: Split[],
-  total: number
-): { valid: boolean; diff: number } {
-  const sum = splits.reduce((acc, s) => acc + s.amount, 0);
-  const diff = roundCurrency(total - sum);
-  return { valid: diff === 0, diff };
-}
-
-export function adjustLastParticipant(
-  splits: Split[],
-  total: number
-): Split[] {
-  if (splits.length === 0) return splits;
-  const adjusted = splits.map((s) => ({ ...s }));
-  const sumExceptLast = adjusted
-    .slice(0, -1)
-    .reduce((acc, s) => acc + s.amount, 0);
-  adjusted[adjusted.length - 1].amount = roundCurrency(total - sumExceptLast);
-  return adjusted;
 }
 
 export function roundCurrency(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export function validateCustomSplits(
+  splits: Record<string, number>,
+  total: number
+): { valid: boolean; diff: number } {
+  const sum = Object.values(splits).reduce(
+    (acc, v) => acc + roundCurrency(v),
+    0
+  );
+  const diff = roundCurrency(total - roundCurrency(sum));
+  return { valid: diff === 0, diff };
+}
+
+export function adjustLastParticipant(
+  splits: Record<string, number>,
+  total: number,
+  participantIds: string[]
+): Record<string, number> {
+  if (participantIds.length === 0) return splits;
+
+  const lastId = participantIds[participantIds.length - 1];
+  const othersSum = participantIds
+    .slice(0, -1)
+    .reduce((acc, id) => acc + roundCurrency(splits[id] ?? 0), 0);
+
+  const lastAmount = roundCurrency(total - othersSum);
+
+  return {
+    ...splits,
+    [lastId]: lastAmount >= 0 ? lastAmount : 0,
+  };
 }

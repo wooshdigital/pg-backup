@@ -5,7 +5,7 @@ export interface Participant {
   avatarColor?: string;
 }
 
-export interface ExpenseSplit {
+export interface SplitEntry {
   participantId: string;
   amount: number;
 }
@@ -15,16 +15,22 @@ export interface Expense {
   description: string;
   amount: number;
   currency: string;
-  paidById: string;
+  paidBy: string;
+  splits: SplitEntry[];
+  splitType: 'equal' | 'custom';
   date: string;
-  splits?: ExpenseSplit[];
+  category: string;
 }
 
 export interface Trip {
   id: string;
   name: string;
+  description?: string;
   currency: string;
-  participants?: Participant[];
-  expenses?: Expense[];
-  createdAt?: string;
+  startDate?: string;
+  endDate?: string;
+  participants: Participant[];
+  expenses: Expense[];
+  createdAt: string;
+  updatedAt?: string;
 }
