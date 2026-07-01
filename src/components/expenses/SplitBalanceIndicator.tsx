@@ -4,58 +4,62 @@ import { roundCurrency } from '../../utils/splitCalculator';
 
 interface SplitBalanceIndicatorProps {
   total: number;
-  assigned: number;
-  currency?: string;
+  diff: number;
+  currency: string;
 }
 
-export const SplitBalanceIndicator: React.FC<SplitBalanceIndicatorProps> = ({
-  total,
-  assigned,
-  currency = '$',
-}) => {
-  const remaining = roundCurrency(total - assigned);
-  const isOver = remaining < -0.001;
-  const isExact = Math.abs(remaining) < 0.001;
+export function SplitBalanceIndicator({ total, diff, currency }: SplitBalanceIndicatorProps) {
+  const isOver = diff < 0;
+  const isExact = diff === 0;
+  const absDiff = Math.abs(roundCurrency(diff));
+
+  if (isExact) {
+    return (
+      <View style={[styles.container, styles.containerSuccess]}>
+        <Text style={[styles.text, styles.textSuccess]}>✓ Split is balanced</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, isOver && styles.containerOver, isExact && styles.containerExact]}>
-      <Text style={[styles.label, isOver && styles.labelOver, isExact && styles.labelExact]}>
-        {isExact
-          ? '✓ Splits balanced'
-          : isOver
-          ? `${currency}${Math.abs(remaining).toFixed(2)} over-assigned`
-          : `${currency}${remaining.toFixed(2)} unassigned`}
+    <View style={[styles.container, isOver ? styles.containerError : styles.containerWarning]}>
+      <Text style={[styles.text, isOver ? styles.textError : styles.textWarning]}>
+        {isOver
+          ? `${currency} ${absDiff.toFixed(2)} over-assigned`
+          : `${currency} ${absDiff.toFixed(2)} unassigned`}
       </Text>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#FEF9C3',
-    alignItems: 'center',
+    borderRadius: 8,
     marginVertical: 8,
+    alignItems: 'center',
   },
-  containerOver: {
-    backgroundColor: '#FEE2E2',
+  containerSuccess: {
+    backgroundColor: '#E8F5E9',
   },
-  containerExact: {
-    backgroundColor: '#DCFCE7',
+  containerWarning: {
+    backgroundColor: '#FFF8E1',
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#92400E',
+  containerError: {
+    backgroundColor: '#FFEBEE',
   },
-  labelOver: {
-    color: '#991B1B',
+  text: {
+    fontSize: 13,
+    fontWeight: '600',
   },
-  labelExact: {
-    color: '#166534',
+  textSuccess: {
+    color: '#2E7D32',
+  },
+  textWarning: {
+    color: '#F57F17',
+  },
+  textError: {
+    color: '#C62828',
   },
 });
-
-export default SplitBalanceIndicator;

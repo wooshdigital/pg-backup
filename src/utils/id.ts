@@ -1,3 +1,3 @@
 export function generateId(): string {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }

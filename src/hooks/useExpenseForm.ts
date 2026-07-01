@@ -1,7 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useTrip } from '../context/TripContext';
-import { calculateEqualSplits, validateCustomSplits, adjustLastParticipant, roundCurrency } from '../utils/splitCalculator';
-import type { SplitType } from '../components/expenses/SplitTypeToggle';
+import { Expense, Participant } from '../types';
+import {
+  calculateEqualSplits,
+  adjustLastParticipant,
+  validateCustomSplits,
+  roundCurrency,
+  Split,
+} from '../utils/splitCalculator';
+
+export type SplitType = 'equal' | 'custom';
 
 export interface ExpenseFormValues {
   description: string;
@@ -10,232 +17,174 @@ export interface ExpenseFormValues {
   paidById: string;
   selectedParticipantIds: string[];
   splitType: SplitType;
-  customSplits: Record<string, string>; // participantId -> amount string
-  date: string;
-  category: string;
-  notes: string;
+  customSplits: Split[];
 }
-
-const DEFAULT_VALUES: ExpenseFormValues = {
-  description: '',
-  amount: '',
-  currency: 'USD',
-  paidById: '',
-  selectedParticipantIds: [],
-  splitType: 'equal',
-  customSplits: {},
-  date: new Date().toISOString().split('T')[0],
-  category: '',
-  notes: '',
-};
 
 export interface UseExpenseFormOptions {
-  tripId: string;
-  expenseId?: string;
-  onSuccess?: () => void;
+  participants: Participant[];
+  tripCurrency: string;
+  existingExpense?: Expense | null;
+  onSubmit: (values: ExpenseFormValues, splits: Split[]) => void;
 }
 
-export interface UseExpenseFormReturn {
-  step: number;
-  values: ExpenseFormValues;
-  errors: Partial<Record<keyof ExpenseFormValues, string>>;
-  isEditing: boolean;
-  isValid: boolean;
-  splitDifference: number;
-  setStep: (step: number) => void;
-  nextStep: () => void;
-  prevStep: () => void;
-  updateField: <K extends keyof ExpenseFormValues>(field: K, value: ExpenseFormValues[K]) => void;
-  toggleParticipant: (participantId: string) => void;
-  updateCustomSplit: (participantId: string, amount: string) => void;
-  handleSplitTypeChange: (type: SplitType) => void;
-  submit: () => void;
-  canProceed: boolean;
-}
-
-export function useExpenseForm({ tripId, expenseId, onSuccess }: UseExpenseFormOptions): UseExpenseFormReturn {
-  const { state, dispatch } = useTrip();
-  const trip = state.trips.find((t) => t.id === tripId);
-  const isEditing = Boolean(expenseId);
-
+export function useExpenseForm({
+  participants,
+  tripCurrency,
+  existingExpense,
+  onSubmit,
+}: UseExpenseFormOptions) {
   const [step, setStep] = useState(1);
-  const [values, setValues] = useState<ExpenseFormValues>(() => {
-    if (expenseId && trip) {
-      const expense = trip.expenses?.find((e: any) => e.id === expenseId);
-      if (expense) {
-        const customSplits: Record<string, string> = {};
-        if (expense.splits) {
-          expense.splits.forEach((s: any) => {
-            customSplits[s.participantId] = s.amount.toString();
-          });
-        }
-        return {
-          description: expense.description || '',
-          amount: expense.amount?.toString() || '',
-          currency: expense.currency || 'USD',
-          paidById: expense.paidById || '',
-          selectedParticipantIds: expense.splits?.map((s: any) => s.participantId) || [],
-          splitType: expense.splitType || 'equal',
-          customSplits,
-          date: expense.date || new Date().toISOString().split('T')[0],
-          category: expense.category || '',
-          notes: expense.notes || '',
-        };
-      }
+
+  const getInitialValues = (): ExpenseFormValues => {
+    if (existingExpense) {
+      const existingSplits: Split[] = existingExpense.splits
+        ? existingExpense.splits.map((s: any) => ({
+            participantId: s.participantId,
+            amount: s.amount,
+          }))
+        : [];
+      const selectedIds = existingSplits.map((s) => s.participantId);
+      // Detect if it's a custom split (not perfectly equal)
+      const equalAmounts = calculateEqualSplits(selectedIds, existingExpense.amount);
+      const isCustom = existingSplits.some((s, i) => {
+        const eq = equalAmounts.find((e) => e.participantId === s.participantId);
+        return eq && Math.abs(eq.amount - s.amount) > 0.001;
+      });
+      return {
+        description: existingExpense.description,
+        amount: String(existingExpense.amount),
+        currency: existingExpense.currency || tripCurrency,
+        paidById: existingExpense.paidById,
+        selectedParticipantIds: selectedIds,
+        splitType: isCustom ? 'custom' : 'equal',
+        customSplits: existingSplits,
+      };
     }
     return {
-      ...DEFAULT_VALUES,
-      currency: trip?.currency || 'USD',
-      paidById: trip?.participants?.[0]?.id || '',
-      selectedParticipantIds: trip?.participants?.map((p: any) => p.id) || [],
+      description: '',
+      amount: '',
+      currency: tripCurrency,
+      paidById: participants.length > 0 ? participants[0].id : '',
+      selectedParticipantIds: participants.map((p) => p.id),
+      splitType: 'equal',
+      customSplits: [],
     };
-  });
+  };
 
-  const [errors, setErrors] = useState<Partial<Record<keyof ExpenseFormValues, string>>>({});
+  const [values, setValues] = useState<ExpenseFormValues>(getInitialValues);
 
-  // Compute split difference for custom splits
-  const numericAmount = parseFloat(values.amount) || 0;
-  const assignedTotal = values.selectedParticipantIds.reduce((sum, id) => {
-    return sum + (parseFloat(values.customSplits[id] || '0') || 0);
-  }, 0);
-  const splitDifference = roundCurrency(numericAmount - assignedTotal);
+  // Reset form when existingExpense changes (e.g. navigation)
+  useEffect(() => {
+    setValues(getInitialValues());
+    setStep(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingExpense?.id]);
 
-  const canProceedStep1 = Boolean(values.description.trim() && values.amount && parseFloat(values.amount) > 0);
-  const canProceedStep2 = Boolean(values.paidById);
-  const canProceedStep3 =
-    values.selectedParticipantIds.length > 0 &&
-    (values.splitType === 'equal' || Math.abs(splitDifference) < 0.001);
+  // Sync customSplits when participants/amount/splitType changes
+  useEffect(() => {
+    if (values.splitType === 'equal') return;
+    const amount = parseFloat(values.amount) || 0;
+    if (amount <= 0) return;
+    // Build customSplits preserving existing values for selected participants
+    const newSplits = values.selectedParticipantIds.map((id) => {
+      const existing = values.customSplits.find((s) => s.participantId === id);
+      return existing || { participantId: id, amount: 0 };
+    });
+    setValues((prev) => ({ ...prev, customSplits: newSplits }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values.selectedParticipantIds, values.splitType]);
 
-  const canProceed =
-    step === 1 ? canProceedStep1 :
-    step === 2 ? canProceedStep2 :
-    canProceedStep3;
-
-  const updateField = useCallback(<K extends keyof ExpenseFormValues>(
-    field: K,
+  const setField = useCallback(<K extends keyof ExpenseFormValues>(
+    key: K,
     value: ExpenseFormValues[K]
   ) => {
-    setValues((prev) => ({ ...prev, [field]: value }));
+    setValues((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const toggleParticipant = useCallback((participantId: string) => {
+  const toggleParticipant = useCallback((id: string) => {
     setValues((prev) => {
-      const ids = prev.selectedParticipantIds;
-      const next = ids.includes(participantId)
-        ? ids.filter((id) => id !== participantId)
-        : [...ids, participantId];
-
-      // Reset custom splits for removed participant; initialize for added one
-      const customSplits = { ...prev.customSplits };
-      if (ids.includes(participantId)) {
-        delete customSplits[participantId];
-      } else {
-        customSplits[participantId] = '';
-      }
-
-      return { ...prev, selectedParticipantIds: next, customSplits };
+      const selected = prev.selectedParticipantIds.includes(id)
+        ? prev.selectedParticipantIds.filter((pid) => pid !== id)
+        : [...prev.selectedParticipantIds, id];
+      return { ...prev, selectedParticipantIds: selected };
     });
   }, []);
 
-  const updateCustomSplit = useCallback((participantId: string, amount: string) => {
-    setValues((prev) => ({
-      ...prev,
-      customSplits: { ...prev.customSplits, [participantId]: amount },
-    }));
-  }, []);
-
-  const handleSplitTypeChange = useCallback((type: SplitType) => {
+  const setCustomSplitAmount = useCallback((participantId: string, amount: number) => {
     setValues((prev) => {
-      if (type === 'equal') {
-        return { ...prev, splitType: type, customSplits: {} };
-      }
-      // Initialize custom splits with equal amounts when switching to custom
-      const total = parseFloat(prev.amount) || 0;
-      const equalSplits = calculateEqualSplits(prev.selectedParticipantIds, total);
-      const customSplits: Record<string, string> = {};
-      equalSplits.forEach((s) => {
-        customSplits[s.participantId] = s.amount > 0 ? s.amount.toString() : '';
-      });
-      return { ...prev, splitType: type, customSplits };
+      const splits = prev.customSplits.map((s) =>
+        s.participantId === participantId ? { ...s, amount } : s
+      );
+      return { ...prev, customSplits: splits };
     });
   }, []);
 
-  const nextStep = useCallback(() => {
-    setStep((s) => Math.min(s + 1, 3));
-  }, []);
+  const autoAdjustLastParticipant = useCallback(() => {
+    const amount = parseFloat(values.amount) || 0;
+    if (amount <= 0 || values.customSplits.length === 0) return;
+    const adjusted = adjustLastParticipant(values.customSplits, amount);
+    setValues((prev) => ({ ...prev, customSplits: adjusted }));
+  }, [values.amount, values.customSplits]);
 
-  const prevStep = useCallback(() => {
-    setStep((s) => Math.max(s - 1, 1));
-  }, []);
-
-  const isValid =
-    canProceedStep1 &&
-    canProceedStep2 &&
-    canProceedStep3;
-
-  const submit = useCallback(() => {
-    if (!isValid) return;
-
-    const total = parseFloat(values.amount);
-    let splits;
-
+  const computedSplits = useCallback((): Split[] => {
+    const amount = parseFloat(values.amount) || 0;
     if (values.splitType === 'equal') {
-      splits = calculateEqualSplits(values.selectedParticipantIds, total);
-    } else {
-      // Use adjusted last participant to handle rounding
-      const rawSplits = values.selectedParticipantIds.map((id) => ({
-        participantId: id,
-        amount: parseFloat(values.customSplits[id] || '0') || 0,
-      }));
-      const adjusted = adjustLastParticipant(rawSplits, total);
-      splits = adjusted;
+      return calculateEqualSplits(values.selectedParticipantIds, amount);
     }
+    return values.customSplits;
+  }, [values]);
 
-    const expenseData = {
-      id: expenseId || `expense-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      description: values.description.trim(),
-      amount: total,
-      currency: values.currency,
-      paidById: values.paidById,
-      splits,
-      splitType: values.splitType,
-      date: values.date,
-      category: values.category,
-      notes: values.notes,
-      createdAt: isEditing ? undefined : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  const splitValidation = useCallback(() => {
+    if (values.splitType === 'equal') return { valid: true, diff: 0 };
+    const amount = parseFloat(values.amount) || 0;
+    return validateCustomSplits(values.customSplits, amount);
+  }, [values]);
 
-    if (isEditing) {
-      dispatch({
-        type: 'TRIP_UPDATE_EXPENSE',
-        payload: { tripId, expense: expenseData },
-      });
-    } else {
-      dispatch({
-        type: 'TRIP_ADD_EXPENSE',
-        payload: { tripId, expense: expenseData },
-      });
+  const canProceed = useCallback(
+    (currentStep: number): boolean => {
+      if (currentStep === 1) {
+        return values.description.trim().length > 0 && parseFloat(values.amount) > 0;
+      }
+      if (currentStep === 2) {
+        return !!values.paidById;
+      }
+      if (currentStep === 3) {
+        if (values.selectedParticipantIds.length === 0) return false;
+        const { valid } = splitValidation();
+        return values.splitType === 'equal' || valid;
+      }
+      return true;
+    },
+    [values, splitValidation]
+  );
+
+  const handleNext = useCallback(() => {
+    if (step < 3 && canProceed(step)) {
+      setStep((s) => s + 1);
     }
+  }, [step, canProceed]);
 
-    onSuccess?.();
-  }, [isValid, values, tripId, expenseId, isEditing, dispatch, onSuccess]);
+  const handleBack = useCallback(() => {
+    if (step > 1) setStep((s) => s - 1);
+  }, [step]);
+
+  const handleSubmit = useCallback(() => {
+    if (!canProceed(3)) return;
+    onSubmit(values, computedSplits());
+  }, [values, computedSplits, canProceed, onSubmit]);
 
   return {
     step,
     values,
-    errors,
-    isEditing,
-    isValid,
-    splitDifference,
-    setStep,
-    nextStep,
-    prevStep,
-    updateField,
+    setField,
     toggleParticipant,
-    updateCustomSplit,
-    handleSplitTypeChange,
-    submit,
+    setCustomSplitAmount,
+    autoAdjustLastParticipant,
+    computedSplits,
+    splitValidation,
     canProceed,
+    handleNext,
+    handleBack,
+    handleSubmit,
   };
 }

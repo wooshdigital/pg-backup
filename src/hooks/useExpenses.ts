@@ -1,36 +1,42 @@
-import { useContext } from 'react';
-import { TripContext } from '../context/TripContext';
+import { useCallback } from 'react';
+import { useTrip } from '../context/TripContext';
 import { Expense } from '../types';
+import { generateId } from '../utils/id';
 
 export function useExpenses(tripId: string) {
-  const { state, dispatch } = useContext(TripContext);
+  const { trip, dispatch } = useTrip();
 
-  const trip = state.trips.find((t) => t.id === tripId);
   const expenses: Expense[] = trip?.expenses ?? [];
 
-  const addExpense = async (
-    expenseData: Omit<Expense, 'id' | 'tripId' | 'createdAt' | 'updatedAt'>
-  ) => {
-    const newExpense: Expense = {
-      ...expenseData,
-      id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      tripId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    dispatch({ type: 'TRIP_ADD_EXPENSE', payload: { tripId, expense: newExpense } });
-    return newExpense;
-  };
+  const addExpense = useCallback(
+    (
+      expenseData: Omit<Expense, 'id'>
+    ) => {
+      const expense: Expense = {
+        ...expenseData,
+        id: generateId(),
+      };
+      dispatch({ type: 'TRIP_ADD_EXPENSE', payload: { tripId, expense } });
+    },
+    [dispatch, tripId]
+  );
 
-  const updateExpense = async (expense: Expense) => {
-    const updated = { ...expense, updatedAt: new Date().toISOString() };
-    dispatch({ type: 'TRIP_UPDATE_EXPENSE', payload: { tripId, expense: updated } });
-    return updated;
-  };
+  const updateExpense = useCallback(
+    (expense: Expense) => {
+      dispatch({ type: 'TRIP_UPDATE_EXPENSE', payload: { tripId, expense } });
+    },
+    [dispatch, tripId]
+  );
 
-  const deleteExpense = async (expenseId: string) => {
-    dispatch({ type: 'TRIP_DELETE_EXPENSE', payload: { tripId, expenseId } });
-  };
+  const deleteExpense = useCallback(
+    (expenseId: string) => {
+      dispatch({
+        type: 'TRIP_DELETE_EXPENSE',
+        payload: { tripId, expenseId },
+      });
+    },
+    [dispatch, tripId]
+  );
 
   return { expenses, addExpense, updateExpense, deleteExpense };
 }

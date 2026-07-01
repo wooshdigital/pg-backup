@@ -1,98 +1,54 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useCallback,
+  ReactNode,
+} from 'react';
+import { Trip, Expense, Participant } from '../types';
 
-// Types
-export interface Participant {
-  id: string;
-  name: string;
-  email?: string;
-}
+// ─── State ────────────────────────────────────────────────────────────────────
 
-export interface Split {
-  participantId: string;
-  amount: number;
-}
-
-export interface Expense {
-  id: string;
-  description: string;
-  amount: number;
-  currency: string;
-  paidById: string;
-  splits: Split[];
-  splitType?: 'equal' | 'custom';
-  date: string;
-  category?: string;
-  notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface Trip {
-  id: string;
-  name: string;
-  description?: string;
-  currency: string;
-  participants: Participant[];
-  expenses: Expense[];
-  createdAt: string;
-  updatedAt?: string;
-}
-
-export interface TripState {
+interface TripState {
   trips: Trip[];
-  loading: boolean;
-  error: string | null;
+  activeTripId: string | null;
 }
 
-// Actions
-export type TripAction =
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_TRIPS'; payload: Trip[] }
-  | { type: 'TRIP_ADD'; payload: Trip }
-  | { type: 'TRIP_UPDATE'; payload: Trip }
-  | { type: 'TRIP_REMOVE'; payload: string }
+// ─── Actions ──────────────────────────────────────────────────────────────────
+
+type TripAction =
+  | { type: 'TRIP_CREATE'; payload: Trip }
+  | { type: 'TRIP_DELETE'; payload: { tripId: string } }
+  | { type: 'TRIP_SET_ACTIVE'; payload: { tripId: string } }
   | { type: 'TRIP_ADD_PARTICIPANT'; payload: { tripId: string; participant: Participant } }
   | { type: 'TRIP_REMOVE_PARTICIPANT'; payload: { tripId: string; participantId: string } }
   | { type: 'TRIP_ADD_EXPENSE'; payload: { tripId: string; expense: Expense } }
   | { type: 'TRIP_UPDATE_EXPENSE'; payload: { tripId: string; expense: Expense } }
-  | { type: 'TRIP_REMOVE_EXPENSE'; payload: { tripId: string; expenseId: string } };
+  | { type: 'TRIP_DELETE_EXPENSE'; payload: { tripId: string; expenseId: string } };
 
-// Initial state
-const initialState: TripState = {
-  trips: [],
-  loading: false,
-  error: null,
-};
+// ─── Reducer ──────────────────────────────────────────────────────────────────
 
-// Reducer
 function tripReducer(state: TripState, action: TripAction): TripState {
   switch (action.type) {
-    case 'SET_LOADING':
-      return { ...state, loading: action.payload };
-
-    case 'SET_ERROR':
-      return { ...state, error: action.payload };
-
-    case 'SET_TRIPS':
-      return { ...state, trips: action.payload };
-
-    case 'TRIP_ADD':
-      return { ...state, trips: [...state.trips, action.payload] };
-
-    case 'TRIP_UPDATE':
+    case 'TRIP_CREATE':
       return {
         ...state,
-        trips: state.trips.map((t) =>
-          t.id === action.payload.id ? { ...t, ...action.payload } : t
-        ),
+        trips: [...state.trips, action.payload],
+        activeTripId: action.payload.id,
       };
 
-    case 'TRIP_REMOVE':
+    case 'TRIP_DELETE':
       return {
         ...state,
-        trips: state.trips.filter((t) => t.id !== action.payload),
+        trips: state.trips.filter((t) => t.id !== action.payload.tripId),
+        activeTripId:
+          state.activeTripId === action.payload.tripId
+            ? null
+            : state.activeTripId,
       };
+
+    case 'TRIP_SET_ACTIVE':
+      return { ...state, activeTripId: action.payload.tripId };
 
     case 'TRIP_ADD_PARTICIPANT':
       return {
@@ -101,8 +57,7 @@ function tripReducer(state: TripState, action: TripAction): TripState {
           t.id === action.payload.tripId
             ? {
                 ...t,
-                participants: [...t.participants, action.payload.participant],
-                updatedAt: new Date().toISOString(),
+                participants: [...(t.participants ?? []), action.payload.participant],
               }
             : t
         ),
@@ -115,10 +70,9 @@ function tripReducer(state: TripState, action: TripAction): TripState {
           t.id === action.payload.tripId
             ? {
                 ...t,
-                participants: t.participants.filter(
+                participants: (t.participants ?? []).filter(
                   (p) => p.id !== action.payload.participantId
                 ),
-                updatedAt: new Date().toISOString(),
               }
             : t
         ),
@@ -131,8 +85,7 @@ function tripReducer(state: TripState, action: TripAction): TripState {
           t.id === action.payload.tripId
             ? {
                 ...t,
-                expenses: [...(t.expenses || []), action.payload.expense],
-                updatedAt: new Date().toISOString(),
+                expenses: [...(t.expenses ?? []), action.payload.expense],
               }
             : t
         ),
@@ -145,33 +98,24 @@ function tripReducer(state: TripState, action: TripAction): TripState {
           t.id === action.payload.tripId
             ? {
                 ...t,
-                expenses: (t.expenses || []).map((e) =>
-                  e.id === action.payload.expense.id
-                    ? {
-                        ...e,
-                        ...action.payload.expense,
-                        createdAt: e.createdAt, // preserve original createdAt
-                        updatedAt: new Date().toISOString(),
-                      }
-                    : e
+                expenses: (t.expenses ?? []).map((e) =>
+                  e.id === action.payload.expense.id ? action.payload.expense : e
                 ),
-                updatedAt: new Date().toISOString(),
               }
             : t
         ),
       };
 
-    case 'TRIP_REMOVE_EXPENSE':
+    case 'TRIP_DELETE_EXPENSE':
       return {
         ...state,
         trips: state.trips.map((t) =>
           t.id === action.payload.tripId
             ? {
                 ...t,
-                expenses: (t.expenses || []).filter(
+                expenses: (t.expenses ?? []).filter(
                   (e) => e.id !== action.payload.expenseId
                 ),
-                updatedAt: new Date().toISOString(),
               }
             : t
         ),
@@ -182,40 +126,54 @@ function tripReducer(state: TripState, action: TripAction): TripState {
   }
 }
 
-// Context
+// ─── Context ──────────────────────────────────────────────────────────────────
+
 interface TripContextValue {
-  state: TripState;
+  trips: Trip[];
+  trip: Trip | null;
+  activeTripId: string | null;
   dispatch: React.Dispatch<TripAction>;
+  setActiveTrip: (tripId: string) => void;
 }
 
 const TripContext = createContext<TripContextValue | undefined>(undefined);
 
-// Provider
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 interface TripProviderProps {
   children: ReactNode;
-  initialTrips?: Trip[];
+  initialState?: Partial<TripState>;
 }
 
-export const TripProvider: React.FC<TripProviderProps> = ({ children, initialTrips }) => {
+export function TripProvider({ children, initialState }: TripProviderProps) {
   const [state, dispatch] = useReducer(tripReducer, {
+    trips: [],
+    activeTripId: null,
     ...initialState,
-    trips: initialTrips || [],
   });
 
+  const setActiveTrip = useCallback(
+    (tripId: string) => {
+      dispatch({ type: 'TRIP_SET_ACTIVE', payload: { tripId } });
+    },
+    [dispatch]
+  );
+
+  const trip = state.trips.find((t) => t.id === state.activeTripId) ?? null;
+
   return (
-    <TripContext.Provider value={{ state, dispatch }}>
+    <TripContext.Provider
+      value={{ trips: state.trips, trip, activeTripId: state.activeTripId, dispatch, setActiveTrip }}
+    >
       {children}
     </TripContext.Provider>
   );
-};
-
-// Hook
-export function useTrip(): TripContextValue {
-  const context = useContext(TripContext);
-  if (!context) {
-    throw new Error('useTrip must be used within a TripProvider');
-  }
-  return context;
 }
 
-export default TripContext;
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useTrip() {
+  const ctx = useContext(TripContext);
+  if (!ctx) throw new Error('useTrip must be used inside TripProvider');
+  return ctx;
+}

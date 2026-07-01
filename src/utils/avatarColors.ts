@@ -1,26 +1,25 @@
 const AVATAR_COLORS = [
-  '#6366F1', // indigo
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#EF4444', // red
-  '#F97316', // orange
-  '#EAB308', // yellow
-  '#22C55E', // green
-  '#14B8A6', // teal
-  '#06B6D4', // cyan
-  '#3B82F6', // blue
-  '#A855F7', // purple
-  '#F43F5E', // rose
+  '#F44336',
+  '#E91E63',
+  '#9C27B0',
+  '#673AB7',
+  '#3F51B5',
+  '#2196F3',
+  '#03A9F4',
+  '#00BCD4',
+  '#009688',
+  '#4CAF50',
+  '#8BC34A',
+  '#FFC107',
+  '#FF9800',
+  '#FF5722',
+  '#795548',
 ];
 
-export function getAvatarColor(name: string): string {
-  if (!name) return AVATAR_COLORS[0];
+export function getAvatarColor(id: string): string {
   let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    hash = hash & hash;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
   }
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
-
-export default { getAvatarColor };

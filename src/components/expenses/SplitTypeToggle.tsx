@@ -1,21 +1,21 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-
-export type SplitType = 'equal' | 'custom';
+import { SplitType } from '../../hooks/useExpenseForm';
 
 interface SplitTypeToggleProps {
   value: SplitType;
-  onChange: (type: SplitType) => void;
+  onChange: (value: SplitType) => void;
 }
 
-export const SplitTypeToggle: React.FC<SplitTypeToggleProps> = ({ value, onChange }) => {
+export function SplitTypeToggle({ value, onChange }: SplitTypeToggleProps) {
   return (
     <View style={styles.container}>
       <TouchableOpacity
         style={[styles.option, value === 'equal' && styles.optionActive]}
         onPress={() => onChange('equal')}
-        accessibilityRole="button"
-        accessibilityState={{ selected: value === 'equal' }}
+        accessibilityRole="radio"
+        accessibilityState={{ checked: value === 'equal' }}
+        accessibilityLabel="Equal split"
       >
         <Text style={[styles.optionText, value === 'equal' && styles.optionTextActive]}>
           Equal
@@ -24,8 +24,9 @@ export const SplitTypeToggle: React.FC<SplitTypeToggleProps> = ({ value, onChang
       <TouchableOpacity
         style={[styles.option, value === 'custom' && styles.optionActive]}
         onPress={() => onChange('custom')}
-        accessibilityRole="button"
-        accessibilityState={{ selected: value === 'custom' }}
+        accessibilityRole="radio"
+        accessibilityState={{ checked: value === 'custom' }}
+        accessibilityLabel="Custom split"
       >
         <Text style={[styles.optionText, value === 'custom' && styles.optionTextActive]}>
           Custom
@@ -33,22 +34,21 @@ export const SplitTypeToggle: React.FC<SplitTypeToggleProps> = ({ value, onChang
       </TouchableOpacity>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F0F0F0',
     borderRadius: 8,
     padding: 3,
+    marginBottom: 16,
   },
   option: {
     flex: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    paddingVertical: 8,
     alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 6,
   },
   optionActive: {
     backgroundColor: '#FFFFFF',
@@ -61,12 +61,10 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#666',
   },
   optionTextActive: {
-    color: '#111827',
+    color: '#1A1A1A',
     fontWeight: '600',
   },
 });
-
-export default SplitTypeToggle;
