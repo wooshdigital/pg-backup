@@ -1,15 +1,15 @@
-import { useState, useCallback, useContext, useEffect } from 'react';
+import { useState, useCallback, useContext } from 'react';
 import { TripContext } from '../context/TripContext';
 import {
-  calculateEqualSplit,
+  calculateEqualSplits,
   validateCustomSplits,
   adjustLastParticipant,
+  initializeCustomSplits,
   roundCurrency,
 } from '../utils/splitCalculator';
+import type { Split } from '../utils/splitCalculator';
 import type { SplitType } from '../components/expenses/SplitTypeToggle';
 import type { Expense } from '../types';
-
-export type ExpenseFormStep = 1 | 2 | 3;
 
 export interface ExpenseFormValues {
   description: string;
@@ -18,211 +18,228 @@ export interface ExpenseFormValues {
   paidBy: string;
   selectedParticipants: string[];
   splitType: SplitType;
-  customSplits: Record<string, string>;
-  date: string;
-  category: string;
+  customSplits: Split[];
 }
 
 interface UseExpenseFormOptions {
   tripId: string;
-  expenseId?: string;
+  existingExpense?: Expense | null;
+  defaultCurrency?: string;
+  participantIds?: string[];
   onSuccess?: () => void;
 }
 
-const DEFAULT_VALUES: ExpenseFormValues = {
-  description: '',
-  amount: '',
-  currency: 'USD',
-  paidBy: '',
-  selectedParticipants: [],
-  splitType: 'equal',
-  customSplits: {},
-  date: new Date().toISOString().split('T')[0],
-  category: 'general',
-};
+function getInitialValues(
+  existingExpense: Expense | null | undefined,
+  defaultCurrency: string,
+  participantIds: string[]
+): ExpenseFormValues {
+  if (existingExpense) {
+    const hasCustomSplits = existingExpense.splits &&
+      existingExpense.splits.length > 0 &&
+      existingExpense.splits.some(s => {
+        const equalAmount = roundCurrency(existingExpense.amount / existingExpense.splits.length);
+        return Math.abs(s.amount - equalAmount) > 0.01;
+      });
+
+    return {
+      description: existingExpense.description,
+      amount: existingExpense.amount.toFixed(2),
+      currency: existingExpense.currency || defaultCurrency,
+      paidBy: existingExpense.paidBy,
+      selectedParticipants: existingExpense.splits
+        ? existingExpense.splits.map(s => s.participantId)
+        : participantIds,
+      splitType: hasCustomSplits ? 'custom' : 'equal',
+      customSplits: existingExpense.splits || [],
+    };
+  }
+
+  return {
+    description: '',
+    amount: '',
+    currency: defaultCurrency,
+    paidBy: participantIds[0] || '',
+    selectedParticipants: [...participantIds],
+    splitType: 'equal',
+    customSplits: [],
+  };
+}
 
 export function useExpenseForm({
   tripId,
-  expenseId,
+  existingExpense,
+  defaultCurrency = 'USD',
+  participantIds = [],
   onSuccess,
 }: UseExpenseFormOptions) {
-  const { state, dispatch } = useContext(TripContext);
-  const trip = state.trips.find((t) => t.id === tripId);
-  const participants = trip?.participants ?? [];
+  const { dispatch } = useContext(TripContext);
 
-  const isEditing = Boolean(expenseId);
-
-  const [step, setStep] = useState<ExpenseFormStep>(1);
-  const [values, setValues] = useState<ExpenseFormValues>(() => {
-    if (expenseId && trip) {
-      const expense = trip.expenses?.find((e: Expense) => e.id === expenseId);
-      if (expense) {
-        const customSplits: Record<string, string> = {};
-        if (expense.splits) {
-          for (const split of expense.splits) {
-            customSplits[split.participantId] = String(split.amount);
-          }
-        }
-        return {
-          description: expense.description ?? '',
-          amount: String(expense.amount ?? ''),
-          currency: expense.currency ?? 'USD',
-          paidBy: expense.paidBy ?? '',
-          selectedParticipants: expense.splits
-            ? expense.splits.map((s: any) => s.participantId)
-            : [],
-          splitType: expense.splitType ?? 'equal',
-          customSplits,
-          date: expense.date
-            ? expense.date.split('T')[0]
-            : new Date().toISOString().split('T')[0],
-          category: expense.category ?? 'general',
-        };
-      }
-    }
-    return {
-      ...DEFAULT_VALUES,
-      currency: trip?.currency ?? 'USD',
-      paidBy: participants[0]?.id ?? '',
-      selectedParticipants: participants.map((p) => p.id),
-    };
-  });
-
+  const [step, setStep] = useState(1);
+  const [values, setValues] = useState<ExpenseFormValues>(() =>
+    getInitialValues(existingExpense, defaultCurrency, participantIds)
+  );
   const [errors, setErrors] = useState<Partial<Record<keyof ExpenseFormValues, string>>>({});
 
-  const setValue = useCallback(
-    <K extends keyof ExpenseFormValues>(key: K, value: ExpenseFormValues[K]) => {
-      setValues((prev) => ({ ...prev, [key]: value }));
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    },
-    []
-  );
+  const isEditing = !!existingExpense;
 
-  const setCustomSplitAmount = useCallback(
-    (participantId: string, value: string) => {
-      setValues((prev) => ({
+  const updateValue = useCallback(<K extends keyof ExpenseFormValues>(
+    key: K,
+    value: ExpenseFormValues[K]
+  ) => {
+    setValues(prev => ({ ...prev, [key]: value }));
+    setErrors(prev => ({ ...prev, [key]: undefined }));
+  }, []);
+
+  const handleParticipantToggle = useCallback((participantId: string) => {
+    setValues(prev => {
+      const isSelected = prev.selectedParticipants.includes(participantId);
+      const newSelected = isSelected
+        ? prev.selectedParticipants.filter(id => id !== participantId)
+        : [...prev.selectedParticipants, participantId];
+
+      // Recalculate splits when participants change
+      const total = parseFloat(prev.amount) || 0;
+      const newSplits = prev.splitType === 'custom'
+        ? initializeCustomSplits(newSelected, total, prev.customSplits)
+        : calculateEqualSplits(newSelected, total);
+
+      return {
         ...prev,
-        customSplits: {
-          ...prev.customSplits,
-          [participantId]: value,
-        },
-      }));
-    },
-    []
-  );
+        selectedParticipants: newSelected,
+        customSplits: newSplits,
+      };
+    });
+  }, []);
 
-  const applyAutoAdjust = useCallback(() => {
-    const total = parseFloat(values.amount) || 0;
-    const numericSplits: Record<string, number> = {};
-    for (const [id, val] of Object.entries(values.customSplits)) {
-      numericSplits[id] = parseFloat(val) || 0;
-    }
-    const adjusted = adjustLastParticipant(
-      numericSplits,
-      total,
-      values.selectedParticipants
-    );
-    const stringified: Record<string, string> = {};
-    for (const [id, val] of Object.entries(adjusted)) {
-      stringified[id] = val.toFixed(2);
-    }
-    setValues((prev) => ({ ...prev, customSplits: stringified }));
-  }, [values.amount, values.customSplits, values.selectedParticipants]);
+  const handleSplitTypeChange = useCallback((splitType: SplitType) => {
+    setValues(prev => {
+      const total = parseFloat(prev.amount) || 0;
+      const newSplits = splitType === 'custom'
+        ? initializeCustomSplits(prev.selectedParticipants, total, prev.customSplits)
+        : calculateEqualSplits(prev.selectedParticipants, total);
 
-  const getCustomSplitDiff = useCallback(() => {
-    const total = parseFloat(values.amount) || 0;
-    const numericSplits: Record<string, number> = {};
-    for (const id of values.selectedParticipants) {
-      numericSplits[id] = parseFloat(values.customSplits[id] ?? '0') || 0;
-    }
-    return validateCustomSplits(numericSplits, total);
-  }, [values.amount, values.customSplits, values.selectedParticipants]);
+      return {
+        ...prev,
+        splitType,
+        customSplits: newSplits,
+      };
+    });
+  }, []);
 
-  const validateStep = useCallback(
-    (s: ExpenseFormStep): boolean => {
-      const newErrors: Partial<Record<keyof ExpenseFormValues, string>> = {};
+  const handleCustomSplitChange = useCallback((participantId: string, amount: number) => {
+    setValues(prev => {
+      const newSplits = prev.customSplits.map(s =>
+        s.participantId === participantId ? { ...s, amount } : s
+      );
+      return { ...prev, customSplits: newSplits };
+    });
+    setErrors(prev => ({ ...prev, customSplits: undefined }));
+  }, []);
 
-      if (s === 1) {
-        if (!values.description.trim()) {
-          newErrors.description = 'Description is required';
-        }
-        const amt = parseFloat(values.amount);
-        if (!values.amount || isNaN(amt) || amt <= 0) {
-          newErrors.amount = 'Enter a valid amount greater than 0';
-        }
+  const handleAutoAdjust = useCallback(() => {
+    setValues(prev => {
+      const total = parseFloat(prev.amount) || 0;
+      const adjusted = adjustLastParticipant(prev.customSplits, total);
+      return { ...prev, customSplits: adjusted };
+    });
+  }, []);
+
+  const validateStep = useCallback((stepNumber: number): boolean => {
+    const newErrors: Partial<Record<keyof ExpenseFormValues, string>> = {};
+
+    if (stepNumber === 1) {
+      if (!values.description.trim()) {
+        newErrors.description = 'Description is required';
       }
-
-      if (s === 2) {
-        if (!values.paidBy) {
-          newErrors.paidBy = 'Select who paid';
-        }
+      const amt = parseFloat(values.amount);
+      if (!values.amount || isNaN(amt) || amt <= 0) {
+        newErrors.amount = 'Enter a valid amount greater than 0';
       }
-
-      if (s === 3) {
-        if (values.selectedParticipants.length === 0) {
-          newErrors.selectedParticipants = 'Select at least one participant';
-        }
-        if (values.splitType === 'custom') {
-          const { valid } = getCustomSplitDiff();
-          if (!valid) {
-            newErrors.customSplits = 'Custom splits must equal the total amount';
-          }
-        }
+      if (!values.paidBy) {
+        newErrors.paidBy = 'Select who paid';
       }
+    }
 
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-    },
-    [values, getCustomSplitDiff]
-  );
+    if (stepNumber === 2) {
+      if (values.selectedParticipants.length === 0) {
+        newErrors.selectedParticipants = 'Select at least one participant';
+      }
+    }
+
+    if (stepNumber === 3 && values.splitType === 'custom') {
+      const total = parseFloat(values.amount) || 0;
+      const error = validateCustomSplits(values.customSplits, total);
+      if (error) {
+        newErrors.customSplits = error;
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [values]);
+
+  const goToStep = useCallback((targetStep: number) => {
+    if (targetStep > step && !validateStep(step)) return;
+    setStep(targetStep);
+  }, [step, validateStep]);
 
   const nextStep = useCallback(() => {
     if (validateStep(step)) {
-      setStep((s) => (s < 3 ? ((s + 1) as ExpenseFormStep) : s));
+      if (step < 3) {
+        // When moving to step 3, initialize splits if needed
+        if (step === 2) {
+          setValues(prev => {
+            const total = parseFloat(prev.amount) || 0;
+            const hasValidSplits = prev.customSplits.length === prev.selectedParticipants.length &&
+              prev.customSplits.every(s => prev.selectedParticipants.includes(s.participantId));
+
+            if (!hasValidSplits) {
+              return {
+                ...prev,
+                customSplits: prev.splitType === 'custom'
+                  ? initializeCustomSplits(prev.selectedParticipants, total)
+                  : calculateEqualSplits(prev.selectedParticipants, total),
+              };
+            }
+            return prev;
+          });
+        }
+        setStep(prev => prev + 1);
+      }
     }
   }, [step, validateStep]);
 
   const prevStep = useCallback(() => {
-    setStep((s) => (s > 1 ? ((s - 1) as ExpenseFormStep) : s));
-    setErrors({});
+    setStep(prev => Math.max(1, prev - 1));
   }, []);
 
-  const computeSplits = useCallback(() => {
+  const handleSubmit = useCallback(() => {
+    if (!validateStep(step)) return;
+
     const total = parseFloat(values.amount) || 0;
-    if (values.splitType === 'equal') {
-      return calculateEqualSplit(total, values.selectedParticipants);
+    const splits = values.splitType === 'equal'
+      ? calculateEqualSplits(values.selectedParticipants, total)
+      : values.customSplits;
+
+    const error = validateCustomSplits(splits, total);
+    if (error) {
+      setErrors(prev => ({ ...prev, customSplits: error }));
+      return;
     }
-    return values.selectedParticipants.map((id) => ({
-      participantId: id,
-      amount: roundCurrency(parseFloat(values.customSplits[id] ?? '0') || 0),
-    }));
-  }, [values]);
 
-  const submit = useCallback(() => {
-    if (!validateStep(3)) return;
-
-    const splits = computeSplits();
-    const total = parseFloat(values.amount) || 0;
-
-    if (isEditing && expenseId) {
+    if (isEditing && existingExpense) {
       dispatch({
         type: 'TRIP_UPDATE_EXPENSE',
         payload: {
           tripId,
           expense: {
-            id: expenseId,
+            ...existingExpense,
             description: values.description.trim(),
             amount: total,
             currency: values.currency,
             paidBy: values.paidBy,
             splits,
-            splitType: values.splitType,
-            date: values.date,
-            category: values.category,
           },
         },
       });
@@ -232,37 +249,34 @@ export function useExpenseForm({
         payload: {
           tripId,
           expense: {
-            id: `expense_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: Date.now().toString(),
             description: values.description.trim(),
             amount: total,
             currency: values.currency,
             paidBy: values.paidBy,
             splits,
-            splitType: values.splitType,
-            date: values.date,
-            category: values.category,
+            createdAt: new Date().toISOString(),
           },
         },
       });
     }
 
     onSuccess?.();
-  }, [validateStep, computeSplits, values, isEditing, expenseId, tripId, dispatch, onSuccess]);
+  }, [step, values, isEditing, existingExpense, tripId, dispatch, validateStep, onSuccess]);
 
   return {
     step,
     values,
     errors,
     isEditing,
-    participants,
-    trip,
-    setValue,
-    setCustomSplitAmount,
-    applyAutoAdjust,
-    getCustomSplitDiff,
+    updateValue,
+    handleParticipantToggle,
+    handleSplitTypeChange,
+    handleCustomSplitChange,
+    handleAutoAdjust,
     nextStep,
     prevStep,
-    submit,
-    validateStep,
+    goToStep,
+    handleSubmit,
   };
 }

@@ -1,77 +1,54 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { getUnassignedAmount } from '../../utils/splitCalculator';
+import type { Split } from '../../utils/splitCalculator';
 
 interface SplitBalanceIndicatorProps {
-  diff: number;
-  currencySymbol?: string;
-  style?: ViewStyle;
+  splits: Split[];
+  total: number;
+  currency: string;
 }
 
 export const SplitBalanceIndicator: React.FC<SplitBalanceIndicatorProps> = ({
-  diff,
-  currencySymbol = '$',
-  style,
+  splits,
+  total,
+  currency,
 }) => {
-  const isBalanced = diff === 0;
-  const isOver = diff < 0;
+  const unassigned = getUnassignedAmount(splits, total);
+  const isBalanced = Math.abs(unassigned) < 0.001;
+  const isOver = unassigned < -0.001;
 
-  const absVal = Math.abs(diff).toFixed(2);
+  const bgColor = isBalanced ? '#ECFDF5' : isOver ? '#FEF2F2' : '#FFFBEB';
+  const textColor = isBalanced ? '#065F46' : isOver ? '#991B1B' : '#92400E';
+  const borderColor = isBalanced ? '#6EE7B7' : isOver ? '#FCA5A5' : '#FCD34D';
 
   let message: string;
   if (isBalanced) {
-    message = 'Splits are balanced ✓';
+    message = 'Perfectly split ✓';
   } else if (isOver) {
-    message = `${currencySymbol}${absVal} over-assigned`;
+    message = `${Math.abs(unassigned).toFixed(2)} ${currency} over-assigned`;
   } else {
-    message = `${currencySymbol}${absVal} unassigned`;
+    message = `${unassigned.toFixed(2)} ${currency} unassigned`;
   }
 
   return (
-    <View
-      style={[
-        styles.container,
-        isBalanced && styles.containerBalanced,
-        isOver && styles.containerOver,
-      ]}
-    >
-      <Text
-        style={[
-          styles.text,
-          isBalanced && styles.textBalanced,
-          isOver && styles.textOver,
-        ]}
-      >
-        {message}
-      </Text>
+    <View style={[styles.container, { backgroundColor: bgColor, borderColor }]}>
+      <Text style={[styles.text, { color: textColor }]}>{message}</Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFF9C4',
+    borderWidth: 1,
     borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 16,
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginVertical: 8,
-  },
-  containerBalanced: {
-    backgroundColor: '#E8F5E9',
-  },
-  containerOver: {
-    backgroundColor: '#FFEBEE',
   },
   text: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F57F17',
-  },
-  textBalanced: {
-    color: '#2E7D32',
-  },
-  textOver: {
-    color: '#C62828',
   },
 });

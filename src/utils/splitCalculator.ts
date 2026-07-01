@@ -1,59 +1,97 @@
-export type SplitResult = {
+export interface Split {
   participantId: string;
   amount: number;
-};
-
-export function calculateEqualSplit(
-  totalAmount: number,
-  participantIds: string[]
-): SplitResult[] {
-  if (participantIds.length === 0) return [];
-
-  const share = Math.floor((totalAmount / participantIds.length) * 100) / 100;
-  const remainder =
-    Math.round((totalAmount - share * participantIds.length) * 100) / 100;
-
-  return participantIds.map((id, index) => ({
-    participantId: id,
-    amount:
-      index === participantIds.length - 1
-        ? Math.round((share + remainder) * 100) / 100
-        : share,
-  }));
 }
 
+/**
+ * Round a currency value to 2 decimal places
+ */
 export function roundCurrency(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function validateCustomSplits(
-  splits: Record<string, number>,
+/**
+ * Calculate equal splits for a list of participants
+ */
+export function calculateEqualSplits(
+  participantIds: string[],
   total: number
-): { valid: boolean; diff: number } {
-  const sum = Object.values(splits).reduce(
-    (acc, v) => acc + roundCurrency(v),
-    0
-  );
-  const diff = roundCurrency(total - roundCurrency(sum));
-  return { valid: diff === 0, diff };
+): Split[] {
+  if (participantIds.length === 0) return [];
+
+  const baseAmount = roundCurrency(Math.floor((total / participantIds.length) * 100) / 100);
+  const remainder = roundCurrency(total - baseAmount * participantIds.length);
+
+  return participantIds.map((participantId, index) => ({
+    participantId,
+    amount: index === participantIds.length - 1
+      ? roundCurrency(baseAmount + remainder)
+      : baseAmount,
+  }));
 }
 
-export function adjustLastParticipant(
-  splits: Record<string, number>,
+/**
+ * Validate that custom splits sum to the total amount
+ * Returns null if valid, or an error message
+ */
+export function validateCustomSplits(splits: Split[], total: number): string | null {
+  const sum = roundCurrency(splits.reduce((acc, s) => acc + s.amount, 0));
+  const roundedTotal = roundCurrency(total);
+
+  if (Math.abs(sum - roundedTotal) > 0.001) {
+    const diff = roundCurrency(roundedTotal - sum);
+    if (diff > 0) {
+      return `${diff.toFixed(2)} unassigned`;
+    } else {
+      return `${Math.abs(diff).toFixed(2)} over-assigned`;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get the unassigned amount (positive = unassigned, negative = over-assigned)
+ */
+export function getUnassignedAmount(splits: Split[], total: number): number {
+  const sum = roundCurrency(splits.reduce((acc, s) => acc + s.amount, 0));
+  return roundCurrency(total - sum);
+}
+
+/**
+ * Adjust the last participant's share so the total is exact (handles floating-point rounding)
+ */
+export function adjustLastParticipant(splits: Split[], total: number): Split[] {
+  if (splits.length === 0) return splits;
+
+  const allButLast = splits.slice(0, -1);
+  const sumAllButLast = roundCurrency(allButLast.reduce((acc, s) => acc + s.amount, 0));
+  const lastAmount = roundCurrency(total - sumAllButLast);
+
+  return [
+    ...allButLast,
+    {
+      ...splits[splits.length - 1],
+      amount: lastAmount,
+    },
+  ];
+}
+
+/**
+ * Initialize custom splits from equal splits or existing splits
+ */
+export function initializeCustomSplits(
+  participantIds: string[],
   total: number,
-  participantIds: string[]
-): Record<string, number> {
-  if (participantIds.length === 0) return splits;
-
-  const lastId = participantIds[participantIds.length - 1];
-  const othersSum = participantIds
-    .slice(0, -1)
-    .reduce((acc, id) => acc + roundCurrency(splits[id] ?? 0), 0);
-
-  const lastAmount = roundCurrency(total - othersSum);
-
-  return {
-    ...splits,
-    [lastId]: lastAmount >= 0 ? lastAmount : 0,
-  };
+  existingSplits?: Split[]
+): Split[] {
+  if (existingSplits && existingSplits.length > 0) {
+    // Use existing splits but ensure all participants are included
+    const existing = new Map(existingSplits.map(s => [s.participantId, s.amount]));
+    return participantIds.map(id => ({
+      participantId: id,
+      amount: existing.get(id) ?? 0,
+    }));
+  }
+  return calculateEqualSplits(participantIds, total);
 }

@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ViewStyle,
 } from 'react-native';
 
 export type SplitType = 'equal' | 'custom';
@@ -12,52 +11,49 @@ export type SplitType = 'equal' | 'custom';
 interface SplitTypeToggleProps {
   value: SplitType;
   onChange: (value: SplitType) => void;
-  style?: ViewStyle;
 }
 
-export const SplitTypeToggle: React.FC<SplitTypeToggleProps> = ({
-  value,
-  onChange,
-  style,
-}) => {
+export const SplitTypeToggle: React.FC<SplitTypeToggleProps> = ({ value, onChange }) => {
   return (
-    <View style={[styles.container, style]}>
-      <TouchableOpacity
-        style={[styles.option, value === 'equal' && styles.optionActive]}
-        onPress={() => onChange('equal')}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={[
-            styles.optionText,
-            value === 'equal' && styles.optionTextActive,
-          ]}
+    <View style={styles.container}>
+      <Text style={styles.label}>Split Type</Text>
+      <View style={styles.toggle}>
+        <TouchableOpacity
+          style={[styles.option, value === 'equal' && styles.optionActive]}
+          onPress={() => onChange('equal')}
+          activeOpacity={0.7}
         >
-          Equal
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.option, value === 'custom' && styles.optionActive]}
-        onPress={() => onChange('custom')}
-        activeOpacity={0.7}
-      >
-        <Text
-          style={[
-            styles.optionText,
-            value === 'custom' && styles.optionTextActive,
-          ]}
+          <Text style={[styles.optionText, value === 'equal' && styles.optionTextActive]}>
+            Equal
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.option, value === 'custom' && styles.optionActive]}
+          onPress={() => onChange('custom')}
+          activeOpacity={0.7}
         >
-          Custom
-        </Text>
-      </TouchableOpacity>
+          <Text style={[styles.optionText, value === 'custom' && styles.optionTextActive]}>
+            Custom
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  toggle: {
     flexDirection: 'row',
-    backgroundColor: '#F0F0F5',
+    backgroundColor: '#F3F4F6',
     borderRadius: 10,
     padding: 3,
   },
@@ -78,10 +74,10 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: '#6B7280',
   },
   optionTextActive: {
-    color: '#007AFF',
+    color: '#111827',
     fontWeight: '600',
   },
 });
