@@ -2,184 +2,223 @@ import React, { useLayoutEffect } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
   Alert,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { useTrip } from '../context/TripContext';
+import { roundCurrency } from '../utils/splitCalculator';
 
-import { RootStackParamList } from '../types';
-import { useExpenses } from '../hooks/useExpenses';
-import { useParticipants } from '../hooks/useParticipants';
-
-type ExpenseDetailRouteProp = RouteProp<RootStackParamList, 'ExpenseDetail'>;
-type ExpenseDetailNavProp = NativeStackNavigationProp<RootStackParamList, 'ExpenseDetail'>;
-
-function getCurrencySymbol(currency: string): string {
-  try {
-    const formatted = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(0);
-    return formatted.replace(/[\d,.\s]/g, '').trim();
-  } catch {
-    return currency;
-  }
+interface RouteParams {
+  tripId: string;
+  expenseId: string;
 }
 
-export default function ExpenseDetailScreen() {
-  const navigation = useNavigation<ExpenseDetailNavProp>();
-  const route = useRoute<ExpenseDetailRouteProp>();
-  const { tripId, expenseId } = route.params;
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  AUD: 'A$',
+  CAD: 'C$',
+};
 
-  const { expenses, deleteExpense } = useExpenses(tripId);
-  const { participants } = useParticipants(tripId);
+function getCurrencySymbol(currency: string): string {
+  return CURRENCY_SYMBOLS[currency] || currency;
+}
 
-  const expense = expenses.find((e) => e.id === expenseId);
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+const AVATAR_COLORS = [
+  '#6366F1', '#8B5CF6', '#EC4899', '#EF4444',
+  '#F59E0B', '#10B981', '#3B82F6', '#14B8A6',
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+export const ExpenseDetailScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { tripId, expenseId } = route.params as RouteParams;
+
+  const { state, dispatch } = useTrip();
+  const trip = state.trips.find((t: any) => t.id === tripId);
+  const expense = trip?.expenses?.find((e: any) => e.id === expenseId);
+  const participants = trip?.participants || [];
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: expense?.description ?? 'Expense',
       headerRight: () => (
         <TouchableOpacity
-          onPress={() =>
-            navigation.navigate('AddExpense', { tripId, expenseId })
-          }
-          style={styles.editBtn}
+          onPress={handleEdit}
+          style={styles.editButton}
           accessibilityLabel="Edit expense"
         >
-          <Text style={styles.editBtnText}>Edit</Text>
+          <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
       ),
     });
-  }, [navigation, expense, tripId, expenseId]);
+  }, [navigation, tripId, expenseId]);
+
+  const handleEdit = () => {
+    navigation.navigate('AddExpense', { tripId, expenseId });
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Expense',
+      `Are you sure you want to delete "${expense?.description}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            dispatch({
+              type: 'TRIP_REMOVE_EXPENSE',
+              payload: { tripId, expenseId },
+            });
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  };
 
   if (!expense) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Text style={styles.notFoundText}>Expense not found.</Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Expense not found.</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
-  const paidBy = participants.find((p) => p.id === expense.paidById);
-  const symbol = getCurrencySymbol(expense.currency);
-
-  const handleDelete = () => {
-    Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteExpense(expenseId);
-          navigation.goBack();
-        },
-      },
-    ]);
-  };
+  const currSymbol = getCurrencySymbol(expense.currency || 'USD');
+  const paidBy = participants.find((p: any) => p.id === expense.paidById);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Amount Card */}
-        <View style={styles.amountCard}>
-          <Text style={styles.expenseDescription}>{expense.description}</Text>
-          <Text style={styles.expenseAmount}>
-            {symbol}{expense.amount.toFixed(2)}
-          </Text>
-          <Text style={styles.expenseCurrency}>{expense.currency}</Text>
-        </View>
+    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+      {/* Amount header */}
+      <View style={styles.amountCard}>
+        <Text style={styles.amountLabel}>{expense.description}</Text>
+        <Text style={styles.amountValue}>
+          {currSymbol}{roundCurrency(expense.amount).toFixed(2)}
+        </Text>
+        {expense.date && (
+          <Text style={styles.dateText}>{expense.date}</Text>
+        )}
+        {expense.category && (
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{expense.category}</Text>
+          </View>
+        )}
+      </View>
 
-        {/* Meta info */}
-        <View style={styles.section}>
-          <DetailRow label="Paid by" value={paidBy?.name ?? 'Unknown'} />
-          <DetailRow
-            label="Date"
-            value={expense.date ? new Date(expense.date).toLocaleDateString() : '—'}
-          />
-          <DetailRow
-            label="Split type"
-            value={expense.splitType === 'custom' ? 'Custom' : 'Equal'}
-          />
-          {expense.notes ? (
-            <DetailRow label="Notes" value={expense.notes} />
-          ) : null}
-        </View>
+      {/* Paid by */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Paid by</Text>
+        {paidBy ? (
+          <View style={styles.paidByRow}>
+            <View style={[styles.avatar, { backgroundColor: getAvatarColor(paidBy.name) }]}>
+              <Text style={styles.avatarText}>{getInitials(paidBy.name)}</Text>
+            </View>
+            <Text style={styles.paidByName}>{paidBy.name}</Text>
+          </View>
+        ) : (
+          <Text style={styles.unknownText}>Unknown</Text>
+        )}
+      </View>
 
-        {/* Splits */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Split Breakdown</Text>
-          {expense.splits.map((split) => {
-            const participant = participants.find(
-              (p) => p.id === split.participantId
-            );
-            const percentage =
-              expense.amount > 0
-                ? ((split.amount / expense.amount) * 100).toFixed(0)
-                : '0';
-            return (
-              <View key={split.participantId} style={styles.splitRow}>
-                <View
-                  style={[
-                    styles.splitAvatar,
-                    { backgroundColor: participant?.avatarColor || '#6366F1' },
-                  ]}
-                >
-                  <Text style={styles.splitAvatarText}>
-                    {(participant?.name ?? '?')
-                      .split(' ')
-                      .map((w: string) => w[0])
-                      .join('')
-                      .toUpperCase()
-                      .slice(0, 2)}
-                  </Text>
-                </View>
-                <Text style={styles.splitName}>{participant?.name ?? 'Unknown'}</Text>
-                <Text style={styles.splitPercent}>{percentage}%</Text>
-                <Text style={styles.splitAmount}>
-                  {symbol}{split.amount.toFixed(2)}
-                </Text>
+      {/* Split breakdown */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Split</Text>
+          {expense.splitType && (
+            <View style={styles.splitTypeBadge}>
+              <Text style={styles.splitTypeBadgeText}>
+                {expense.splitType === 'custom' ? 'Custom' : 'Equal'}
+              </Text>
+            </View>
+          )}
+        </View>
+        {expense.splits?.map((split: any) => {
+          const participant = participants.find((p: any) => p.id === split.participantId);
+          if (!participant) return null;
+          const percentage = expense.amount > 0
+            ? ((split.amount / expense.amount) * 100).toFixed(1)
+            : '0.0';
+          return (
+            <View key={split.participantId} style={styles.splitRow}>
+              <View style={[styles.avatar, { backgroundColor: getAvatarColor(participant.name) }]}>
+                <Text style={styles.avatarText}>{getInitials(participant.name)}</Text>
               </View>
-            );
-          })}
+              <Text style={styles.splitName}>{participant.name}</Text>
+              <View style={styles.splitAmounts}>
+                <Text style={styles.splitAmount}>
+                  {currSymbol}{roundCurrency(split.amount).toFixed(2)}
+                </Text>
+                <Text style={styles.splitPercent}>{percentage}%</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Notes */}
+      {expense.notes ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notes</Text>
+          <Text style={styles.notesText}>{expense.notes}</Text>
         </View>
+      ) : null}
 
-        {/* Delete button */}
-        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-          <Text style={styles.deleteBtnText}>Delete Expense</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+      {/* Metadata */}
+      <View style={styles.section}>
+        <Text style={styles.metaText}>
+          Added {expense.createdAt ? new Date(expense.createdAt).toLocaleDateString() : 'unknown'}
+        </Text>
+        {expense.updatedAt && expense.updatedAt !== expense.createdAt && (
+          <Text style={styles.metaText}>
+            Edited {new Date(expense.updatedAt).toLocaleDateString()}
+          </Text>
+        )}
+      </View>
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
+      {/* Delete */}
+      <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+        <Text style={styles.deleteButtonText}>Delete Expense</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F9FAFB',
+  },
+  content: {
+    padding: 16,
+    gap: 12,
+    paddingBottom: 32,
   },
   centered: {
     flex: 1,
@@ -187,159 +226,173 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-
-  // Edit button in header
-  editBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 6,
-  },
-  editBtnText: {
-    color: '#6366F1',
+  errorText: {
     fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 16,
+  },
+  backBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+  },
+  backBtnText: {
+    color: '#FFFFFF',
     fontWeight: '600',
   },
-
-  // Amount card
+  editButton: {
+    marginRight: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#EEF2FF',
+  },
+  editButtonText: {
+    color: '#6366F1',
+    fontWeight: '600',
+    fontSize: 15,
+  },
   amountCard: {
     backgroundColor: '#6366F1',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
-    marginBottom: 20,
+    gap: 6,
   },
-  expenseDescription: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.85)',
+  amountLabel: {
+    fontSize: 18,
+    color: '#C7D2FE',
     fontWeight: '500',
-    marginBottom: 8,
-    textAlign: 'center',
   },
-  expenseAmount: {
-    fontSize: 42,
-    fontWeight: '800',
+  amountValue: {
+    fontSize: 40,
     color: '#FFFFFF',
-    marginBottom: 4,
+    fontWeight: '800',
+    letterSpacing: -1,
   },
-  expenseCurrency: {
+  dateText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '600',
+    color: '#A5B4FC',
+    marginTop: 4,
   },
-
-  // Section
+  categoryBadge: {
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  categoryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
   section: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
+    fontWeight: '600',
+    color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 12,
   },
-
-  // Detail rows
-  detailRow: {
+  splitTypeBadge: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  splitTypeBadgeText: {
+    fontSize: 12,
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  paidByRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#F1F5F9',
+    alignItems: 'center',
+    gap: 10,
   },
-  detailLabel: {
-    fontSize: 14,
-    color: '#64748B',
+  paidByName: {
+    fontSize: 16,
+    color: '#111827',
     fontWeight: '500',
   },
-  detailValue: {
-    fontSize: 14,
-    color: '#1E293B',
-    fontWeight: '600',
-    maxWidth: '60%',
-    textAlign: 'right',
+  unknownText: {
+    fontSize: 15,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
   },
-
-  // Split rows
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   splitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#F1F5F9',
-  },
-  splitAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  splitAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
+    gap: 10,
+    paddingVertical: 4,
   },
   splitName: {
     flex: 1,
-    fontSize: 14,
-    color: '#1E293B',
-    fontWeight: '500',
+    fontSize: 15,
+    color: '#374151',
   },
-  splitPercent: {
-    fontSize: 13,
-    color: '#64748B',
-    marginRight: 12,
+  splitAmounts: {
+    alignItems: 'flex-end',
+    gap: 2,
   },
   splitAmount: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#6366F1',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
   },
-
-  // Delete
-  deleteBtn: {
-    backgroundColor: '#FFF1F2',
+  splitPercent: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  notesText: {
+    fontSize: 15,
+    color: '#374151',
+    lineHeight: 22,
+  },
+  metaText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+  },
+  deleteButton: {
+    marginTop: 8,
+    padding: 16,
     borderRadius: 12,
-    padding: 14,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#FECDD3',
-    marginTop: 8,
+    borderColor: '#FECACA',
   },
-  deleteBtnText: {
-    color: '#DC2626',
+  deleteButtonText: {
     fontSize: 15,
-    fontWeight: '700',
-  },
-
-  // Not found
-  notFoundText: {
-    fontSize: 18,
-    color: '#64748B',
-    marginBottom: 16,
-  },
-  backButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    backgroundColor: '#6366F1',
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: '#FFFFFF',
     fontWeight: '600',
+    color: '#DC2626',
   },
 });
+
+export default ExpenseDetailScreen;

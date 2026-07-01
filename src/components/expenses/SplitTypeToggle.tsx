@@ -1,22 +1,16 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ViewStyle,
-} from 'react-native';
-import { SplitType } from '../../hooks/useExpenseForm';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+export type SplitType = 'equal' | 'custom';
 
 interface SplitTypeToggleProps {
   value: SplitType;
-  onChange: (value: SplitType) => void;
-  style?: ViewStyle;
+  onChange: (type: SplitType) => void;
 }
 
-export function SplitTypeToggle({ value, onChange, style }: SplitTypeToggleProps) {
+export const SplitTypeToggle: React.FC<SplitTypeToggleProps> = ({ value, onChange }) => {
   return (
-    <View style={[styles.container, style]}>
+    <View style={styles.container}>
       <TouchableOpacity
         style={[styles.option, value === 'equal' && styles.optionActive]}
         onPress={() => onChange('equal')}
@@ -39,19 +33,20 @@ export function SplitTypeToggle({ value, onChange, style }: SplitTypeToggleProps
       </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
     padding: 3,
   },
   option: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -66,10 +61,12 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#64748B',
+    color: '#6B7280',
   },
   optionTextActive: {
-    color: '#1E293B',
+    color: '#111827',
     fontWeight: '600',
   },
 });
+
+export default SplitTypeToggle;

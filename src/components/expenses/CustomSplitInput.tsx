@@ -1,137 +1,138 @@
-import React, { useRef } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  ViewStyle,
-} from 'react-native';
-import { Participant } from '../../types';
-import { Split } from '../../utils/splitCalculator';
+import React from 'react';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
 
 interface CustomSplitInputProps {
-  participant: Participant;
-  split: Split;
-  currency: string;
-  onChangeAmount: (participantId: string, amount: string) => void;
-  style?: ViewStyle;
+  participantId: string;
+  name: string;
+  amount: number;
+  currency?: string;
+  onChange: (participantId: string, amount: number) => void;
+  isLast?: boolean;
 }
 
 function getInitials(name: string): string {
   return name
     .split(' ')
-    .map((w) => w[0])
+    .map((n) => n[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
 }
 
-export function CustomSplitInput({
-  participant,
-  split,
-  currency,
-  onChangeAmount,
-  style,
-}: CustomSplitInputProps) {
-  const inputRef = useRef<TextInput>(null);
+const AVATAR_COLORS = [
+  '#6366F1', '#8B5CF6', '#EC4899', '#EF4444',
+  '#F59E0B', '#10B981', '#3B82F6', '#14B8A6',
+];
 
-  const avatarColor = participant.avatarColor || '#6366F1';
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+export const CustomSplitInput: React.FC<CustomSplitInputProps> = ({
+  participantId,
+  name,
+  amount,
+  currency = '$',
+  onChange,
+  isLast = false,
+}) => {
+  const initials = getInitials(name);
+  const avatarColor = getAvatarColor(name);
+
+  const handleChange = (text: string) => {
+    const parsed = parseFloat(text);
+    onChange(participantId, isNaN(parsed) ? 0 : parsed);
+  };
 
   return (
-    <View style={[styles.row, style]}>
-      {/* Avatar */}
+    <View style={styles.container}>
       <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-        <Text style={styles.avatarText}>{getInitials(participant.name)}</Text>
+        <Text style={styles.avatarText}>{initials}</Text>
       </View>
-
-      {/* Name */}
       <Text style={styles.name} numberOfLines={1}>
-        {participant.name}
+        {name}
       </Text>
-
-      {/* Amount input */}
       <View style={styles.inputWrapper}>
-        <Text style={styles.currencySymbol}>{getCurrencySymbol(currency)}</Text>
+        <Text style={styles.currencySymbol}>{currency}</Text>
         <TextInput
-          ref={inputRef}
-          style={styles.input}
-          value={split.amount === 0 ? '' : split.amount.toString()}
-          onChangeText={(text) => onChangeAmount(participant.id, text)}
+          style={[styles.input, isLast && styles.inputLast]}
+          value={amount === 0 ? '' : amount.toString()}
+          onChangeText={handleChange}
           keyboardType="decimal-pad"
           placeholder="0.00"
-          placeholderTextColor="#94A3B8"
-          accessibilityLabel={`${participant.name}'s share`}
+          placeholderTextColor="#9CA3AF"
+          accessibilityLabel={`${name}'s share`}
+          editable={!isLast}
           selectTextOnFocus
         />
       </View>
+      {isLast && (
+        <Text style={styles.autoLabel}>auto</Text>
+      )}
     </View>
   );
-}
-
-function getCurrencySymbol(currency: string): string {
-  try {
-    const formatted = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(0);
-    return formatted.replace(/[\d,.\s]/g, '').trim();
-  } catch {
-    return currency;
-  }
-}
+};
 
 const styles = StyleSheet.create({
-  row: {
+  container: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+    gap: 10,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    flexShrink: 0,
   },
   avatarText: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   name: {
     flex: 1,
     fontSize: 15,
-    color: '#1E293B',
-    fontWeight: '500',
+    color: '#111827',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
     borderRadius: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 6,
-    minWidth: 100,
-    backgroundColor: '#F8FAFC',
+    minWidth: 90,
   },
   currencySymbol: {
     fontSize: 14,
-    color: '#64748B',
-    marginRight: 4,
+    color: '#6B7280',
+    marginRight: 2,
   },
   input: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
+    color: '#111827',
     minWidth: 60,
     padding: 0,
     textAlign: 'right',
   },
+  inputLast: {
+    color: '#6B7280',
+  },
+  autoLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
 });
+
+export default CustomSplitInput;

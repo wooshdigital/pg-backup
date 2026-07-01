@@ -1,626 +1,624 @@
-import React, { useCallback, useLayoutEffect } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  Alert,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-import { RootStackParamList } from '../types';
-import { useExpenseForm } from '../hooks/useExpenseForm';
-import { CURRENCIES } from '../constants/currencies';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { TextInput } from '../components/TextInput';
 import { SplitTypeToggle } from '../components/expenses/SplitTypeToggle';
 import { CustomSplitInput } from '../components/expenses/CustomSplitInput';
 import { SplitBalanceIndicator } from '../components/expenses/SplitBalanceIndicator';
+import { useTrip } from '../context/TripContext';
+import { useExpenseForm } from '../hooks/useExpenseForm';
+import { roundCurrency } from '../utils/splitCalculator';
 
-// Inline simple components to keep the file self-contained
-import {
-  TextInput,
-  View as RNView,
-  Text as RNText,
-  TouchableOpacity as RNTO,
-  StyleSheet as SS,
-} from 'react-native';
+interface RouteParams {
+  tripId: string;
+  expenseId?: string;
+}
 
-type AddExpenseRouteProp = RouteProp<RootStackParamList, 'AddExpense'>;
-type AddExpenseNavProp = NativeStackNavigationProp<RootStackParamList, 'AddExpense'>;
+const STEPS = ['Details', 'Paid by', 'Split'];
 
-export default function AddExpenseScreen() {
-  const navigation = useNavigation<AddExpenseNavProp>();
-  const route = useRoute<AddExpenseRouteProp>();
-  const { tripId, expenseId } = route.params;
+export const AddExpenseScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { tripId, expenseId } = route.params as RouteParams;
+
+  const { state } = useTrip();
+  const trip = state.trips.find((t: any) => t.id === tripId);
+  const participants = trip?.participants || [];
 
   const {
     step,
     values,
-    errors,
-    participants,
-    existingExpense,
-    splitDiff,
-    setValue,
-    handleParticipantToggle,
+    isEditing,
+    splitDifference,
+    nextStep,
+    prevStep,
+    updateField,
+    toggleParticipant,
+    updateCustomSplit,
     handleSplitTypeChange,
-    handleCustomSplitChange,
-    handleAutoAdjustLast,
-    goNext,
-    goBack,
-    handleSubmit,
-  } = useExpenseForm(tripId, expenseId);
+    submit,
+    canProceed,
+  } = useExpenseForm({
+    tripId,
+    expenseId,
+    onSuccess: () => navigation.goBack(),
+  });
 
-  const isEditing = !!expenseId;
+  const numericAmount = parseFloat(values.amount) || 0;
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title: isEditing ? 'Edit Expense' : 'Add Expense',
-      headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Text style={styles.headerBtnText}>Cancel</Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, isEditing]);
+  const assignedTotal = values.selectedParticipantIds.reduce((sum: number, id: string) => {
+    return sum + (parseFloat(values.customSplits[id] || '0') || 0);
+  }, 0);
 
-  const onSubmit = useCallback(async () => {
-    const success = await handleSubmit();
-    if (success) {
-      navigation.goBack();
+  const handleSubmit = useCallback(() => {
+    if (!canProceed) return;
+    if (step < 3) {
+      nextStep();
     } else {
-      Alert.alert('Error', 'Please fix the errors before saving.');
+      submit();
     }
-  }, [handleSubmit, navigation]);
+  }, [canProceed, step, nextStep, submit]);
 
-  const selectedParticipants = participants.filter((p) =>
-    values.selectedParticipantIds.includes(p.id)
-  );
-
-  // ── Step Indicator ──────────────────────────────────────────────
   const renderStepIndicator = () => (
     <View style={styles.stepIndicator}>
-      {[1, 2, 3].map((s) => (
-        <View key={s} style={styles.stepRow}>
-          <View style={[styles.stepDot, s === step && styles.stepDotActive, s < step && styles.stepDotDone]}>
-            <Text style={[styles.stepDotText, (s === step || s < step) && styles.stepDotTextActive]}>
-              {s < step ? '✓' : s}
-            </Text>
-          </View>
-          {s < 3 && <View style={[styles.stepLine, s < step && styles.stepLineDone]} />}
-        </View>
-      ))}
+      {STEPS.map((label, idx) => {
+        const stepNum = idx + 1;
+        const isActive = step === stepNum;
+        const isComplete = step > stepNum;
+        return (
+          <React.Fragment key={label}>
+            <View style={styles.stepItem}>
+              <View
+                style={[
+                  styles.stepCircle,
+                  isActive && styles.stepCircleActive,
+                  isComplete && styles.stepCircleComplete,
+                ]}
+              >
+                {isComplete ? (
+                  <Text style={styles.stepCircleTextComplete}>✓</Text>
+                ) : (
+                  <Text style={[styles.stepCircleText, isActive && styles.stepCircleTextActive]}>
+                    {stepNum}
+                  </Text>
+                )}
+              </View>
+              <Text style={[styles.stepLabel, isActive && styles.stepLabelActive]}>
+                {label}
+              </Text>
+            </View>
+            {idx < STEPS.length - 1 && (
+              <View style={[styles.stepLine, isComplete && styles.stepLineComplete]} />
+            )}
+          </React.Fragment>
+        );
+      })}
     </View>
   );
 
-  // ── Step 1: Details ─────────────────────────────────────────────
   const renderStep1 = () => (
-    <ScrollView style={styles.stepContent} keyboardShouldPersistTaps="handled">
-      <Text style={styles.stepTitle}>Expense Details</Text>
+    <View style={styles.stepContent}>
+      <Text style={styles.sectionTitle}>Expense Details</Text>
 
-      <Text style={styles.label}>Description *</Text>
-      <TextInput
-        style={[styles.input, errors.description ? styles.inputError : null]}
-        value={values.description}
-        onChangeText={(v) => setValue('description', v)}
-        placeholder="e.g. Dinner at Trattoria"
-        placeholderTextColor="#94A3B8"
-        returnKeyType="next"
-        autoFocus
-      />
-      {errors.description ? <Text style={styles.errorText}>{errors.description}</Text> : null}
-
-      <Text style={styles.label}>Amount *</Text>
-      <View style={styles.amountRow}>
-        <View style={styles.currencyPicker}>
-          <Text style={styles.currencyText}>{values.currency}</Text>
-        </View>
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Description *</Text>
         <TextInput
-          style={[styles.input, styles.amountInput, errors.amount ? styles.inputError : null]}
-          value={values.amount}
-          onChangeText={(v) => setValue('amount', v)}
-          placeholder="0.00"
-          placeholderTextColor="#94A3B8"
-          keyboardType="decimal-pad"
-          returnKeyType="done"
+          value={values.description}
+          onChangeText={(text) => updateField('description', text)}
+          placeholder="e.g. Dinner at Trattoria"
+          autoFocus={!isEditing}
+          returnKeyType="next"
         />
       </View>
-      {errors.amount ? <Text style={styles.errorText}>{errors.amount}</Text> : null}
 
-      <Text style={styles.label}>Currency</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencyList}>
-        {CURRENCIES.slice(0, 12).map((c) => (
-          <TouchableOpacity
-            key={c.code}
-            style={[styles.currencyChip, values.currency === c.code && styles.currencyChipActive]}
-            onPress={() => setValue('currency', c.code)}
-          >
-            <Text style={[styles.currencyChipText, values.currency === c.code && styles.currencyChipTextActive]}>
-              {c.code}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Amount *</Text>
+        <View style={styles.amountRow}>
+          <View style={styles.currencyBadge}>
+            <Text style={styles.currencyBadgeText}>{values.currency}</Text>
+          </View>
+          <View style={styles.amountInputWrap}>
+            <TextInput
+              value={values.amount}
+              onChangeText={(text) => updateField('amount', text)}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+            />
+          </View>
+        </View>
+      </View>
 
-      <Text style={styles.label}>Date</Text>
-      <TextInput
-        style={styles.input}
-        value={values.date}
-        onChangeText={(v) => setValue('date', v)}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor="#94A3B8"
-      />
-
-      <Text style={styles.label}>Notes</Text>
-      <TextInput
-        style={[styles.input, styles.notesInput]}
-        value={values.notes}
-        onChangeText={(v) => setValue('notes', v)}
-        placeholder="Optional notes..."
-        placeholderTextColor="#94A3B8"
-        multiline
-        numberOfLines={3}
-      />
-    </ScrollView>
-  );
-
-  // ── Step 2: Paid By ─────────────────────────────────────────────
-  const renderStep2 = () => (
-    <ScrollView style={styles.stepContent}>
-      <Text style={styles.stepTitle}>Who Paid?</Text>
-      {errors.paidById ? <Text style={styles.errorText}>{errors.paidById}</Text> : null}
-      {participants.map((p) => {
-        const isSelected = values.paidById === p.id;
-        return (
-          <TouchableOpacity
-            key={p.id}
-            style={[styles.participantRow, isSelected && styles.participantRowSelected]}
-            onPress={() => setValue('paidById', p.id)}
-          >
-            <View style={[styles.avatar, { backgroundColor: p.avatarColor || '#6366F1' }]}>
-              <Text style={styles.avatarText}>
-                {p.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
-              </Text>
-            </View>
-            <Text style={[styles.participantName, isSelected && styles.participantNameSelected]}>
-              {p.name}
-            </Text>
-            {isSelected && <Text style={styles.checkmark}>✓</Text>}
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  );
-
-  // ── Step 3: Split ────────────────────────────────────────────────
-  const renderStep3 = () => {
-    const total = parseFloat(values.amount) || 0;
-
-    return (
-      <ScrollView style={styles.stepContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.stepTitle}>Split Between</Text>
-
-        {/* Split type toggle */}
-        <SplitTypeToggle
-          value={values.splitType}
-          onChange={handleSplitTypeChange}
-          style={styles.splitToggle}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Date</Text>
+        <TextInput
+          value={values.date}
+          onChangeText={(text) => updateField('date', text)}
+          placeholder="YYYY-MM-DD"
         />
+      </View>
 
-        {/* Participant selection */}
-        <Text style={styles.subLabel}>Participants</Text>
-        {errors.selectedParticipantIds ? (
-          <Text style={styles.errorText}>{errors.selectedParticipantIds}</Text>
-        ) : null}
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Category</Text>
+        <TextInput
+          value={values.category}
+          onChangeText={(text) => updateField('category', text)}
+          placeholder="e.g. Food, Transport, Accommodation"
+        />
+      </View>
 
-        {participants.map((p) => {
-          const isSelected = values.selectedParticipantIds.includes(p.id);
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>Notes</Text>
+        <TextInput
+          value={values.notes}
+          onChangeText={(text) => updateField('notes', text)}
+          placeholder="Optional notes"
+          multiline
+          numberOfLines={3}
+        />
+      </View>
+    </View>
+  );
+
+  const renderStep2 = () => (
+    <View style={styles.stepContent}>
+      <Text style={styles.sectionTitle}>Who Paid?</Text>
+      <View style={styles.participantList}>
+        {participants.map((p: any) => {
+          const isSelected = values.paidById === p.id;
           return (
             <TouchableOpacity
               key={p.id}
               style={[styles.participantRow, isSelected && styles.participantRowSelected]}
-              onPress={() => handleParticipantToggle(p.id)}
+              onPress={() => updateField('paidById', p.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected }}
             >
-              <View style={[styles.avatar, { backgroundColor: p.avatarColor || '#6366F1' }]}>
-                <Text style={styles.avatarText}>
-                  {p.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
-                </Text>
+              <View style={[styles.radio, isSelected && styles.radioSelected]}>
+                {isSelected && <View style={styles.radioDot} />}
               </View>
               <Text style={[styles.participantName, isSelected && styles.participantNameSelected]}>
                 {p.name}
               </Text>
-              {values.splitType === 'equal' && isSelected && (
-                <Text style={styles.equalAmount}>
-                  {values.currency}{' '}
-                  {selectedParticipants.length > 0
-                    ? (total / selectedParticipants.length).toFixed(2)
-                    : '0.00'}
-                </Text>
-              )}
-              {isSelected && values.splitType !== 'custom' && (
-                <Text style={styles.checkmark}>✓</Text>
-              )}
-              {!isSelected && <View style={styles.unchecked} />}
             </TouchableOpacity>
           );
         })}
+      </View>
+    </View>
+  );
 
-        {/* Custom split inputs */}
-        {values.splitType === 'custom' && selectedParticipants.length > 0 && (
-          <View style={styles.customSplitSection}>
-            <View style={styles.customSplitHeader}>
-              <Text style={styles.subLabel}>Enter Amounts</Text>
-              <TouchableOpacity onPress={handleAutoAdjustLast} style={styles.autoAdjustBtn}>
-                <Text style={styles.autoAdjustText}>Auto-adjust last</Text>
+  const renderStep3 = () => {
+    const lastParticipantId = values.selectedParticipantIds[values.selectedParticipantIds.length - 1];
+
+    return (
+      <View style={styles.stepContent}>
+        <Text style={styles.sectionTitle}>How to Split?</Text>
+
+        {numericAmount > 0 && (
+          <Text style={styles.totalLabel}>
+            Total: {values.currency} {numericAmount.toFixed(2)}
+          </Text>
+        )}
+
+        <View style={styles.fieldGroup}>
+          <SplitTypeToggle value={values.splitType} onChange={handleSplitTypeChange} />
+        </View>
+
+        <Text style={styles.subSectionTitle}>Include participants</Text>
+        <View style={styles.participantList}>
+          {participants.map((p: any) => {
+            const isSelected = values.selectedParticipantIds.includes(p.id);
+            return (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.participantCheckRow, isSelected && styles.participantCheckRowSelected]}
+                onPress={() => toggleParticipant(p.id)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isSelected }}
+              >
+                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={[styles.participantName, isSelected && styles.participantNameSelected]}>
+                  {p.name}
+                </Text>
               </TouchableOpacity>
-            </View>
+            );
+          })}
+        </View>
 
-            <SplitBalanceIndicator
-              diff={splitDiff}
-              currency={values.currency}
-            />
+        {values.splitType === 'custom' && values.selectedParticipantIds.length > 0 && (
+          <View style={styles.customSplitsSection}>
+            <Text style={styles.subSectionTitle}>Enter each person's share</Text>
+            <Text style={styles.autoHint}>
+              The last person's share is auto-calculated.
+            </Text>
 
-            {selectedParticipants.map((p) => {
-              const split = values.customSplits.find((s) => s.participantId === p.id) || {
-                participantId: p.id,
-                amount: 0,
-              };
+            {values.selectedParticipantIds.map((id: string, index: number) => {
+              const participant = participants.find((p: any) => p.id === id);
+              if (!participant) return null;
+              const isLast = id === lastParticipantId;
+              const amount = isLast
+                ? Math.max(0, roundCurrency(numericAmount - values.selectedParticipantIds.slice(0, -1).reduce((sum: number, pid: string) => {
+                    return sum + (parseFloat(values.customSplits[pid] || '0') || 0);
+                  }, 0)))
+                : parseFloat(values.customSplits[id] || '0') || 0;
+
               return (
                 <CustomSplitInput
-                  key={p.id}
-                  participant={p}
-                  split={split}
-                  currency={values.currency}
-                  onChangeAmount={handleCustomSplitChange}
+                  key={id}
+                  participantId={id}
+                  name={participant.name}
+                  amount={amount}
+                  currency={values.currency === 'USD' ? '$' : values.currency}
+                  onChange={(pid, val) => updateCustomSplit(pid, val.toString())}
+                  isLast={isLast}
                 />
               );
             })}
 
-            {errors.customSplits ? (
-              <Text style={styles.errorText}>{errors.customSplits}</Text>
-            ) : null}
+            <SplitBalanceIndicator
+              total={numericAmount}
+              assigned={assignedTotal}
+              currency={values.currency === 'USD' ? '$' : values.currency}
+            />
           </View>
         )}
-      </ScrollView>
-    );
-  };
 
-  // ── Navigation Buttons ───────────────────────────────────────────
-  const renderNavButtons = () => {
-    const isLastStep = step === 3;
-    const canSaveCustom =
-      !isLastStep || values.splitType !== 'custom' || splitDiff === 0;
-
-    return (
-      <View style={styles.navButtons}>
-        {step > 1 && (
-          <TouchableOpacity style={styles.backBtn} onPress={goBack}>
-            <Text style={styles.backBtnText}>Back</Text>
-          </TouchableOpacity>
+        {values.splitType === 'equal' && values.selectedParticipantIds.length > 0 && numericAmount > 0 && (
+          <View style={styles.equalSplitPreview}>
+            <Text style={styles.equalSplitPreviewText}>
+              Each person pays:{' '}
+              <Text style={styles.equalSplitAmount}>
+                {values.currency === 'USD' ? '$' : values.currency}
+                {roundCurrency(numericAmount / values.selectedParticipantIds.length).toFixed(2)}
+              </Text>
+            </Text>
+          </View>
         )}
-        <TouchableOpacity
-          style={[
-            styles.nextBtn,
-            isLastStep && !canSaveCustom && styles.nextBtnDisabled,
-            step === 1 && styles.nextBtnFull,
-          ]}
-          onPress={isLastStep ? onSubmit : goNext}
-          disabled={isLastStep && !canSaveCustom}
-        >
-          <Text style={styles.nextBtnText}>
-            {isLastStep ? (isEditing ? 'Save Changes' : 'Add Expense') : 'Next'}
-          </Text>
-        </TouchableOpacity>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={88}
+    >
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          {isEditing ? 'Edit Expense' : 'Add Expense'}
+        </Text>
+      </View>
+
+      {renderStepIndicator()}
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        {renderStepIndicator()}
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+      </ScrollView>
 
-        <View style={styles.flex}>
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-        </View>
-
-        {renderNavButtons()}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <View style={styles.footer}>
+        {step > 1 && (
+          <TouchableOpacity style={styles.backButton} onPress={prevStep}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[styles.nextButton, !canProceed && styles.nextButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={!canProceed}
+        >
+          <Text style={styles.nextButtonText}>
+            {step < 3 ? 'Next →' : isEditing ? 'Save Changes' : 'Add Expense'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F9FAFB',
   },
-  headerBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 6,
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  headerBtnText: {
-    color: '#6366F1',
-    fontSize: 16,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
   },
-
-  // Step indicator
   stepIndicator: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 24,
     paddingVertical: 16,
-    paddingHorizontal: 32,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E2E8F0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  stepRow: {
-    flexDirection: 'row',
+  stepItem: {
     alignItems: 'center',
+    gap: 4,
   },
-  stepDot: {
+  stepCircle: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#E2E8F0',
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepDotActive: {
-    backgroundColor: '#6366F1',
-  },
-  stepDotDone: {
-    backgroundColor: '#22C55E',
-  },
-  stepDotText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
-  },
-  stepDotTextActive: {
-    color: '#FFFFFF',
-  },
-  stepLine: {
-    width: 40,
-    height: 2,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 4,
-  },
-  stepLineDone: {
-    backgroundColor: '#22C55E',
-  },
-
-  // Step content
-  stepContent: {
-    flex: 1,
-    padding: 20,
-  },
-  stepTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 24,
-  },
-  subLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#1E293B',
-  },
-  inputError: {
-    borderColor: '#EF4444',
-  },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  amountRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  currencyPicker: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    justifyContent: 'center',
-  },
-  currencyText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  amountInput: {
-    flex: 1,
-  },
-  currencyList: {
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  currencyChip: {
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    marginRight: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  currencyChipActive: {
+  stepCircleActive: {
     borderColor: '#6366F1',
     backgroundColor: '#EEF2FF',
   },
-  currencyChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+  stepCircleComplete: {
+    borderColor: '#10B981',
+    backgroundColor: '#10B981',
   },
-  currencyChipTextActive: {
+  stepCircleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  stepCircleTextActive: {
     color: '#6366F1',
   },
-  errorText: {
-    color: '#EF4444',
+  stepCircleTextComplete: {
     fontSize: 12,
-    marginTop: 4,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  stepLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
     fontWeight: '500',
   },
-
-  // Participant rows
+  stepLabelActive: {
+    color: '#6366F1',
+    fontWeight: '600',
+  },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 16,
+    marginHorizontal: 4,
+  },
+  stepLineComplete: {
+    backgroundColor: '#10B981',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 24,
+  },
+  stepContent: {
+    padding: 20,
+    gap: 4,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 16,
+  },
+  subSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  fieldGroup: {
+    marginBottom: 16,
+    gap: 6,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  currencyBadge: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  currencyBadgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6366F1',
+  },
+  amountInputWrap: {
+    flex: 1,
+  },
+  totalLabel: {
+    fontSize: 15,
+    color: '#374151',
+    fontWeight: '500',
+    marginBottom: 12,
+    backgroundColor: '#F3F4F6',
+    padding: 10,
+    borderRadius: 8,
+  },
+  participantList: {
+    gap: 6,
+  },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    gap: 12,
     padding: 12,
-    marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   participantRowSelected: {
     borderColor: '#6366F1',
-    backgroundColor: '#FAFAFE',
+    backgroundColor: '#EEF2FF',
   },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  participantName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  participantNameSelected: {
-    color: '#1E293B',
-    fontWeight: '600',
-  },
-  equalAmount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6366F1',
-    marginRight: 8,
-  },
-  checkmark: {
-    fontSize: 16,
-    color: '#6366F1',
-    fontWeight: '700',
-  },
-  unchecked: {
+  radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
-  },
-
-  // Custom split
-  splitToggle: {
-    marginBottom: 8,
-  },
-  customSplitSection: {
-    marginTop: 16,
-  },
-  customSplitHeader: {
-    flexDirection: 'row',
+    borderColor: '#D1D5DB',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    justifyContent: 'center',
   },
-  autoAdjustBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 8,
+  radioSelected: {
+    borderColor: '#6366F1',
   },
-  autoAdjustText: {
-    color: '#6366F1',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  // Nav buttons
-  navButtons: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E2E8F0',
-  },
-  backBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  backBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  nextBtn: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#6366F1',
   },
-  nextBtnFull: {
+  participantCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  participantCheckRowSelected: {
+    borderColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    borderColor: '#6366F1',
+    backgroundColor: '#6366F1',
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  participantName: {
+    fontSize: 15,
+    color: '#374151',
     flex: 1,
   },
-  nextBtnDisabled: {
-    backgroundColor: '#A5B4FC',
+  participantNameSelected: {
+    color: '#4338CA',
+    fontWeight: '500',
   },
-  nextBtnText: {
-    fontSize: 16,
+  customSplitsSection: {
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 2,
+  },
+  autoHint: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  equalSplitPreview: {
+    marginTop: 12,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  equalSplitPreviewText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  equalSplitAmount: {
+    fontWeight: '700',
+    color: '#4338CA',
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  backButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+  },
+  backButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  nextButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#6366F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextButtonDisabled: {
+    backgroundColor: '#C7D2FE',
+  },
+  nextButtonText: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
   },
 });
+
+export default AddExpenseScreen;

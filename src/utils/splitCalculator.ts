@@ -1,41 +1,64 @@
-import { Participant } from '../types';
-
-export interface Split {
+export interface ParticipantSplit {
   participantId: string;
   amount: number;
 }
 
+/**
+ * Rounds a currency value to 2 decimal places using banker's rounding workaround.
+ */
+export function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Calculates equal splits for a list of participant IDs.
+ */
 export function calculateEqualSplits(
-  participants: Participant[],
+  participantIds: string[],
   total: number
-): Split[] {
-  if (participants.length === 0) return [];
+): ParticipantSplit[] {
+  if (participantIds.length === 0) return [];
 
-  const perPerson = roundCurrency(total / participants.length);
-  const splits: Split[] = participants.map((p) => ({
-    participantId: p.id,
-    amount: perPerson,
+  const baseAmount = roundCurrency(Math.floor((total / participantIds.length) * 100) / 100);
+  const remainder = roundCurrency(total - baseAmount * participantIds.length);
+
+  return participantIds.map((id, index) => ({
+    participantId: id,
+    amount: index === participantIds.length - 1
+      ? roundCurrency(baseAmount + remainder)
+      : baseAmount,
   }));
-
-  // Adjust last participant for floating point rounding
-  return adjustLastParticipant(splits, total);
 }
 
+/**
+ * Validates that custom splits sum to the total amount.
+ * Returns an object with isValid flag and the difference.
+ */
 export function validateCustomSplits(
-  splits: Split[],
+  splits: ParticipantSplit[],
   total: number
-): { valid: boolean; diff: number } {
-  const sum = splits.reduce((acc, s) => acc + s.amount, 0);
-  const diff = roundCurrency(total - sum);
-  return { valid: diff === 0, diff };
+): { isValid: boolean; difference: number } {
+  const sum = splits.reduce((acc, s) => acc + (s.amount || 0), 0);
+  const difference = roundCurrency(total - sum);
+  return {
+    isValid: Math.abs(difference) < 0.001,
+    difference,
+  };
 }
 
-export function adjustLastParticipant(splits: Split[], total: number): Split[] {
+/**
+ * Auto-adjusts the last participant's share to make splits sum exactly to total.
+ * Handles floating-point rounding issues.
+ */
+export function adjustLastParticipant(
+  splits: ParticipantSplit[],
+  total: number
+): ParticipantSplit[] {
   if (splits.length === 0) return splits;
 
   const allButLast = splits.slice(0, -1);
-  const sumOfRest = allButLast.reduce((acc, s) => acc + s.amount, 0);
-  const lastAmount = roundCurrency(total - sumOfRest);
+  const sumOfOthers = allButLast.reduce((acc, s) => acc + (s.amount || 0), 0);
+  const lastAmount = roundCurrency(total - sumOfOthers);
 
   return [
     ...allButLast,
@@ -43,6 +66,9 @@ export function adjustLastParticipant(splits: Split[], total: number): Split[] {
   ];
 }
 
-export function roundCurrency(value: number): number {
-  return Math.round(value * 100) / 100;
+/**
+ * Creates an initial custom splits map with zero amounts for each participant.
+ */
+export function createInitialCustomSplits(participantIds: string[]): ParticipantSplit[] {
+  return participantIds.map((id) => ({ participantId: id, amount: 0 }));
 }
