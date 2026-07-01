@@ -2,83 +2,64 @@ package main
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
+	"log"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/ssoready/conf/internal/backup"
-	"github.com/ssoready/conf/internal/compress"
-	"github.com/ssoready/conf/internal/config"
-	"github.com/ssoready/conf/internal/dumper"
-	"github.com/ssoready/conf/internal/storage"
+	"github.com/yourorg/backupworker/internal/backup"
+	"github.com/yourorg/backupworker/internal/config"
+	"github.com/yourorg/backupworker/internal/scheduler"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	logger := log.New(os.Stdout, "[worker] ", log.LstdFlags|log.LUTC)
 
-	ctx := context.Background()
-
-	// Load configuration from file / env.
-	cfg, err := config.Load()
+	// Load configuration
+	cfg, err := config.Load("config.yaml")
 	if err != nil {
-		logger.ErrorContext(ctx, "config.load_failed", slog.String("error", err.Error()))
-		os.Exit(1)
+		logger.Fatalf("failed to load config: %v", err)
 	}
 
-	// Build dumper.
-	d, err := dumper.New(cfg)
+	// Build the backup job
+	job, err := backup.NewJob(cfg, logger)
 	if err != nil {
-		logger.ErrorContext(ctx, "dumper.init_failed", slog.String("error", err.Error()))
-		os.Exit(1)
+		logger.Fatalf("failed to create backup job: %v", err)
 	}
 
-	// Build compressor.
-	algo := cfg.Compression.Algorithm
-	if algo == "" {
-		algo = "gzip"
-	}
-	level := cfg.Compression.Level
+	// Create signal-aware context so we can shut down cleanly
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
-	var c compress.Compressor
-	if level > 0 {
-		c, err = compress.NewFactory().CreateWithLevel(algo, level)
-	} else {
-		c, err = compress.NewFactory().Create(algo)
-	}
+	// Build the scheduler
+	sched, err := scheduler.New(cfg.Schedule, logger, func(jobCtx context.Context) error {
+		start := time.Now()
+		logger.Printf("backup job started")
+		if err := job.Run(jobCtx); err != nil {
+			return fmt.Errorf("backup job failed: %w", err)
+		}
+		logger.Printf("backup job completed successfully in %s", time.Since(start).Round(time.Millisecond))
+		return nil
+	})
 	if err != nil {
-		logger.ErrorContext(ctx, "compressor.init_failed", slog.String("error", err.Error()))
-		os.Exit(1)
+		logger.Fatalf("failed to create scheduler: %v", err)
 	}
 
-	// Build storage backend.
-	s, err := storage.New(ctx, cfg)
-	if err != nil {
-		logger.ErrorContext(ctx, "storage.init_failed", slog.String("error", err.Error()))
-		os.Exit(1)
+	// Start the cron scheduler
+	sched.Start()
+	logger.Printf("scheduler started; cron expression: %q", cfg.Schedule)
+
+	if next, ok := sched.NextRun(); ok {
+		logger.Printf("next scheduled run: %s", next.Format(time.RFC3339))
 	}
 
-	// Construct and run the backup job.
-	job := &backup.Job{
-		Dumper:       d,
-		Compressor:   c,
-		Storage:      s,
-		Logger:       logger,
-		StreamDirect: cfg.StreamDirect,
-	}
+	// Block until a signal is received
+	<-ctx.Done()
+	logger.Printf("shutdown signal received, waiting for any running job to finish...")
 
-	result := job.Run(ctx)
-	if result.Err != nil {
-		logger.ErrorContext(ctx, "backup.run_failed",
-			slog.String("error", result.Err.Error()),
-		)
-		os.Exit(1)
-	}
-
-	logger.InfoContext(ctx, "backup.run_succeeded",
-		slog.String("key", result.Key),
-		slog.Int64("size_bytes", result.Size),
-		slog.Duration("duration", result.Duration),
-	)
+	// Stop() blocks until the currently-running job (if any) completes
+	sched.Stop()
+	logger.Printf("scheduler stopped; exiting")
 }

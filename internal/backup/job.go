@@ -3,166 +3,96 @@ package backup
 import (
 	"context"
 	"fmt"
-	"io"
-	"log/slog"
-	"time"
+	"log"
 
-	"github.com/ssoready/conf/internal/compress"
-	"github.com/ssoready/conf/internal/dumper"
-	"github.com/ssoready/conf/internal/storage"
-	"github.com/ssoready/conf/internal/tempfile"
+	"github.com/yourorg/backupworker/internal/config"
+	"github.com/yourorg/backupworker/internal/compress"
+	"github.com/yourorg/backupworker/internal/dumper"
+	"github.com/yourorg/backupworker/internal/storage"
+	"github.com/yourorg/backupworker/internal/tempfile"
 )
 
-// BackupResult holds the outcome of a completed backup run.
-type BackupResult struct {
-	Key      string
-	Size     int64
-	Duration time.Duration
-	Err      error
-}
-
-// Job orchestrates the full backup cycle: dump → compress → upload.
+// Job holds all dependencies needed to execute a single backup run.
 type Job struct {
-	Dumper    dumper.Dumper
-	Compressor compress.Compressor
-	Storage   storage.Backend
-	Logger    *slog.Logger
-
-	// StreamDirect, when true, streams compressed data directly to the uploader
-	// via an io.Pipe, bypassing the intermediate temp file.
-	StreamDirect bool
+	cfg     *config.Config
+	logger  *log.Logger
+	dumper  dumper.Dumper
+	storage storage.Storage
 }
 
-// Run executes a single full backup cycle and returns a BackupResult.
-func (j *Job) Run(ctx context.Context) BackupResult {
-	start := time.Now()
-	log := j.Logger
-	if log == nil {
-		log = slog.Default()
-	}
-
-	log.InfoContext(ctx, "backup.start")
-
-	var (
-		key  string
-		size int64
-		err  error
-	)
-
-	if j.StreamDirect {
-		key, size, err = j.runStreamed(ctx, log)
-	} else {
-		key, size, err = j.runBuffered(ctx, log)
-	}
-
-	dur := time.Since(start)
-
+// NewJob constructs a Job from the given configuration.
+func NewJob(cfg *config.Config, logger *log.Logger) (*Job, error) {
+	d, err := dumper.New(cfg)
 	if err != nil {
-		log.ErrorContext(ctx, "backup.failed",
-			slog.String("error", err.Error()),
-			slog.Duration("duration", dur),
-		)
-		return BackupResult{Err: err, Duration: dur}
+		return nil, fmt.Errorf("dumper: %w", err)
 	}
 
-	log.InfoContext(ctx, "backup.complete",
-		slog.String("key", key),
-		slog.Int64("size_bytes", size),
-		slog.Duration("duration", dur),
-	)
-
-	return BackupResult{
-		Key:      key,
-		Size:     size,
-		Duration: dur,
+	s, err := storage.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("storage: %w", err)
 	}
+
+	return &Job{
+		cfg:    cfg,
+		logger: logger,
+		dumper: d,
+		storage: s,
+	}, nil
 }
 
-// runBuffered writes dump output through the compressor into a temp file, then
-// seeks back to the beginning and uploads.
-func (j *Job) runBuffered(ctx context.Context, log *slog.Logger) (string, int64, error) {
-	// 1. Create temp file.
-	log.InfoContext(ctx, "backup.tempfile.create")
-	tf, err := tempfile.New()
+// Run executes a full backup pipeline: dump → compress → upload.
+// It honours ctx cancellation between each stage so a graceful shutdown
+// does not leave partial artefacts on the remote storage.
+func (j *Job) Run(ctx context.Context) error {
+	// Stage 0: pre-flight cancellation check
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("backup cancelled before start: %w", err)
+	}
+
+	// Stage 1: create a temporary file for the dump
+	tmp, err := tempfile.New(j.cfg.TempDir, "backup-*.sql")
 	if err != nil {
-		return "", 0, fmt.Errorf("create temp file: %w", err)
+		return fmt.Errorf("tempfile: %w", err)
 	}
-	defer func() {
-		if removeErr := tf.Remove(); removeErr != nil {
-			log.WarnContext(ctx, "backup.tempfile.remove_failed",
-				slog.String("error", removeErr.Error()),
-			)
-		}
-	}()
+	defer tmp.Cleanup()
 
-	// 2. Stream pg_dump → compressor → temp file.
-	log.InfoContext(ctx, "backup.dump.start")
-	if err = j.dumpCompressTo(ctx, tf); err != nil {
-		return "", 0, fmt.Errorf("dump and compress: %w", err)
-	}
-	log.InfoContext(ctx, "backup.dump.complete")
+	j.logger.Printf("stage 1/3: dumping database to %s", tmp.Path())
 
-	// 3. Seek temp file to start.
-	if _, err = tf.Seek(0, io.SeekStart); err != nil {
-		return "", 0, fmt.Errorf("seek temp file: %w", err)
-	}
-
-	// Get size for logging.
-	info, err := tf.Stat()
-	if err != nil {
-		return "", 0, fmt.Errorf("stat temp file: %w", err)
-	}
-	size := info.Size()
-	log.InfoContext(ctx, "backup.upload.start",
-		slog.Int64("size_bytes", size),
-	)
-
-	// 4. Upload to storage.
-	key, err := j.Storage.Put(ctx, tf)
-	if err != nil {
-		return "", 0, fmt.Errorf("upload: %w", err)
-	}
-	log.InfoContext(ctx, "backup.upload.complete", slog.String("key", key))
-
-	// 5. Temp file is removed by the deferred tf.Remove() above.
-	return key, size, nil
-}
-
-// runStreamed pipes dump output through the compressor directly to the uploader
-// without buffering in a temp file.
-func (j *Job) runStreamed(ctx context.Context, log *slog.Logger) (string, int64, error) {
-	log.InfoContext(ctx, "backup.stream.start")
-	key, size, err := RunPipeline(ctx, j.Dumper, j.Compressor, j.Storage)
-	if err != nil {
-		return "", 0, fmt.Errorf("stream pipeline: %w", err)
-	}
-	log.InfoContext(ctx, "backup.stream.complete",
-		slog.String("key", key),
-		slog.Int64("size_bytes", size),
-	)
-	return key, size, nil
-}
-
-// dumpCompressTo runs pg_dump, passes its output through the compressor, and
-// writes the result into dst.
-func (j *Job) dumpCompressTo(ctx context.Context, dst io.Writer) error {
-	pr, pw := io.Pipe()
-
-	dumpErrCh := make(chan error, 1)
-	go func() {
-		defer pw.Close()
-		dumpErrCh <- j.Dumper.Dump(ctx, pw)
-	}()
-
-	if err := j.Compressor.Compress(pr, dst); err != nil {
-		// Drain the pipe so the goroutine can exit.
-		_, _ = io.Copy(io.Discard, pr)
-		<-dumpErrCh
-		return fmt.Errorf("compress: %w", err)
-	}
-
-	if err := <-dumpErrCh; err != nil {
+	if err := j.dumper.Dump(ctx, tmp.Path()); err != nil {
 		return fmt.Errorf("dump: %w", err)
 	}
+
+	// Check for cancellation between stages
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("backup cancelled after dump: %w", err)
+	}
+
+	// Stage 2: compress the dump
+	j.logger.Printf("stage 2/3: compressing dump")
+
+	compressor, err := compress.NewFromConfig(j.cfg)
+	if err != nil {
+		return fmt.Errorf("compressor: %w", err)
+	}
+
+	compressedPath, err := compressor.Compress(ctx, tmp.Path())
+	if err != nil {
+		return fmt.Errorf("compress: %w", err)
+	}
+	defer compressor.Cleanup(compressedPath)
+
+	// Check for cancellation between stages
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("backup cancelled after compress: %w", err)
+	}
+
+	// Stage 3: upload to storage backend
+	key := storage.BuildKey(j.cfg, compressedPath)
+	j.logger.Printf("stage 3/3: uploading to storage key=%s", key)
+
+	if err := j.storage.Put(ctx, key, compressedPath); err != nil {
+		return fmt.Errorf("upload: %w", err)
+	}
+
 	return nil
 }
