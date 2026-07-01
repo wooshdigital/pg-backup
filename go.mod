@@ -1,4 +1,4 @@
-module github.com/yourorg/backupworker
+module github.com/yourusername/backupworker
 
 go 1.21
 

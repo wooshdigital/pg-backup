@@ -2,20 +2,18 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/yourorg/backupworker/internal/backup"
-	"github.com/yourorg/backupworker/internal/config"
-	"github.com/yourorg/backupworker/internal/scheduler"
+	"github.com/yourusername/backupworker/internal/backup"
+	"github.com/yourusername/backupworker/internal/config"
+	"github.com/yourusername/backupworker/internal/scheduler"
 )
 
 func main() {
-	logger := log.New(os.Stdout, "[worker] ", log.LstdFlags|log.LUTC)
+	logger := log.New(os.Stdout, "[worker] ", log.LstdFlags|log.Lmicroseconds)
 
 	// Load configuration
 	cfg, err := config.Load("config.yaml")
@@ -23,43 +21,35 @@ func main() {
 		logger.Fatalf("failed to load config: %v", err)
 	}
 
-	// Build the backup job
-	job, err := backup.NewJob(cfg, logger)
-	if err != nil {
-		logger.Fatalf("failed to create backup job: %v", err)
-	}
-
-	// Create signal-aware context so we can shut down cleanly
+	// Create a context that is cancelled on SIGTERM or SIGINT
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// Build the scheduler
-	sched, err := scheduler.New(cfg.Schedule, logger, func(jobCtx context.Context) error {
-		start := time.Now()
-		logger.Printf("backup job started")
-		if err := job.Run(jobCtx); err != nil {
-			return fmt.Errorf("backup job failed: %w", err)
+	// Build the backup job
+	job := backup.NewJob(cfg, logger)
+
+	// Create and configure the scheduler
+	sched, err := scheduler.New(cfg.Schedule, func() {
+		logger.Println("backup job starting")
+		if runErr := job.Run(ctx); runErr != nil {
+			logger.Printf("backup job failed: %v", runErr)
+		} else {
+			logger.Println("backup job completed successfully")
 		}
-		logger.Printf("backup job completed successfully in %s", time.Since(start).Round(time.Millisecond))
-		return nil
-	})
+	}, logger)
 	if err != nil {
 		logger.Fatalf("failed to create scheduler: %v", err)
 	}
 
-	// Start the cron scheduler
+	// Start the scheduler
 	sched.Start()
-	logger.Printf("scheduler started; cron expression: %q", cfg.Schedule)
+	logger.Printf("scheduler started; next run at %s", sched.NextRun().Format("2006-01-02 15:04:05 MST"))
 
-	if next, ok := sched.NextRun(); ok {
-		logger.Printf("next scheduled run: %s", next.Format(time.RFC3339))
-	}
-
-	// Block until a signal is received
+	// Block until signal received
 	<-ctx.Done()
-	logger.Printf("shutdown signal received, waiting for any running job to finish...")
+	logger.Println("shutdown signal received, waiting for in-progress backup to complete...")
 
-	// Stop() blocks until the currently-running job (if any) completes
+	// Stop the scheduler – waits for any running job to finish
 	sched.Stop()
-	logger.Printf("scheduler stopped; exiting")
+	logger.Println("scheduler stopped cleanly, exiting")
 }

@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -10,103 +9,98 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// JobFunc is the function signature for a scheduled backup job.
-// It receives a context that is cancelled when the scheduler is stopping.
-type JobFunc func(ctx context.Context) error
-
-// Scheduler wraps robfig/cron and provides a clean API for starting,
-// stopping, and querying the next scheduled run.
+// Scheduler wraps robfig/cron to provide a clean interface for scheduling
+// backup jobs with overlap protection and next-run introspection.
 type Scheduler struct {
 	cron       *cron.Cron
-	logger     *log.Logger
 	entryID    cron.EntryID
 	expression string
-
-	// jobCtx / jobCancel allow us to propagate shutdown into a running job.
-	mu        sync.Mutex
-	jobCtx    context.Context    //nolint:containedctx
-	jobCancel context.CancelFunc
+	logger     *log.Logger
+	mu         sync.Mutex
 }
 
-// New creates a Scheduler that will execute fn on the given cron expression.
-// The cron expression follows standard 5-field POSIX syntax (minute, hour,
-// day-of-month, month, day-of-week), e.g. "0 2 * * *" for 02:00 daily.
-func New(expression string, logger *log.Logger, fn JobFunc) (*Scheduler, error) {
+// New creates a new Scheduler that will call fn on the given cron expression.
+// It uses cron.SkipIfStillRunning to prevent overlapping executions and
+// cron.WithSeconds(false) so standard 5-field POSIX cron expressions are
+// accepted (minute hour dom month dow).
+//
+// An error is returned if the cron expression cannot be parsed.
+func New(expression string, fn func(), logger *log.Logger) (*Scheduler, error) {
 	if expression == "" {
 		return nil, fmt.Errorf("cron expression must not be empty")
 	}
 
-	s := &Scheduler{
-		logger:     logger,
-		expression: expression,
-	}
+	// chainLogger bridges cron's logger interface to our *log.Logger.
+	chainLogger := &cronLogger{logger: logger}
 
-	// Use SkipIfStillRunning so that a long backup does not queue up
-	// a second run while the first is still in progress.
 	c := cron.New(
-		cron.WithLogger(cron.DefaultLogger),
-		cron.WithChain(cron.SkipIfStillRunning(cron.DefaultLogger)),
+		cron.WithLogger(chainLogger),
+		cron.WithChain(
+			cron.SkipIfStillRunning(chainLogger),
+			cron.Recover(chainLogger),
+		),
 	)
 
-	id, err := c.AddFunc(expression, func() {
-		// Create a child context that we can cancel on shutdown.
-		s.mu.Lock()
-		ctx, cancel := context.WithCancel(context.Background())
-		s.jobCtx = ctx
-		s.jobCancel = cancel
-		s.mu.Unlock()
-
-		defer func() {
-			s.mu.Lock()
-			cancel()
-			s.jobCtx = nil
-			s.jobCancel = nil
-			s.mu.Unlock()
-		}()
-
-		if err := fn(ctx); err != nil {
-			logger.Printf("[scheduler] job error: %v", err)
-		} else {
-			if next, ok := s.NextRun(); ok {
-				logger.Printf("[scheduler] next run scheduled at %s", next.Format(time.RFC3339))
-			}
-		}
-	})
+	id, err := c.AddFunc(expression, fn)
 	if err != nil {
 		return nil, fmt.Errorf("invalid cron expression %q: %w", expression, err)
 	}
 
-	s.cron = c
-	s.entryID = id
-	return s, nil
+	return &Scheduler{
+		cron:       c,
+		entryID:    id,
+		expression: expression,
+		logger:     logger,
+	}, nil
 }
 
-// Start begins the cron scheduler in the background.
+// Start begins the scheduler's background goroutine.
 func (s *Scheduler) Start() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.cron.Start()
 }
 
-// Stop halts the scheduler and waits for any currently-running job to finish.
-// It also cancels the job context so long-running operations can react promptly.
+// Stop halts the scheduler and blocks until any currently-running job finishes.
 func (s *Scheduler) Stop() {
-	// Signal a running job that it should wrap up.
 	s.mu.Lock()
-	if s.jobCancel != nil {
-		s.jobCancel()
-	}
-	s.mu.Unlock()
-
-	// cron.Stop() returns a context that is done when all running jobs finish.
-	stopCtx := s.cron.Stop()
-	<-stopCtx.Done()
+	defer s.mu.Unlock()
+	ctx := s.cron.Stop()
+	// Wait for any running job to finish.
+	<-ctx.Done()
 }
 
-// NextRun returns the next scheduled execution time for the registered job.
-// The second return value is false when the scheduler has no entries.
-func (s *Scheduler) NextRun() (time.Time, bool) {
+// NextRun returns the next scheduled execution time. Returns the zero value of
+// time.Time if the scheduler has not been started or no entries are registered.
+func (s *Scheduler) NextRun() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	entry := s.cron.Entry(s.entryID)
-	if entry.ID == 0 {
-		return time.Time{}, false
+	return entry.Next
+}
+
+// cronLogger adapts *log.Logger to cron.Logger.
+type cronLogger struct {
+	logger *log.Logger
+}
+
+func (l *cronLogger) Info(msg string, keysAndValues ...interface{}) {
+	l.logger.Printf("[cron] INFO  "+msg, formatKV(keysAndValues)...)
+}
+
+func (l *cronLogger) Error(err error, msg string, keysAndValues ...interface{}) {
+	l.logger.Printf("[cron] ERROR "+msg+" error=%v", append(formatKV(keysAndValues), err)...)
+}
+
+// formatKV converts key-value pairs into printf-compatible arguments by
+// building a flat slice where each pair becomes "key=value".
+func formatKV(keysAndValues []interface{}) []interface{} {
+	if len(keysAndValues) == 0 {
+		return nil
 	}
-	return entry.Next, true
+	args := make([]interface{}, 0, len(keysAndValues)/2)
+	for i := 0; i+1 < len(keysAndValues); i += 2 {
+		args = append(args, fmt.Sprintf("%v=%v", keysAndValues[i], keysAndValues[i+1]))
+	}
+	return args
 }

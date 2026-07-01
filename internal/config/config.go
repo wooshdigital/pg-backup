@@ -7,94 +7,73 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds all application configuration.
+// Config holds all application configuration loaded from config.yaml.
 type Config struct {
-	Database    DatabaseConfig    `yaml:"database"`
-	Storage     StorageConfig     `yaml:"storage"`
-	Compression CompressionConfig `yaml:"compression"`
-	StreamDirect bool             `yaml:"stream_direct"`
+	// Schedule is a standard 5-field cron expression (or robfig @every / @daily etc.)
+	// Example: "0 2 * * *" runs at 02:00 AM daily.
+	Schedule string `yaml:"schedule"`
+
+	Database DatabaseConfig `yaml:"database"`
+	Storage  StorageConfig  `yaml:"storage"`
+	Compress CompressConfig `yaml:"compress"`
 }
 
-// DatabaseConfig contains Postgres connection settings.
+// DatabaseConfig contains the database connection parameters.
 type DatabaseConfig struct {
-	DSN string `yaml:"dsn"`
+	Driver   string `yaml:"driver"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Name     string `yaml:"name"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
 }
 
-// StorageConfig contains storage backend settings.
+// StorageConfig defines where backups are stored.
 type StorageConfig struct {
-	Backend     string `yaml:"backend"`      // "s3" or "local"
-	LocalPath   string `yaml:"local_path"`
-	S3Bucket    string `yaml:"s3_bucket"`
-	S3Region    string `yaml:"s3_region"`
-	S3Endpoint  string `yaml:"s3_endpoint"`
-	S3PathStyle bool   `yaml:"s3_path_style"`
+	Type   string `yaml:"type"` // "local" or "s3"
+	Path   string `yaml:"path"` // local directory or S3 bucket
+	Region string `yaml:"region"`
 }
 
-// CompressionConfig controls which compression algorithm and level to use.
-type CompressionConfig struct {
-	Algorithm string `yaml:"algorithm"` // "gzip", "zstd", "none"
+// CompressConfig defines compression settings.
+type CompressConfig struct {
+	Algorithm string `yaml:"algorithm"` // "gzip", "zstd", etc.
 	Level     int    `yaml:"level"`
 }
 
-// Load reads configuration from the path specified by CONFIG_FILE env var
-// (default: config.yaml), then overrides with individual env vars.
-func Load() (*Config, error) {
-	path := os.Getenv("CONFIG_FILE")
-	if path == "" {
-		path = "config.yaml"
+// Load reads and parses the YAML configuration file at the given path.
+func Load(path string) (*Config, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening config file %q: %w", path, err)
+	}
+	defer f.Close()
+
+	var cfg Config
+	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("decoding config file %q: %w", path, err)
 	}
 
-	cfg := defaultConfig()
-
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("read config file %q: %w", path, err)
-	}
-	if err == nil {
-		if err = yaml.Unmarshal(data, cfg); err != nil {
-			return nil, fmt.Errorf("parse config file: %w", err)
-		}
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Allow individual environment variable overrides.
-	applyEnvOverrides(cfg)
-
-	return cfg, nil
+	return &cfg, nil
 }
 
-func defaultConfig() *Config {
-	return &Config{
-		Storage: StorageConfig{
-			Backend:  "s3",
-			S3Region: "us-east-1",
-		},
-		Compression: CompressionConfig{
-			Algorithm: "gzip",
-			Level:     6,
-		},
+// validate performs basic sanity checks on the loaded configuration.
+func (c *Config) validate() error {
+	if c.Schedule == "" {
+		return fmt.Errorf("schedule must not be empty")
 	}
-}
-
-func applyEnvOverrides(cfg *Config) {
-	if v := os.Getenv("POSTGRES_DSN"); v != "" {
-		cfg.Database.DSN = v
+	if c.Database.Driver == "" {
+		return fmt.Errorf("database.driver must not be empty")
 	}
-	if v := os.Getenv("S3_BUCKET"); v != "" {
-		cfg.Storage.S3Bucket = v
+	if c.Database.Name == "" {
+		return fmt.Errorf("database.name must not be empty")
 	}
-	if v := os.Getenv("S3_REGION"); v != "" {
-		cfg.Storage.S3Region = v
+	if c.Storage.Type == "" {
+		return fmt.Errorf("storage.type must not be empty")
 	}
-	if v := os.Getenv("S3_ENDPOINT"); v != "" {
-		cfg.Storage.S3Endpoint = v
-	}
-	if v := os.Getenv("STORAGE_BACKEND"); v != "" {
-		cfg.Storage.Backend = v
-	}
-	if v := os.Getenv("LOCAL_PATH"); v != "" {
-		cfg.Storage.LocalPath = v
-	}
-	if v := os.Getenv("COMPRESSION_ALGORITHM"); v != "" {
-		cfg.Compression.Algorithm = v
-	}
+	return nil
 }
