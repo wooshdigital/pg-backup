@@ -1,389 +1,626 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useLayoutEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
   StyleSheet,
-  Platform,
+  SafeAreaView,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useTripContext } from '../context/TripContext';
-import { computeEqualSplits } from '../utils/splitCalculator';
-import { AmountInput } from '../components/common/AmountInput';
-import { StepIndicator } from '../components/expenses/StepIndicator';
-import { PayerSelector } from '../components/expenses/PayerSelector';
-import { ParticipantMultiSelect } from '../components/expenses/ParticipantMultiSelect';
-import { SplitSummary } from '../components/expenses/SplitSummary';
-import { generateId } from '../utils/id';
-import { Expense } from '../types';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-type RootStackParamList = {
-  AddExpense: { tripId: string };
-};
+import { RootStackParamList } from '../types';
+import { useExpenseForm } from '../hooks/useExpenseForm';
+import { CURRENCIES } from '../constants/currencies';
+import { SplitTypeToggle } from '../components/expenses/SplitTypeToggle';
+import { CustomSplitInput } from '../components/expenses/CustomSplitInput';
+import { SplitBalanceIndicator } from '../components/expenses/SplitBalanceIndicator';
+
+// Inline simple components to keep the file self-contained
+import {
+  TextInput,
+  View as RNView,
+  Text as RNText,
+  TouchableOpacity as RNTO,
+  StyleSheet as SS,
+} from 'react-native';
 
 type AddExpenseRouteProp = RouteProp<RootStackParamList, 'AddExpense'>;
+type AddExpenseNavProp = NativeStackNavigationProp<RootStackParamList, 'AddExpense'>;
 
-const TOTAL_STEPS = 3;
-
-export function AddExpenseScreen() {
-  const navigation = useNavigation<any>();
+export default function AddExpenseScreen() {
+  const navigation = useNavigation<AddExpenseNavProp>();
   const route = useRoute<AddExpenseRouteProp>();
-  const { tripId } = route.params;
-  const { state, dispatch } = useTripContext();
+  const { tripId, expenseId } = route.params;
 
-  const trip = state.trips.find((t) => t.id === tripId);
+  const {
+    step,
+    values,
+    errors,
+    participants,
+    existingExpense,
+    splitDiff,
+    setValue,
+    handleParticipantToggle,
+    handleSplitTypeChange,
+    handleCustomSplitChange,
+    handleAutoAdjustLast,
+    goNext,
+    goBack,
+    handleSubmit,
+  } = useExpenseForm(tripId, expenseId);
 
-  // ── Form state ──────────────────────────────────────────────────────────────
-  const [step, setStep] = useState(0);
-  const [title, setTitle] = useState('');
-  const [amountStr, setAmountStr] = useState('');
-  const [date, setDate] = useState(todayIso());
-  const [payerId, setPayerId] = useState<string | null>(
-    trip?.participants[0]?.id ?? null
-  );
-  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>(
-    trip?.participants.map((p) => p.id) ?? []
-  );
+  const isEditing = !!expenseId;
 
-  // ── Errors ──────────────────────────────────────────────────────────────────
-  const [titleError, setTitleError] = useState('');
-  const [amountError, setAmountError] = useState('');
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: isEditing ? 'Edit Expense' : 'Add Expense',
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+          <Text style={styles.headerBtnText}>Cancel</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, isEditing]);
 
-  if (!trip) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <Text style={styles.errorText}>Trip not found.</Text>
-      </SafeAreaView>
-    );
-  }
-
-  const currency = trip.currency || 'USD';
-  const currencySymbol = getCurrencySymbol(currency);
-
-  const amount = parseFloat(amountStr) || 0;
-  const splits = computeEqualSplits(amount, selectedParticipantIds);
-
-  // ── Validation ──────────────────────────────────────────────────────────────
-  const validateStep0 = () => {
-    let valid = true;
-    if (!title.trim()) {
-      setTitleError('Title is required');
-      valid = false;
+  const onSubmit = useCallback(async () => {
+    const success = await handleSubmit();
+    if (success) {
+      navigation.goBack();
     } else {
-      setTitleError('');
+      Alert.alert('Error', 'Please fix the errors before saving.');
     }
-    if (!amountStr || parseFloat(amountStr) <= 0) {
-      setAmountError('Enter a valid amount');
-      valid = false;
-    } else {
-      setAmountError('');
-    }
-    return valid;
-  };
+  }, [handleSubmit, navigation]);
 
-  const validateStep1 = () => {
-    if (!payerId) {
-      Alert.alert('Select Payer', 'Please select who paid for this expense.');
-      return false;
-    }
-    return true;
-  };
+  const selectedParticipants = participants.filter((p) =>
+    values.selectedParticipantIds.includes(p.id)
+  );
 
-  const validateStep2 = () => {
-    if (selectedParticipantIds.length === 0) {
-      Alert.alert('Select Participants', 'Please select at least one participant.');
-      return false;
-    }
-    return true;
-  };
-
-  const handleNext = () => {
-    if (step === 0 && !validateStep0()) return;
-    if (step === 1 && !validateStep1()) return;
-    if (step < TOTAL_STEPS - 1) setStep((s) => s + 1);
-  };
-
-  const handleBack = () => {
-    if (step > 0) setStep((s) => s - 1);
-    else navigation.goBack();
-  };
-
-  const handleSave = () => {
-    if (!validateStep2()) return;
-
-    const expense: Expense = {
-      id: generateId(),
-      tripId,
-      title: title.trim(),
-      amount,
-      currency,
-      date,
-      payerId: payerId!,
-      splitType: 'equal',
-      splits,
-      createdAt: new Date().toISOString(),
-    };
-
-    dispatch({ type: 'TRIP_ADD_EXPENSE', payload: { tripId, expense } });
-    navigation.goBack();
-  };
-
-  const toggleParticipant = useCallback((id: string) => {
-    setSelectedParticipantIds((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    );
-  }, []);
-
-  // ── Render steps ─────────────────────────────────────────────────────────────
-
-  const renderStep = () => {
-    switch (step) {
-      case 0:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Expense Details</Text>
-            <Text style={styles.stepSubtitle}>What did you spend on?</Text>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Title</Text>
-              <TextInput
-                style={[styles.textInput, !!titleError && styles.textInputError]}
-                value={title}
-                onChangeText={(t) => {
-                  setTitle(t);
-                  if (t.trim()) setTitleError('');
-                }}
-                placeholder="e.g. Dinner, Hotel, Taxi..."
-                placeholderTextColor="#9CA3AF"
-                returnKeyType="next"
-              />
-              {!!titleError && <Text style={styles.errorMsg}>{titleError}</Text>}
-            </View>
-
-            <AmountInput
-              label="Amount"
-              value={amountStr}
-              onChangeText={(v) => {
-                setAmountStr(v);
-                if (parseFloat(v) > 0) setAmountError('');
-              }}
-              currencySymbol={currencySymbol}
-              error={amountError}
-            />
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Date</Text>
-              <TextInput
-                style={styles.textInput}
-                value={date}
-                onChangeText={setDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#9CA3AF"
-                keyboardType={Platform.OS === 'ios' ? 'default' : 'default'}
-              />
-              <Text style={styles.hint}>Format: YYYY-MM-DD</Text>
-            </View>
-          </View>
-        );
-
-      case 1:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Who Paid?</Text>
-            <Text style={styles.stepSubtitle}>Select the person who paid for this expense.</Text>
-            <PayerSelector
-              participants={trip.participants}
-              selectedPayerId={payerId}
-              onSelect={setPayerId}
-            />
-          </View>
-        );
-
-      case 2:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Split Between</Text>
-            <Text style={styles.stepSubtitle}>
-              Select who shares this expense. Cost is split equally.
+  // ── Step Indicator ──────────────────────────────────────────────
+  const renderStepIndicator = () => (
+    <View style={styles.stepIndicator}>
+      {[1, 2, 3].map((s) => (
+        <View key={s} style={styles.stepRow}>
+          <View style={[styles.stepDot, s === step && styles.stepDotActive, s < step && styles.stepDotDone]}>
+            <Text style={[styles.stepDotText, (s === step || s < step) && styles.stepDotTextActive]}>
+              {s < step ? '✓' : s}
             </Text>
-            <ParticipantMultiSelect
-              participants={trip.participants}
-              selectedIds={selectedParticipantIds}
-              onToggle={toggleParticipant}
-            />
-            <View style={styles.splitPreview}>
-              <SplitSummary
-                splits={splits}
-                participants={trip.participants}
-                currency={currency}
-              />
-            </View>
           </View>
+          {s < 3 && <View style={[styles.stepLine, s < step && styles.stepLineDone]} />}
+        </View>
+      ))}
+    </View>
+  );
+
+  // ── Step 1: Details ─────────────────────────────────────────────
+  const renderStep1 = () => (
+    <ScrollView style={styles.stepContent} keyboardShouldPersistTaps="handled">
+      <Text style={styles.stepTitle}>Expense Details</Text>
+
+      <Text style={styles.label}>Description *</Text>
+      <TextInput
+        style={[styles.input, errors.description ? styles.inputError : null]}
+        value={values.description}
+        onChangeText={(v) => setValue('description', v)}
+        placeholder="e.g. Dinner at Trattoria"
+        placeholderTextColor="#94A3B8"
+        returnKeyType="next"
+        autoFocus
+      />
+      {errors.description ? <Text style={styles.errorText}>{errors.description}</Text> : null}
+
+      <Text style={styles.label}>Amount *</Text>
+      <View style={styles.amountRow}>
+        <View style={styles.currencyPicker}>
+          <Text style={styles.currencyText}>{values.currency}</Text>
+        </View>
+        <TextInput
+          style={[styles.input, styles.amountInput, errors.amount ? styles.inputError : null]}
+          value={values.amount}
+          onChangeText={(v) => setValue('amount', v)}
+          placeholder="0.00"
+          placeholderTextColor="#94A3B8"
+          keyboardType="decimal-pad"
+          returnKeyType="done"
+        />
+      </View>
+      {errors.amount ? <Text style={styles.errorText}>{errors.amount}</Text> : null}
+
+      <Text style={styles.label}>Currency</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencyList}>
+        {CURRENCIES.slice(0, 12).map((c) => (
+          <TouchableOpacity
+            key={c.code}
+            style={[styles.currencyChip, values.currency === c.code && styles.currencyChipActive]}
+            onPress={() => setValue('currency', c.code)}
+          >
+            <Text style={[styles.currencyChipText, values.currency === c.code && styles.currencyChipTextActive]}>
+              {c.code}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <Text style={styles.label}>Date</Text>
+      <TextInput
+        style={styles.input}
+        value={values.date}
+        onChangeText={(v) => setValue('date', v)}
+        placeholder="YYYY-MM-DD"
+        placeholderTextColor="#94A3B8"
+      />
+
+      <Text style={styles.label}>Notes</Text>
+      <TextInput
+        style={[styles.input, styles.notesInput]}
+        value={values.notes}
+        onChangeText={(v) => setValue('notes', v)}
+        placeholder="Optional notes..."
+        placeholderTextColor="#94A3B8"
+        multiline
+        numberOfLines={3}
+      />
+    </ScrollView>
+  );
+
+  // ── Step 2: Paid By ─────────────────────────────────────────────
+  const renderStep2 = () => (
+    <ScrollView style={styles.stepContent}>
+      <Text style={styles.stepTitle}>Who Paid?</Text>
+      {errors.paidById ? <Text style={styles.errorText}>{errors.paidById}</Text> : null}
+      {participants.map((p) => {
+        const isSelected = values.paidById === p.id;
+        return (
+          <TouchableOpacity
+            key={p.id}
+            style={[styles.participantRow, isSelected && styles.participantRowSelected]}
+            onPress={() => setValue('paidById', p.id)}
+          >
+            <View style={[styles.avatar, { backgroundColor: p.avatarColor || '#6366F1' }]}>
+              <Text style={styles.avatarText}>
+                {p.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
+              </Text>
+            </View>
+            <Text style={[styles.participantName, isSelected && styles.participantNameSelected]}>
+              {p.name}
+            </Text>
+            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+          </TouchableOpacity>
         );
-    }
+      })}
+    </ScrollView>
+  );
+
+  // ── Step 3: Split ────────────────────────────────────────────────
+  const renderStep3 = () => {
+    const total = parseFloat(values.amount) || 0;
+
+    return (
+      <ScrollView style={styles.stepContent} keyboardShouldPersistTaps="handled">
+        <Text style={styles.stepTitle}>Split Between</Text>
+
+        {/* Split type toggle */}
+        <SplitTypeToggle
+          value={values.splitType}
+          onChange={handleSplitTypeChange}
+          style={styles.splitToggle}
+        />
+
+        {/* Participant selection */}
+        <Text style={styles.subLabel}>Participants</Text>
+        {errors.selectedParticipantIds ? (
+          <Text style={styles.errorText}>{errors.selectedParticipantIds}</Text>
+        ) : null}
+
+        {participants.map((p) => {
+          const isSelected = values.selectedParticipantIds.includes(p.id);
+          return (
+            <TouchableOpacity
+              key={p.id}
+              style={[styles.participantRow, isSelected && styles.participantRowSelected]}
+              onPress={() => handleParticipantToggle(p.id)}
+            >
+              <View style={[styles.avatar, { backgroundColor: p.avatarColor || '#6366F1' }]}>
+                <Text style={styles.avatarText}>
+                  {p.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
+                </Text>
+              </View>
+              <Text style={[styles.participantName, isSelected && styles.participantNameSelected]}>
+                {p.name}
+              </Text>
+              {values.splitType === 'equal' && isSelected && (
+                <Text style={styles.equalAmount}>
+                  {values.currency}{' '}
+                  {selectedParticipants.length > 0
+                    ? (total / selectedParticipants.length).toFixed(2)
+                    : '0.00'}
+                </Text>
+              )}
+              {isSelected && values.splitType !== 'custom' && (
+                <Text style={styles.checkmark}>✓</Text>
+              )}
+              {!isSelected && <View style={styles.unchecked} />}
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* Custom split inputs */}
+        {values.splitType === 'custom' && selectedParticipants.length > 0 && (
+          <View style={styles.customSplitSection}>
+            <View style={styles.customSplitHeader}>
+              <Text style={styles.subLabel}>Enter Amounts</Text>
+              <TouchableOpacity onPress={handleAutoAdjustLast} style={styles.autoAdjustBtn}>
+                <Text style={styles.autoAdjustText}>Auto-adjust last</Text>
+              </TouchableOpacity>
+            </View>
+
+            <SplitBalanceIndicator
+              diff={splitDiff}
+              currency={values.currency}
+            />
+
+            {selectedParticipants.map((p) => {
+              const split = values.customSplits.find((s) => s.participantId === p.id) || {
+                participantId: p.id,
+                amount: 0,
+              };
+              return (
+                <CustomSplitInput
+                  key={p.id}
+                  participant={p}
+                  split={split}
+                  currency={values.currency}
+                  onChangeAmount={handleCustomSplitChange}
+                />
+              );
+            })}
+
+            {errors.customSplits ? (
+              <Text style={styles.errorText}>{errors.customSplits}</Text>
+            ) : null}
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
+  // ── Navigation Buttons ───────────────────────────────────────────
+  const renderNavButtons = () => {
+    const isLastStep = step === 3;
+    const canSaveCustom =
+      !isLastStep || values.splitType !== 'custom' || splitDiff === 0;
+
+    return (
+      <View style={styles.navButtons}>
+        {step > 1 && (
+          <TouchableOpacity style={styles.backBtn} onPress={goBack}>
+            <Text style={styles.backBtnText}>Back</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[
+            styles.nextBtn,
+            isLastStep && !canSaveCustom && styles.nextBtnDisabled,
+            step === 1 && styles.nextBtnFull,
+          ]}
+          onPress={isLastStep ? onSubmit : goNext}
+          disabled={isLastStep && !canSaveCustom}
+        >
+          <Text style={styles.nextBtnText}>
+            {isLastStep ? (isEditing ? 'Save Changes' : 'Add Expense') : 'Next'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>
-            {step === 0 ? '✕' : '← Back'}
-          </Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Expense</Text>
-        <View style={styles.backBtn} />
-      </View>
-
-      <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={90}
       >
-        {renderStep()}
-      </ScrollView>
+        {renderStepIndicator()}
 
-      {/* Footer */}
-      <View style={styles.footer}>
-        {step < TOTAL_STEPS - 1 ? (
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleNext}>
-            <Text style={styles.primaryBtnText}>Next →</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleSave}>
-            <Text style={styles.primaryBtnText}>Save Expense</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+        <View style={styles.flex}>
+          {step === 1 && renderStep1()}
+          {step === 2 && renderStep2()}
+          {step === 3 && renderStep3()}
+        </View>
+
+        {renderNavButtons()}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getCurrencySymbol(currency: string): string {
-  const symbols: Record<string, string> = {
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    JPY: '¥',
-    CAD: 'C$',
-    AUD: 'A$',
-    CHF: 'CHF',
-    CNY: '¥',
-    INR: '₹',
-  };
-  return symbols[currency] ?? currency;
-}
-
 const styles = StyleSheet.create({
-  safe: {
+  flex: { flex: 1 },
+  container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
   },
-  header: {
+  headerBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+  },
+  headerBtnText: {
+    color: '#6366F1',
+    fontSize: 16,
+  },
+
+  // Step indicator
+  stepIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotActive: {
+    backgroundColor: '#6366F1',
+  },
+  stepDotDone: {
+    backgroundColor: '#22C55E',
+  },
+  stepDotText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  stepDotTextActive: {
+    color: '#FFFFFF',
+  },
+  stepLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 4,
+  },
+  stepLineDone: {
+    backgroundColor: '#22C55E',
+  },
+
+  // Step content
+  stepContent: {
+    flex: 1,
+    padding: 20,
+  },
+  stepTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 24,
+  },
+  subLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1E293B',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  notesInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  currencyPicker: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  currencyText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  amountInput: {
+    flex: 1,
+  },
+  currencyList: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  currencyChip: {
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginRight: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  currencyChipActive: {
+    borderColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
+  },
+  currencyChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  currencyChipTextActive: {
+    color: '#6366F1',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+
+  // Participant rows
+  participantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  participantRowSelected: {
+    borderColor: '#6366F1',
+    backgroundColor: '#FAFAFE',
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  participantName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  participantNameSelected: {
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  equalAmount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6366F1',
+    marginRight: 8,
+  },
+  checkmark: {
+    fontSize: 16,
+    color: '#6366F1',
+    fontWeight: '700',
+  },
+  unchecked: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+  },
+
+  // Custom split
+  splitToggle: {
+    marginBottom: 8,
+  },
+  customSplitSection: {
+    marginTop: 16,
+  },
+  customSplitHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    marginBottom: 4,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
+  autoAdjustBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 8,
+  },
+  autoAdjustText: {
+    color: '#6366F1',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Nav buttons
+  navButtons: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E2E8F0',
   },
   backBtn: {
-    width: 70,
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   backBtnText: {
     fontSize: 16,
-    color: '#6366F1',
     fontWeight: '600',
+    color: '#64748B',
   },
-  scroll: {
+  nextBtn: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#6366F1',
+  },
+  nextBtnFull: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 32,
+  nextBtnDisabled: {
+    backgroundColor: '#A5B4FC',
   },
-  stepContent: {
-    gap: 20,
-  },
-  stepTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  stepSubtitle: {
-    fontSize: 15,
-    color: '#6B7280',
-    marginTop: -12,
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  textInput: {
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
-  },
-  textInputError: {
-    borderColor: '#EF4444',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  errorMsg: {
-    fontSize: 12,
-    color: '#EF4444',
-  },
-  splitPreview: {
-    marginTop: 4,
-  },
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  primaryBtn: {
-    backgroundColor: '#6366F1',
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  primaryBtnText: {
-    color: '#fff',
+  nextBtnText: {
     fontSize: 16,
     fontWeight: '700',
-  },
-  errorText: {
-    textAlign: 'center',
-    marginTop: 40,
-    color: '#EF4444',
-    fontSize: 16,
+    color: '#FFFFFF',
   },
 });

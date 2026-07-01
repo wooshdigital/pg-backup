@@ -1,45 +1,82 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  StyleSheet,
   TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useTripContext } from '../context/TripContext';
-import { SplitSummary } from '../components/expenses/SplitSummary';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-type RootStackParamList = {
-  ExpenseDetail: { tripId: string; expenseId: string };
-};
+import { RootStackParamList } from '../types';
+import { useExpenses } from '../hooks/useExpenses';
+import { useParticipants } from '../hooks/useParticipants';
 
 type ExpenseDetailRouteProp = RouteProp<RootStackParamList, 'ExpenseDetail'>;
+type ExpenseDetailNavProp = NativeStackNavigationProp<RootStackParamList, 'ExpenseDetail'>;
 
-export function ExpenseDetailScreen() {
-  const navigation = useNavigation<any>();
+function getCurrencySymbol(currency: string): string {
+  try {
+    const formatted = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(0);
+    return formatted.replace(/[\d,.\s]/g, '').trim();
+  } catch {
+    return currency;
+  }
+}
+
+export default function ExpenseDetailScreen() {
+  const navigation = useNavigation<ExpenseDetailNavProp>();
   const route = useRoute<ExpenseDetailRouteProp>();
   const { tripId, expenseId } = route.params;
-  const { state, dispatch } = useTripContext();
 
-  const trip = state.trips.find((t) => t.id === tripId);
-  const expense = trip?.expenses.find((e) => e.id === expenseId);
+  const { expenses, deleteExpense } = useExpenses(tripId);
+  const { participants } = useParticipants(tripId);
 
-  if (!trip || !expense) {
+  const expense = expenses.find((e) => e.id === expenseId);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: expense?.description ?? 'Expense',
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() =>
+            navigation.navigate('AddExpense', { tripId, expenseId })
+          }
+          style={styles.editBtn}
+          accessibilityLabel="Edit expense"
+        >
+          <Text style={styles.editBtnText}>Edit</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, expense, tripId, expenseId]);
+
+  if (!expense) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.notFound}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
           <Text style={styles.notFoundText}>Expense not found.</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  const participantMap = new Map(trip.participants.map((p) => [p.id, p]));
-  const payer = participantMap.get(expense.payerId);
-  const payerInitials = payer ? getInitials(payer.name) : '?';
+  const paidBy = participants.find((p) => p.id === expense.paidById);
+  const symbol = getCurrencySymbol(expense.currency);
 
   const handleDelete = () => {
     Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
@@ -47,245 +84,262 @@ export function ExpenseDetailScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => {
-          dispatch({
-            type: 'TRIP_DELETE_EXPENSE',
-            payload: { tripId, expenseId },
-          });
+        onPress: async () => {
+          await deleteExpense(expenseId);
           navigation.goBack();
         },
       },
     ]);
   };
 
-  const formattedDate = formatDate(expense.date);
-
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Expense Detail
-        </Text>
-        <TouchableOpacity onPress={handleDelete} style={styles.deleteBtn}>
-          <Text style={styles.deleteBtnText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Title & Amount */}
-        <View style={styles.heroSection}>
-          <Text style={styles.expenseTitle}>{expense.title}</Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Amount Card */}
+        <View style={styles.amountCard}>
+          <Text style={styles.expenseDescription}>{expense.description}</Text>
           <Text style={styles.expenseAmount}>
-            {expense.currency} {expense.amount.toFixed(2)}
+            {symbol}{expense.amount.toFixed(2)}
           </Text>
-          <Text style={styles.expenseDate}>{formattedDate}</Text>
+          <Text style={styles.expenseCurrency}>{expense.currency}</Text>
         </View>
 
-        {/* Payer */}
+        {/* Meta info */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Paid by</Text>
-          <View style={styles.payerRow}>
-            <View
-              style={[
-                styles.payerAvatar,
-                { backgroundColor: payer?.avatarColor || '#6366F1' },
-              ]}
-            >
-              <Text style={styles.payerInitials}>{payerInitials}</Text>
-            </View>
-            <Text style={styles.payerName}>{payer?.name || 'Unknown'}</Text>
-          </View>
-        </View>
-
-        {/* Split breakdown */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
-            Split ({expense.splitType === 'equal' ? 'Equally' : 'Custom'})
-          </Text>
-          <SplitSummary
-            splits={expense.splits}
-            participants={trip.participants}
-            currency={expense.currency}
+          <DetailRow label="Paid by" value={paidBy?.name ?? 'Unknown'} />
+          <DetailRow
+            label="Date"
+            value={expense.date ? new Date(expense.date).toLocaleDateString() : '—'}
           />
+          <DetailRow
+            label="Split type"
+            value={expense.splitType === 'custom' ? 'Custom' : 'Equal'}
+          />
+          {expense.notes ? (
+            <DetailRow label="Notes" value={expense.notes} />
+          ) : null}
         </View>
 
-        {/* Meta */}
-        <View style={styles.metaSection}>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaKey}>Trip</Text>
-            <Text style={styles.metaValue}>{trip.name}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaKey}>Participants</Text>
-            <Text style={styles.metaValue}>{expense.splits.length}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaKey}>Added</Text>
-            <Text style={styles.metaValue}>{formatDate(expense.createdAt.slice(0, 10))}</Text>
-          </View>
+        {/* Splits */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Split Breakdown</Text>
+          {expense.splits.map((split) => {
+            const participant = participants.find(
+              (p) => p.id === split.participantId
+            );
+            const percentage =
+              expense.amount > 0
+                ? ((split.amount / expense.amount) * 100).toFixed(0)
+                : '0';
+            return (
+              <View key={split.participantId} style={styles.splitRow}>
+                <View
+                  style={[
+                    styles.splitAvatar,
+                    { backgroundColor: participant?.avatarColor || '#6366F1' },
+                  ]}
+                >
+                  <Text style={styles.splitAvatarText}>
+                    {(participant?.name ?? '?')
+                      .split(' ')
+                      .map((w: string) => w[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2)}
+                  </Text>
+                </View>
+                <Text style={styles.splitName}>{participant?.name ?? 'Unknown'}</Text>
+                <Text style={styles.splitPercent}>{percentage}%</Text>
+                <Text style={styles.splitAmount}>
+                  {symbol}{split.amount.toFixed(2)}
+                </Text>
+              </View>
+            );
+          })}
         </View>
+
+        {/* Delete button */}
+        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+          <Text style={styles.deleteBtnText}>Delete Expense</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-}
-
-function formatDate(dateKey: string): string {
-  if (!dateKey) return '';
-  const [year, month, day] = dateKey.slice(0, 10).split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
   },
-  header: {
-    flexDirection: 'row',
+  centered: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-    flex: 1,
-    textAlign: 'center',
-  },
-  backBtn: {
-    width: 70,
-  },
-  backBtnText: {
-    fontSize: 16,
-    color: '#6366F1',
-    fontWeight: '600',
-  },
-  deleteBtn: {
-    width: 70,
-    alignItems: 'flex-end',
-  },
-  deleteBtnText: {
-    fontSize: 15,
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-  scroll: {
-    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 40,
-    gap: 24,
   },
-  heroSection: {
+
+  // Edit button in header
+  editBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+  },
+  editBtnText: {
+    color: '#6366F1',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Amount card
+  amountCard: {
+    backgroundColor: '#6366F1',
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
-    paddingVertical: 24,
-    gap: 8,
+    marginBottom: 20,
   },
-  expenseTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
+  expenseDescription: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.85)',
+    fontWeight: '500',
+    marginBottom: 8,
     textAlign: 'center',
   },
   expenseAmount: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: '800',
-    color: '#6366F1',
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
-  expenseDate: {
+  expenseCurrency: {
     fontSize: 14,
-    color: '#9CA3AF',
-  },
-  section: {
-    gap: 10,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  payerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 12,
-  },
-  payerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  payerInitials: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  payerName: {
-    fontSize: 16,
+    color: 'rgba(255,255,255,0.7)',
     fontWeight: '600',
-    color: '#111827',
   },
-  metaSection: {
-    backgroundColor: '#F9FAFB',
+
+  // Section
+  section: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    gap: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  metaRow: {
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+
+  // Detail rows
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F1F5F9',
   },
-  metaKey: {
+  detailLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#64748B',
     fontWeight: '500',
   },
-  metaValue: {
+  detailValue: {
     fontSize: 14,
-    color: '#111827',
+    color: '#1E293B',
     fontWeight: '600',
+    maxWidth: '60%',
+    textAlign: 'right',
   },
-  notFound: {
-    flex: 1,
-    justifyContent: 'center',
+
+  // Split rows
+  splitRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F1F5F9',
   },
+  splitAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  splitAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  splitName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1E293B',
+    fontWeight: '500',
+  },
+  splitPercent: {
+    fontSize: 13,
+    color: '#64748B',
+    marginRight: 12,
+  },
+  splitAmount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6366F1',
+  },
+
+  // Delete
+  deleteBtn: {
+    backgroundColor: '#FFF1F2',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    marginTop: 8,
+  },
+  deleteBtnText: {
+    color: '#DC2626',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  // Not found
   notFoundText: {
-    color: '#EF4444',
-    fontSize: 16,
+    fontSize: 18,
+    color: '#64748B',
+    marginBottom: 16,
+  },
+  backButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    backgroundColor: '#6366F1',
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });

@@ -1,27 +1,48 @@
-import { Split } from '../types';
+import { Participant } from '../types';
 
-/**
- * Computes an equal-split array for a given amount and list of participant IDs.
- * Handles rounding by adding any remainder to the first participant.
- */
-export function computeEqualSplits(amount: number, participantIds: string[]): Split[] {
-  if (participantIds.length === 0) return [];
-
-  const count = participantIds.length;
-  const baseAmount = Math.floor((amount / count) * 100) / 100;
-  const total = parseFloat((baseAmount * count).toFixed(2));
-  const remainder = parseFloat((amount - total).toFixed(2));
-
-  return participantIds.map((participantId, index) => ({
-    participantId,
-    amount: index === 0 ? parseFloat((baseAmount + remainder).toFixed(2)) : baseAmount,
-  }));
+export interface Split {
+  participantId: string;
+  amount: number;
 }
 
-/**
- * Returns the per-person amount for an equal split (display purposes).
- */
-export function getEqualShareAmount(amount: number, count: number): number {
-  if (count === 0) return 0;
-  return parseFloat((amount / count).toFixed(2));
+export function calculateEqualSplits(
+  participants: Participant[],
+  total: number
+): Split[] {
+  if (participants.length === 0) return [];
+
+  const perPerson = roundCurrency(total / participants.length);
+  const splits: Split[] = participants.map((p) => ({
+    participantId: p.id,
+    amount: perPerson,
+  }));
+
+  // Adjust last participant for floating point rounding
+  return adjustLastParticipant(splits, total);
+}
+
+export function validateCustomSplits(
+  splits: Split[],
+  total: number
+): { valid: boolean; diff: number } {
+  const sum = splits.reduce((acc, s) => acc + s.amount, 0);
+  const diff = roundCurrency(total - sum);
+  return { valid: diff === 0, diff };
+}
+
+export function adjustLastParticipant(splits: Split[], total: number): Split[] {
+  if (splits.length === 0) return splits;
+
+  const allButLast = splits.slice(0, -1);
+  const sumOfRest = allButLast.reduce((acc, s) => acc + s.amount, 0);
+  const lastAmount = roundCurrency(total - sumOfRest);
+
+  return [
+    ...allButLast,
+    { ...splits[splits.length - 1], amount: lastAmount },
+  ];
+}
+
+export function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100;
 }

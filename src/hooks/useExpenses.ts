@@ -1,63 +1,36 @@
-import { useMemo } from 'react';
-import { useTripContext } from '../context/TripContext';
+import { useContext } from 'react';
+import { TripContext } from '../context/TripContext';
 import { Expense } from '../types';
 
-export interface ExpenseSection {
-  title: string; // formatted date label e.g. "June 28, 2026"
-  data: Expense[];
-}
-
-/**
- * Returns expenses for a given tripId, sorted descending by date,
- * and grouped into sections by date for SectionList consumption.
- */
-export function useExpenses(tripId: string): {
-  expenses: Expense[];
-  sections: ExpenseSection[];
-  total: number;
-} {
-  const { state } = useTripContext();
+export function useExpenses(tripId: string) {
+  const { state, dispatch } = useContext(TripContext);
 
   const trip = state.trips.find((t) => t.id === tripId);
-  const expenses: Expense[] = trip?.expenses || [];
+  const expenses: Expense[] = trip?.expenses ?? [];
 
-  const sorted = useMemo(
-    () =>
-      [...expenses].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      ),
-    [expenses]
-  );
+  const addExpense = async (
+    expenseData: Omit<Expense, 'id' | 'tripId' | 'createdAt' | 'updatedAt'>
+  ) => {
+    const newExpense: Expense = {
+      ...expenseData,
+      id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      tripId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    dispatch({ type: 'TRIP_ADD_EXPENSE', payload: { tripId, expense: newExpense } });
+    return newExpense;
+  };
 
-  const sections = useMemo<ExpenseSection[]>(() => {
-    const map = new Map<string, Expense[]>();
+  const updateExpense = async (expense: Expense) => {
+    const updated = { ...expense, updatedAt: new Date().toISOString() };
+    dispatch({ type: 'TRIP_UPDATE_EXPENSE', payload: { tripId, expense: updated } });
+    return updated;
+  };
 
-    for (const expense of sorted) {
-      const dateKey = expense.date.slice(0, 10); // YYYY-MM-DD
-      if (!map.has(dateKey)) map.set(dateKey, []);
-      map.get(dateKey)!.push(expense);
-    }
+  const deleteExpense = async (expenseId: string) => {
+    dispatch({ type: 'TRIP_DELETE_EXPENSE', payload: { tripId, expenseId } });
+  };
 
-    return Array.from(map.entries()).map(([dateKey, data]) => ({
-      title: formatDateLabel(dateKey),
-      data,
-    }));
-  }, [sorted]);
-
-  const total = useMemo(
-    () => expenses.reduce((sum, e) => sum + e.amount, 0),
-    [expenses]
-  );
-
-  return { expenses: sorted, sections, total };
-}
-
-function formatDateLabel(dateKey: string): string {
-  const [year, month, day] = dateKey.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  return { expenses, addExpense, updateExpense, deleteExpense };
 }

@@ -3,14 +3,21 @@ import { Trip } from '../types';
 
 const TRIPS_KEY = '@splitwise_trips';
 
-export async function saveTrips(trips: Trip[]): Promise<void> {
-  await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(trips));
+export async function loadTrips(): Promise<Trip[]> {
+  try {
+    const raw = await AsyncStorage.getItem(TRIPS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Trip[];
+  } catch (e) {
+    console.error('Failed to load trips:', e);
+    return [];
+  }
 }
 
-export async function loadTrips(): Promise<Trip[]> {
-  const raw = await AsyncStorage.getItem(TRIPS_KEY);
-  if (!raw) return [];
-  const parsed = JSON.parse(raw) as Trip[];
-  // Ensure backward compat: every trip has expenses array
-  return parsed.map((t) => ({ ...t, expenses: t.expenses || [] }));
+export async function saveTrips(trips: Trip[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(TRIPS_KEY, JSON.stringify(trips));
+  } catch (e) {
+    console.error('Failed to save trips:', e);
+  }
 }
